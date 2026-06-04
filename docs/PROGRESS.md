@@ -28,7 +28,7 @@
 | **M10** 部署 | ⏳ Pending | - | - | Cloudflare Pages + D1 |
 | **M11** 备份监控（可选）| ⏳ Optional | - | - | 后续 |
 
-**总测试数（截至 M1）**: 42 个（39 unit + 3 e2e）全绿
+**总测试数（截至 M2）**: 84 个（81 unit + 3 e2e）全绿
 
 ---
 
@@ -108,20 +108,47 @@
 
 ---
 
-## ⏳ M2：PM 认证（Pending）
+## ✅ M2：PM 认证（Done, 2026-06-04）
 
 ### 目标
 实现 PM 的 PIN 码登录 + Session Cookie + 5 次错锁 5 分钟保护。
 
-### 计划
-- 端点：
-  - `POST /api/admin/auth/login`（body: `{pin}`，验证 bcrypt + 检查 lockout）
-  - `POST /api/admin/auth/logout`（清 cookie）
-  - `GET /api/admin/auth/me`（返回当前 PM user）
-- 工具：
-  - `src/auth/pin.ts` — `hashPin(pin)`、`verifyPin(pin, hash)`
-  - `src/auth/session.ts` — `signSession(userId)`、`verifySession(cookie)`、cookie 解析
-  - `src/middleware/auth.ts` — `requireAuth(c, next)` Hono middleware
+### 交付
+- `migrations/0002_auth.sql` — `auth_attempts` 表（5 fail / 5min lockout）
+- `src/auth/pin.ts` — Web Crypto **PBKDF2-SHA256** PIN 哈希（OWASP 2023+ 600k iterations）
+- `src/auth/session.ts` — HMAC-SHA256 签名 token（compact JWT-like: `<payloadB64>.<sigB64>`）
+- `src/auth/lockout.ts` — `isLockedOut(db, ip)` + `recordAttempt(db, ip, success)`
+- `src/middleware/requirePm.ts` — Hono middleware: 401 unless valid session
+- `src/routes/admin/auth.ts` — `POST /login`, `POST /logout`, `GET /me`
+- `src/routes/admin/index.ts` — admin 路由聚合（`/auth/*` 例外，logout 公开）
+- `src/worker.ts` — 挂载 `/api/admin` + Env `JWT_SECRET`
+- `seeds/local.sql` — 本地开发种子（PM user id=1 PIN 待设置 + child user id=2 空名）
+- `scripts/hash-pin.mjs` — 一次性工具，生成 PIN hash 用于 init
+- `tests/unit/{pin,session,lockout,admin-auth}.test.ts` — 42 新单测
+
+### 端点
+- `POST /api/admin/auth/login` body: `{pin}` → 200 + Set-Cookie 或 401/429
+- `POST /api/admin/auth/logout` → 200 + 清 cookie
+- `GET /api/admin/auth/me` → 200 user JSON 或 401
+
+### 验收
+- ✅ 81/81 单测全绿（M1 39 + M2 新增 42）
+- ✅ 3/3 e2e 全绿（无回归）
+- ✅ `npm run typecheck` 0 错误
+- ✅ **真实 wrangler dev + 本地 D1 端到端**：
+  - `POST /login {pin:"1234"}` → 200 + `Set-Cookie: pm_session=...`
+  - `GET /me` 带 cookie → 200 `{id:1, name:"PM", role:"pm"}`
+  - 5 次错误 PIN → 第 5 次起 429 TOO_MANY_ATTEMPTS
+  - `POST /logout` 带 cookie → 200 + `Set-Cookie: pm_session=; Max-Age=0`
+
+### 默认决策（与原 PLAN 偏差）
+- **bcrypt → PBKDF2-SHA256**：PLAN/PRD 写"bcrypt"，但 Cloudflare Workers 无 scrypt/bcrypt 原生支持，bcryptjs 增加 50KB+ bundle 且偶有兼容问题。PBKDF2-SHA256 600k iter 是 OWASP 2023+ 最低推荐，Web Crypto API 原生支持，Workers 友好。
+- **JWT 库 → 手写 HMAC-SHA256**：避免引入 jose 等 100KB+ JWT 库；自写 HMAC 签 token 满足需求且契约显式。
+- **本地 PM PIN 初始化**：seed.sql 写占位 hash（不可用），用户用 `node scripts/hash-pin.mjs <pin> <secret>` 算 hash 然后 UPDATE 进 D1。生产环境 `scripts/init-prod.ts` 待 M10 写。
+- **seed.sql 移到 `seeds/local.sql`**：原计划放 migrations/，但 wrangler 会把整个目录当 migration 自动 apply — seed 不应被作为 schema migration 处理。
+
+### Commit
+- 待提交
 - 新表：`auth_attempts`（id, ip, attempted_at, success）
 - 依赖：`bcryptjs`（Workers 兼容）
 - 种子：M2 完成后用 SQL 写一个 PM user（PIN 1234 或 PM 启动时设置）
