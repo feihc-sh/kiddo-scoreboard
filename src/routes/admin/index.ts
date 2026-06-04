@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import { requirePm } from '../../middleware/requirePm.ts';
 import auth from './auth.ts';
 import taskCompletions from './task-completions.ts';
+import adminEvents from './events.ts';
 import type { Env } from '../../worker.ts';
 
 const admin = new Hono<{ Bindings: Env }>();
@@ -17,5 +18,6 @@ admin.route('/auth', auth);
 admin.use('/*', requirePm);
 
 admin.route('/task-completions', taskCompletions);
+admin.route('/events', adminEvents);
 
 export default admin;

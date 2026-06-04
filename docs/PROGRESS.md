@@ -20,15 +20,15 @@
 | **M2** PM 认证 | ✅ Done | 2026-06-04 | 42 unit | PIN + Session cookie + 锁 5 分钟 |
 | **M3** 只读 API | ✅ Done | 2026-06-05 | 25 unit + 2 e2e | 余额/用户/事件/任务 + today-status |
 | **M4** 任务系统 | ✅ Done | 2026-06-05 | 14 unit + 3 e2e | 完成任务 (事务) + PM 撤销 |
-| **M5** 申请审批 | ⏳ Pending | - | - | 提交 / 通过 / 拒绝 / 撤销 |
-| **M6** 兑换 | ⏳ Pending | - | - | 双账户 1:1 转换 |
+| **M5** 申请审批 | ✅ Done | 2026-06-05 | 21 unit + 4 e2e | submit/approve/reject/revoke/edit |
+| **M6** 兑换 + 周额度 | ⏳ Pending | - | - | 双账户 1:1 转换 + 周末发工资 |
 | **M7** 改名 + 审计 UI | ⏳ Pending | - | - | 首次填名字 + log 时间线 |
 | **M8** 儿子端 UI | ⏳ Pending | - | - | iPad Safari PWA |
 | **M9** PM 端 UI | ⏳ Pending | - | - | 后台管理 |
 | **M10** 部署 | ⏳ Pending | - | - | Cloudflare Pages + D1 |
 | **M11** 备份监控（可选）| ⏳ Optional | - | - | 后续 |
 
-**总测试数（截至 M4）**: 147 个（120 unit + 8 e2e）全绿
+**总测试数（截至 M5）**: 168 个（141 unit + 12 e2e）全绿
 
 ---
 
@@ -262,4 +262,43 @@
 
 ---
 
-**下次更新**: 完成 M5 后
+## ✅ M5：申请审批（Done, 2026-06-05）
+
+### 目标
+儿子端提交加减申请（pending 状态）+ PM 4 个动作：approve / reject / revoke / edit。
+
+### 交付
+- `src/routes/me/events.ts`（118 行）— `POST /api/me/events`（submit，pending）
+- `src/routes/admin/events.ts`（389 行）— PM 4 actions
+- `src/routes/me/index.ts` + `src/routes/admin/index.ts` — mount
+- `tests/unit/me-events-submit.test.ts`（319 行）— 6 tests
+- `tests/unit/admin-events-actions.test.ts`（564 行）— 15 tests
+- `tests/e2e/event-approval.spec.ts` — 4 e2e
+
+### 端点
+| Method | Path | 角色 | 行为 |
+|--------|------|------|------|
+| POST | `/api/me/events` | 儿子 | 提交申请，状态=pending |
+| POST | `/api/admin/events/:id/approve` | PM | pending → approved，加余额 |
+| POST | `/api/admin/events/:id/reject` | PM | pending → rejected |
+| POST | `/api/admin/events/:id/revoke` | PM | approved/rejected → revoked |
+| PUT | `/api/admin/events/:id` | PM | 编辑 type/change_value/reason |
+
+### 验收
+- ✅ 141/141 单测全绿（M1-M4 120 + M5 新增 21）
+- ✅ 12/12 e2e 全绿（8 旧 + 4 新）
+- ✅ `npm run typecheck` 0 错误
+
+### 默认决策
+- **儿子端 user_id 继续写死 2**（M4 同款，`CHILD_USER_ID` 常量）
+- **Submit 不算余额**（status='pending'，computeBalance 默认只算 approved）
+- **Edit 用动态 SET**（只更新提供的字段，绝不动 status / submitted_by / source）
+- **Edit 审计 details 只记 changed 字段**（old_values vs new_values）
+- **409 用 `INVALID_STATUS`** 而非通用 `CONFLICT`（更具体）
+
+### 阻塞
+- 无。M6（兑换+周额度）和 M7（改名+审计+任务配置）继续。
+
+---
+
+**下次更新**: 完成 M6 后
