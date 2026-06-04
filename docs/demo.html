@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>儿子计分板 Demo</title>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+<script>
+// ============== v2: 首次填名字 ==============
+(function() {
+  const modal = document.getElementById('welcomeModal');
+  if (!modal) return;
+  const input = document.getElementById('welcomeName');
+  const btn = document.getElementById('welcomeSubmit');
+  const stored = localStorage.getItem('kiddo_name');
+  if (stored) {
+    document.querySelectorAll('.child-name-display, #childNameText').forEach(el => el.textContent = stored);
+  } else {
+    setTimeout(() => { modal.style.display = 'flex'; input && input.focus(); }, 200);
+  }
+  if (btn) btn.onclick = () => {
+    const name = (input.value || '').trim();
+    if (!name) { input.focus(); return; }
+    localStorage.setItem('kiddo_name', name);
+    document.querySelectorAll('.child-name-display, #childNameText').forEach(el => el.textContent = name);
+    if (typeof confetti === 'function') confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+    showToast('🎉 欢迎 ' + name + '!');
+    setTimeout(() => { modal.style.display = 'none'; }, 1200);
+  };
+  if (input) input.onkeydown = e => { if (e.key === 'Enter' && btn) btn.click(); };
+  // 重置名字按钮
+  const resetBtn = document.getElementById('btn-rename');
+  if (resetBtn) resetBtn.onclick = () => {
+    if (confirm('确定要重置名字吗? (会清除 localStorage 并刷新页面)')) {
+      localStorage.removeItem('kiddo_name');
+      localStorage.removeItem('kiddo_completed');
+      location.reload();
+    }
+  };
+})();
+
+// ============== v2: 任务快捷键 ==============
+const KIDDO_TASKS = [
+  { id: 1, name: '按时上床',     icon: '🎯', reward: 5, target: 'game_time' },
+  { id: 2, name: '英语题 1 道',  icon: '📚', reward: 2, target: 'pocket_money' },
+  { id: 3, name: '数学题 1 道',  icon: '📐', reward: 2, target: 'pocket_money' },
+  { id: 4, name: '整理床铺',     icon: '🛏️', reward: 3, target: 'game_time' }
+];
+function renderTaskShortcuts() {
+  const el = document.getElementById('taskShortcuts');
+  if (!el) return;
+  const done = JSON.parse(localStorage.getItem('kiddo_completed') || '[]');
+  el.innerHTML = '';
+  KIDDO_TASKS.forEach(t => {
+    const isDone = done.includes(t.id);
+    const btn = document.createElement('button');
+    btn.className = 'task-shortcut' + (isDone ? ' completed' : '');
+    btn.disabled = isDone;
+    btn.innerHTML = `${t.icon} ${t.name} <span style="color:#f59e0b;font-weight:700;">+${t.reward}</span>`;
+    btn.onclick = () => completeTask(t);
+    el.appendChild(btn);
+  });
+}
+function completeTask(t) {
+  const done = JSON.parse(localStorage.getItem('kiddo_completed') || '[]');
+  if (done.includes(t.id)) { showToast('⚠️ 今天已经完成过这个任务啦!'); return; }
+  done.push(t.id);
+  localStorage.setItem('kiddo_completed', JSON.stringify(done));
+  // 更新 mock 余额
+  if (state.balance) {
+    if (t.target === 'game_time') state.balance = (state.balance || 0) + t.reward;
+  }
+  // 更新事件 log
+  if (state.events) {
+    state.events.unshift({
+      id: (state.events[0]?.id || 0) + 1,
+      type: t.target,
+      change: t.reward,
+      reason: '任务: ' + t.icon + ' ' + t.name,
+      status: 'approved',
+      submitted_by: 'child',
+      created_at: nowStr(),
+      who: '小明'
+    });
+  }
+  // 更新审计 log
+  if (state.audit) {
+    state.audit.unshift({
+      id: (state.audit[0]?.id || 0) + 1,
+      action: 'task_complete',
+      actor: '小明',
+      detail: '完成任务 ' + t.icon + ' ' + t.name + ' +' + t.reward + ' 代币 → ' + (t.target === 'game_time' ? '游戏时间' : '零花钱'),
+      time: nowStr()
+    });
+  }
+  if (typeof confetti === 'function') confetti({ particleCount: 100, spread: 70, origin: { y: 0.7 } });
+  showToast(`+${t.reward} 代币! ${t.target === 'game_time' ? '🎮 游戏时间' : '💰 零花钱'} +${t.reward}`);
+  renderTaskShortcuts();
+  if (typeof renderChildEvents === 'function') renderChildEvents();
+  if (typeof renderPM === 'function') renderPM();
+}
+renderTaskShortcuts();
+
+</script>
+<style>
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: #f5f7fb; color: #1f2937; }
+  body { font-size: 18px; line-height: 1.5; }
+
+  /* Top nav */
+  .nav { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; padding: 12px 16px; gap: 8px; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .nav-title { font-weight: 700; font-size: 18px; margin-right: auto; }
+  .tab { padding: 10px 18px; border-radius: 999px; border: 2px solid #e5e7eb; background: #fff; font-size: 16px; font-weight: 600; color: #6b7280; cursor: pointer; }
+  .tab.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+  /* Container */
+  .container { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  /* Child view */
+  .hero { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; border-radius: 24px; padding: 32px 24px; text-align: center; box-shadow: 0 10px 30px rgba(16,185,129,.25); position: relative; }
+  .hero-label { font-size: 18px; opacity: .9; margin-bottom: 4px; }
+  .hero-value { font-size: 96px; font-weight: 800; line-height: 1; letter-spacing: -2px; }
+  .hero-unit { font-size: 28px; font-weight: 600; margin-left: 4px; opacity: .9; }
+  .hero-name { margin-top: 12px; font-size: 22px; opacity: .95; }
+  .hero-rename { position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,.2); border: 0; color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; cursor: pointer; backdrop-filter: blur(8px); }
+  .hero-rename:hover { background: rgba(255,255,255,.3); }
+
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+  .btn { padding: 18px 24px; border-radius: 16px; border: 0; font-size: 18px; font-weight: 700; cursor: pointer; transition: transform .08s, box-shadow .15s; }
+  .btn:active { transform: scale(.97); }
+  .btn-primary { background: #2563eb; color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,.25); }
+  .btn-secondary { background: #fff; color: #1f2937; border: 2px solid #e5e7eb; }
+  .btn-success { background: #10b981; color: #fff; }
+  .btn-danger { background: #ef4444; color: #fff; }
+  .btn-warn { background: #f59e0b; color: #fff; }
+  .btn-ghost { background: #f3f4f6; color: #374151; }
+
+  /* Section */
+  .section { margin-top: 28px; }
+  .section-title { font-size: 18px; font-weight: 700; margin: 0 0 12px; color: #374151; display: flex; align-items: center; gap: 8px; }
+  .section-title .count { background: #e5e7eb; color: #4b5563; font-size: 13px; padding: 2px 10px; border-radius: 999px; font-weight: 600; }
+  .section-title .count.has-pending { background: #fef3c7; color: #b45309; }
+
+  /* Event list */
+  .event-list { display: flex; flex-direction: column; gap: 10px; }
+  .event { background: #fff; border-radius: 14px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .event-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .event-icon.game { background: #ecfdf5; }
+  .event-icon.deduct { background: #fef2f2; }
+  .event-body { flex: 1; min-width: 0; }
+  .event-reason { font-weight: 600; font-size: 16px; margin-bottom: 2px; word-break: break-word; }
+  .event-meta { font-size: 13px; color: #6b7280; }
+  .event-value { font-size: 20px; font-weight: 800; flex-shrink: 0; }
+  .event-value.pos { color: #10b981; }
+  .event-value.neg { color: #ef4444; }
+
+  /* Status badges */
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.pending { background: #f3f4f6; color: #4b5563; }
+  .badge.approved { background: #d1fae5; color: #065f46; }
+  .badge.rejected { background: #fee2e2; color: #991b1b; }
+  .badge.revoked { background: #fed7aa; color: #9a3412; }
+
+  /* Pending cards (PM) */
+  .pending-card { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.06); border-left: 6px solid #f59e0b; }
+  .pending-card .top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .pending-card .who { font-size: 14px; color: #6b7280; }
+  .pending-card .val { font-size: 32px; font-weight: 800; }
+  .pending-card .row { display: flex; gap: 10px; margin-top: 12px; }
+  .pending-card .row .btn { flex: 1; padding: 14px; font-size: 16px; }
+
+  /* Audit log timeline */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before { content: ''; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: #e5e7eb; }
+  .tl-item { position: relative; padding: 10px 0; }
+  .tl-item::before { content: ''; position: absolute; left: -24px; top: 14px; width: 12px; height: 12px; border-radius: 50%; background: #2563eb; border: 2px solid #fff; box-shadow: 0 0 0 2px #2563eb; }
+  .tl-item .action { font-weight: 600; font-size: 15px; }
+  .tl-item .time { font-size: 12px; color: #9ca3af; }
+  .tl-item .detail { font-size: 14px; color: #4b5563; margin-top: 2px; }
+
+  /* Modal */
+  .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+  .modal-back.show { display: flex; }
+  .modal { background: #fff; border-radius: 20px; padding: 24px; max-width: 480px; width: 100%; max-height: 90vh; overflow: auto; }
+  .modal h2 { margin: 0 0 16px; font-size: 22px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 14px; color: #6b7280; margin-bottom: 6px; font-weight: 600; }
+  .field input, .field select, .field textarea { width: 100%; padding: 14px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 16px; font-family: inherit; background: #fff; }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: 0; border-color: #2563eb; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .modal-actions .btn { flex: 1; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1f2937; color: #fff; padding: 14px 22px; border-radius: 999px; font-size: 15px; font-weight: 600; z-index: 200; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-8px); }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 40px 20px; color: #9ca3af; }
+  .empty-icon { font-size: 48px; margin-bottom: 8px; }
+
+  /* PM not logged in */
+  .login-prompt { text-align: center; padding: 60px 20px; }
+  .login-prompt h2 { font-size: 28px; margin: 0 0 12px; }
+  .login-prompt p { color: #6b7280; margin: 0 0 24px; }
+
+  @media (min-width: 768px) {
+    .hero-value { font-size: 128px; }
+    .container { padding: 28px 24px 60px; }
+  }
+
+  /* ===== v2 additions: dual balance + welcome modal + tasks + PM sections ===== */
+  .balance-row { display: flex; gap: 16px; justify-content: center; margin: 20px 0; }
+  .balance-card { flex: 1; max-width: 300px; background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; }
+  .balance-card.game-time { border-top: 4px solid #10b981; }
+  .balance-card.pocket-money { border-top: 4px solid #f59e0b; }
+  .balance-label { font-size: 16px; color: #6b7280; margin-bottom: 8px; font-weight: 600; }
+  .balance-value { font-size: 56px; font-weight: 800; line-height: 1; color: #1f2937; }
+  .balance-card.game-time .balance-value { color: #10b981; }
+  .balance-card.pocket-money .balance-value { color: #f59e0b; }
+  .balance-unit { font-size: 18px; font-weight: 500; color: #6b7280; margin-left: 4px; }
+
+  .welcome-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99999; display: flex; align-items: center; justify-content: center; }
+  .welcome-content { background: white; padding: 40px; border-radius: 20px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+
+  .task-shortcuts { margin: 20px 0; padding: 16px; background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+  .task-shortcuts-label { font-size: 14px; color: #6b7280; margin-bottom: 12px; font-weight: 600; }
+  .task-shortcuts-list { display: flex; gap: 8px; flex-wrap: wrap; }
+  .task-shortcut { padding: 12px 16px; background: #f3f4f6; border: 2px solid #e5e7eb; border-radius: 12px; cursor: pointer; font-size: 15px; font-weight: 600; transition: all 0.2s; }
+  .task-shortcut:hover:not(.completed) { background: #dbeafe; border-color: #2563eb; transform: translateY(-1px); }
+  .task-shortcut.completed { background: #d1fae5; border-color: #10b981; color: #047857; cursor: not-allowed; }
+  .task-shortcut.completed::after { content: ' ✅'; }
+
+  .pm-section { background: white; border-radius: 16px; padding: 20px; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+  .pm-section h3 { margin: 0 0 16px; font-size: 18px; }
+  .task-mgmt-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .task-mgmt-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #f9fafb; border-radius: 8px; }
+  .task-mgmt-item .task-name { font-weight: 600; }
+  .task-mgmt-item .task-reward { color: #f59e0b; font-weight: 600; }
+  .task-mgmt-item .task-actions { display: flex; gap: 4px; }
+  .btn-warn-sm { padding: 4px 10px; background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .btn-secondary-sm { padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+  .btn-primary-sm { padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+  .task-completion-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 6px; }
+  .exchange-row { display: flex; gap: 8px; align-items: center; }
+  .exchange-select, .exchange-input { padding: 8px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; }
+  .exchange-input { width: 80px; }
+
+  .audit-actor { display: inline-block; padding: 2px 10px; border-radius: 999px; background: #f3f4f6; color: #374151; font-size: 13px; }
+  .audit-actor.task_complete { background: #dbeafe; color: #1e40af; }
+  .audit-actor.exchange { background: #fce7f3; color: #9f1239; }
+  .audit-actor.weekly { background: #fef3c7; color: #92400e; }
+
+
+/* ============== v2 双账户余额 (Warm Playful) ============== */
+.balance-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 720px; margin: 28px auto; padding: 0 24px; }
+.balance-card {
+  position: relative; overflow: hidden;
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  padding: 28px 24px;
+  text-align: left;
+  box-shadow: var(--shadow-md);
+  transition: transform 0.3s var(--bounce), box-shadow 0.3s var(--ease);
+}
+.balance-card:hover { transform: translateY(-2px); }
+.balance-card.game-time { box-shadow: var(--shadow-game); }
+.balance-card.game-time::before {
+  content: ''; position: absolute; top: -40px; right: -40px; width: 120px; height: 120px;
+  background: radial-gradient(circle, var(--game-green-soft) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.balance-card.pocket-money { box-shadow: var(--shadow-money); }
+.balance-card.pocket-money::before {
+  content: ''; position: absolute; top: -40px; right: -40px; width: 120px; height: 120px;
+  background: radial-gradient(circle, var(--money-gold-soft) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.balance-icon { font-size: 40px; margin-bottom: 8px; display: block; }
+.balance-label { font-size: 15px; color: var(--text-soft); font-weight: 600; margin-bottom: 4px; }
+.balance-value {
+  font-size: 64px; font-weight: 800; line-height: 1; margin: 8px 0;
+  letter-spacing: -0.03em;
+}
+.balance-card.game-time .balance-value { color: var(--game-green); }
+.balance-card.pocket-money .balance-value { color: var(--money-gold); }
+.balance-unit { font-size: 18px; font-weight: 600; color: var(--text-soft); margin-left: 4px; }
+.balance-trend { font-size: 13px; color: var(--text-muted); margin-top: 8px; font-weight: 500; }
+
+/* ============== v2 任务快捷键 (Warm Playful) ============== */
+.task-shortcuts {
+  max-width: 720px; margin: 0 auto 24px; padding: 0 24px;
+}
+.task-shortcuts-card {
+  background: var(--bg-card); border-radius: var(--radius-xl);
+  padding: 20px 24px; box-shadow: var(--shadow-sm);
+}
+.task-shortcuts-label {
+  font-size: 14px; color: var(--text-soft); font-weight: 700;
+  margin-bottom: 14px; display: flex; align-items: center; gap: 6px;
+  letter-spacing: 0.02em;
+}
+.task-shortcuts-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.task-shortcut {
+  padding: 14px 16px;
+  background: linear-gradient(135deg, var(--bg-soft), var(--bg-card));
+  border: 2px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 15px; font-weight: 700;
+  text-align: left;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--text-strong);
+  box-shadow: var(--shadow-xs);
+}
+.task-shortcut:hover:not(.completed) {
+  transform: translateY(-2px);
+  border-color: var(--accent-orange);
+  box-shadow: 0 6px 16px rgba(255, 138, 76, 0.18);
+  background: var(--bg-card);
+}
+.task-shortcut.completed {
+  background: var(--game-green-soft);
+  border-color: var(--game-green);
+  color: #047857;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+.task-shortcut-emoji { font-size: 22px; }
+.task-shortcut-reward { color: var(--money-gold); font-weight: 800; margin-left: auto; }
+
+/* ============== v2 顶部导航 (Warm Playful) ============== */
+.nav { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+.tab { border-radius: var(--radius-pill); font-weight: 700; }
+.tab.active { box-shadow: 0 4px 12px rgba(255, 138, 76, 0.3); }
+
+/* ============== v2 欢迎弹窗 (Warm Playful) ============== */
+.welcome-modal { background: rgba(31, 41, 55, 0.4); backdrop-filter: blur(8px); }
+.welcome-content {
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  padding: 48px 40px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-soft);
+}
+.welcome-emoji { font-size: 72px; display: block; margin-bottom: 16px; animation: bounce 2s var(--bounce) infinite; }
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.welcome-content input {
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  font-size: 18px;
+  border: 2px solid var(--border-soft);
+  transition: all 0.2s var(--ease);
+}
+.welcome-content input:focus {
+  border-color: var(--accent-orange);
+  box-shadow: 0 0 0 4px rgba(255, 138, 76, 0.15);
+  outline: none;
+}
+.welcome-content button {
+  border-radius: var(--radius-md);
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-orange), #FF6B35);
+  color: white;
+  box-shadow: 0 6px 16px rgba(255, 138, 76, 0.35);
+}
+.welcome-content button:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(255, 138, 76, 0.45); }
+
+/* ============== v2 PM 端 section (Warm Playful) ============== */
+.pm-section { background: var(--bg-card); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-soft); }
+.task-mgmt-item { background: var(--bg-soft); border-radius: var(--radius-md); border: 1px solid var(--border-soft); }
+.btn-warn { border-radius: var(--radius-sm); }
+.btn-primary, .btn-secondary { border-radius: var(--radius-md); padding: 10px 18px; font-weight: 700; }
+.btn-primary { background: linear-gradient(135deg, var(--accent-orange), #FF6B35); color: white; box-shadow: 0 4px 12px rgba(255, 138, 76, 0.3); }
+.btn-secondary { background: var(--bg-soft); color: var(--text-strong); border: 1px solid var(--border-soft); }
+
+/* ============== Warm Playful Design Tokens (覆盖 v1) ============== */
+:root {
+  --bg-warm: #FFF9F0;
+  --bg-card: #FFFFFF;
+  --bg-soft: #FFFCF5;
+  --game-green: #10B981;
+  --game-green-soft: #D1FAE5;
+  --money-gold: #F59E0B;
+  --money-gold-soft: #FEF3C7;
+  --accent-orange: #FF8A4C;
+  --text-strong: #1F2937;
+  --text-soft: #6B7280;
+  --border-soft: #F3F4F6;
+  --shadow-md: 0 6px 16px rgba(31, 41, 55, 0.08);
+  --shadow-game: 0 8px 24px rgba(16, 185, 129, 0.18);
+  --shadow-money: 0 8px 24px rgba(245, 158, 11, 0.18);
+  --radius-md: 18px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+html, body { background: var(--bg-warm) !important; }
+body {
+  font-family: -apple-system, "SF Pro Rounded", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif !important;
+  letter-spacing: -0.01em !important;
+}
+button, .btn, .task-shortcut, .tab {
+  transition: transform 0.2s var(--bounce), box-shadow 0.2s var(--ease), background 0.2s var(--ease) !important;
+}
+button:active, .btn:active, .task-shortcut:active:not(.completed), .tab:active {
+  transform: scale(0.94) !important;
+}
+</style>
+</head>
+<body>
+
+<!-- v2: welcome modal (first-time name entry) -->
+<div id="welcomeModal" class="welcome-modal" style="display:none;">
+  <div class="welcome-content">
+    <div style="font-size:64px;margin-bottom:16px;">🎮</div>
+    <h2 style="margin:0 0 8px;">欢迎来到你的计分板！</h2>
+    <p style="color:#6b7280;margin:0 0 24px;">请输入你的名字（之后就不能改啦）</p>
+    <input id="welcomeName" type="text" placeholder="你的名字" maxlength="10"
+           style="width:100%;padding:14px 16px;font-size:18px;border:2px solid #e5e7eb;border-radius:12px;outline:none;box-sizing:border-box;">
+    <button id="welcomeSubmit" style="margin-top:16px;width:100%;padding:14px;background:#2563eb;color:white;border:none;border-radius:12px;font-size:18px;font-weight:600;cursor:pointer;">开始 🚀</button>
+  </div>
+</div>
+
+<nav class="nav">
+  <div class="nav-title">🎮 儿子计分板</div>
+  <button class="tab active" data-view="child">儿子端</button>
+  <button class="tab" data-view="pm">PM 端</button>
+</nav>
+
+<main class="container">
+
+  <!-- CHILD VIEW -->
+  <section id="view-child">
+    <!-- v2: dual-balance cards (replaces single hero gradient) -->
+    <div class="balance-row">
+      <div class="balance-card game-time">
+        <div class="balance-label">🎮 游戏时间</div>
+        <div class="balance-value" id="balance">45<span class="balance-unit">分钟</span></div>
+      </div>
+      <div class="balance-card pocket-money">
+        <div class="balance-label">💰 零花钱</div>
+        <div class="balance-value" id="pocket-balance">30<span class="balance-unit">元</span></div>
+      </div>
+    </div>
+
+    <!-- v2: greeting + rename (preserved from v1) -->
+    <div style="text-align:center;margin:8px 0 4px;color:#374151;font-size:18px;">
+      你好, <span class="child-name">小明</span> 👋
+      <button id="btn-rename" style="margin-left:12px;background:transparent;border:1px solid #e5e7eb;color:#6b7280;padding:4px 12px;border-radius:999px;font-size:13px;cursor:pointer;">✏️ 改我的名字</button>
+    </div>
+
+    <!-- v2: task shortcuts (child-side, one-tap daily tasks) -->
+    <div class="task-shortcuts">
+      <div class="task-shortcuts-label">⚡ 今日任务 (每天每项 1 次)</div>
+      <div class="task-shortcuts-list" id="taskShortcuts"></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-submit">📝 提交申请</button>
+      <button class="btn btn-secondary" id="btn-refresh">🔄 刷新</button>
+    </div>
+
+    <div class="section">
+      <h3 class="section-title">最近事件 <span class="count" id="event-count">0</span></h3>
+      <div class="event-list" id="child-events"></div>
+    </div>
+  </section>
+
+  <!-- PM VIEW -->
+  <section id="view-pm" style="display:none">
+
+    <!-- Login gate -->
+    <div id="pm-login" class="login-prompt">
+      <h2>👨‍💼 PM 端</h2>
+      <p>（Demo 简化）点击下方按钮假装以"爸爸"身份登录</p>
+      <button class="btn btn-primary" id="btn-login" style="max-width:280px;margin:0 auto">假装登录</button>
+    </div>
+
+    <div id="pm-dashboard" style="display:none">
+      <div class="section">
+        <h3 class="section-title">⏳ 待审批 <span class="count has-pending" id="pending-count">0</span></h3>
+        <div id="pending-list"></div>
+      </div>
+
+      <div class="section">
+        <h3 class="section-title">🎁 周额度发放</h3>
+        <div style="background:#fff;border-radius:14px;padding:18px;display:flex;align-items:center;gap:16px;box-shadow:0 1px 3px rgba(0,0,0,.05)">
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:16px">本周: <span id="week-id">2026-W23</span></div>
+            <div style="font-size:13px;color:#6b7280;margin-top:2px">标准 60 分钟（周末 2 天 × 30 分钟）</div>
+          </div>
+          <button class="btn btn-success" id="btn-grant">+ 发放</button>
+        </div>
+      </div>
+
+      <!-- v2: PM task management (PRD §5.4) -->
+      <section class="pm-section">
+        <h3>📋 任务管理 (PM 后台)</h3>
+        <div class="task-mgmt-list">
+          <div class="task-mgmt-item">
+            <div>
+              <div class="task-name">🎯 按时上床</div>
+              <div style="font-size:12px;color:#6b7280;">→ 🎮 游戏时间</div>
+            </div>
+            <span class="task-reward">+5</span>
+            <div class="task-actions">
+              <button class="btn-warn-sm">编辑</button>
+              <button class="btn-warn-sm" style="background:#fee2e2;color:#991b1b;border-color:#f87171;">删除</button>
+            </div>
+          </div>
+          <div class="task-mgmt-item">
+            <div>
+              <div class="task-name">📚 英语题 1 道</div>
+              <div style="font-size:12px;color:#6b7280;">→ 💰 零花钱</div>
+            </div>
+            <span class="task-reward">+2</span>
+            <div class="task-actions">
+              <button class="btn-warn-sm">编辑</button>
+              <button class="btn-warn-sm" style="background:#fee2e2;color:#991b1b;border-color:#f87171;">删除</button>
+            </div>
+          </div>
+          <div class="task-mgmt-item">
+            <div>
+              <div class="task-name">📐 数学题 1 道</div>
+              <div style="font-size:12px;color:#6b7280;">→ 💰 零花钱</div>
+            </div>
+            <span class="task-reward">+2</span>
+            <div class="task-actions">
+              <button class="btn-warn-sm">编辑</button>
+              <button class="btn-warn-sm" style="background:#fee2e2;color:#991b1b;border-color:#f87171;">删除</button>
+            </div>
+          </div>
+          <div class="task-mgmt-item">
+            <div>
+              <div class="task-name">🛏️ 整理床铺</div>
+              <div style="font-size:12px;color:#6b7280;">→ 🎮 游戏时间</div>
+            </div>
+            <span class="task-reward">+3</span>
+            <div class="task-actions">
+              <button class="btn-warn-sm">编辑</button>
+              <button class="btn-warn-sm" style="background:#fee2e2;color:#991b1b;border-color:#f87171;">删除</button>
+            </div>
+          </div>
+        </div>
+        <button class="btn-secondary-sm" onclick="alert('Demo: 新建任务表单 (PRD §5.4)')">+ 新建任务</button>
+      </section>
+
+      <section class="pm-section">
+        <h3>✅ 今日任务完成 (可撤销)</h3>
+        <div class="task-completions-list">
+          <div class="task-completion-item">
+            <span>🎯 按时上床 +5 · 小明 21:00</span>
+            <button class="btn-warn-sm" onclick="alert('Demo: 撤销任务完成 (PRD §5.3)')">撤销</button>
+          </div>
+          <div class="task-completion-item">
+            <span>📚 英语题 1 道 +2 · 小明 19:30</span>
+            <button class="btn-warn-sm" onclick="alert('Demo: 撤销任务完成 (PRD §5.3)')">撤销</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="pm-section">
+        <h3>💱 双账户兑换</h3>
+        <div class="exchange-form">
+          <div class="exchange-row">
+            <select class="exchange-select">
+              <option>💰 零花钱 → 🎮 游戏时间</option>
+              <option>🎮 游戏时间 → 💰 零花钱</option>
+            </select>
+            <input type="number" class="exchange-input" value="30" min="1">
+            <button class="btn-primary-sm" onclick="alert('Demo: 兑换 30 元 → 30 分钟游戏')">兑换</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="section">
+        <h3 class="section-title">📋 全部事件</h3>
+        <div class="event-list" id="pm-events"></div>
+      </div>
+
+      <div class="section">
+        <h3 class="section-title">📜 审计 Log</h3>
+        <div class="timeline" id="audit-log"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Rename modal -->
+<div class="modal-back" id="modal-rename">
+  <div class="modal">
+    <h2>✏️ 改我的名字</h2>
+    <div class="field">
+      <label>新名字</label>
+      <input type="text" id="rename-input" maxlength="20" placeholder="给自己起个新名字">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" data-close>取消</button>
+      <button class="btn btn-primary" id="btn-rename-confirm">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- Submit modal -->
+<div class="modal-back" id="modal-submit">
+  <div class="modal">
+    <h2>📝 提交申请</h2>
+    <div class="field">
+      <label>类型</label>
+      <select id="submit-type">
+        <option value="game_time_pos">+ 游戏时间（奖励）</option>
+        <option value="game_time_neg">- 游戏时间（扣分）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>数量（分钟）</label>
+      <input type="number" id="submit-value" min="1" max="120" value="15">
+    </div>
+    <div class="field">
+      <label>原因（必填）</label>
+      <textarea id="submit-reason" rows="3" placeholder="例: 帮妈妈倒垃圾"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" data-close>取消</button>
+      <button class="btn btn-primary" id="btn-submit-confirm">提交</button>
+    </div>
+  </div>
+</div>
+
+<!-- Grant modal -->
+<div class="modal-back" id="modal-grant">
+  <div class="modal">
+    <h2>🎁 发放周额度</h2>
+    <div class="field">
+      <label>游戏时间（分钟）</label>
+      <input type="number" id="grant-minutes" min="0" max="180" value="60">
+    </div>
+    <div class="field">
+      <label>备注</label>
+      <input type="text" id="grant-note" value="周末发工资" maxlength="50">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" data-close>取消</button>
+      <button class="btn btn-success" id="btn-grant-confirm">确认发放</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============== Mock state (in-memory) ==============
+const state = {
+  child: { id: 1, name: '小明' },
+  pm: { id: 2, name: '爸爸' },
+  balance: 45,
+  week: '2026-W23',
+  pmLoggedIn: false,
+  events: [
+    { id: 1, type: 'game_time', change: +60, reason: '周额度发放 (2026-W22)', status: 'approved', submitted_by: 'pm', created_at: '2026-06-01 09:00', who: '爸爸' },
+    { id: 2, type: 'game_time', change: +15, reason: '帮忙倒垃圾', status: 'approved', submitted_by: 'child', created_at: '2026-06-03 18:30', who: '小明' },
+    { id: 3, type: 'game_time', change: -10, reason: '晚上 10:30 还没睡', status: 'approved', submitted_by: 'pm', created_at: '2026-06-04 22:45', who: '爸爸' },
+    { id: 4, type: 'game_time', change: +30, reason: '周末想多玩 30 分钟', status: 'pending', submitted_by: 'child', created_at: '2026-06-04 19:12', who: '小明' },
+    { id: 5, type: 'game_time', change: -20, reason: '偷偷玩手机游戏 20 分钟', status: 'approved', submitted_by: 'pm', created_at: '2026-06-02 21:15', who: '爸爸' },
+  ],
+  audit: [
+    { id: 1, action: 'login', actor: '爸爸', detail: 'PM 登录', time: '2026-06-01 09:00' },
+    { id: 2, action: 'grant', actor: '爸爸', detail: '发放周额度 +60 分钟 (2026-W22)', time: '2026-06-01 09:01' },
+    { id: 3, action: 'submit', actor: '小明', detail: '提交 +15 分钟 (帮忙倒垃圾)', time: '2026-06-03 18:30' },
+    { id: 4, action: 'approve', actor: '爸爸', detail: '通过 #2 (+15 分钟)', time: '2026-06-03 20:10' },
+    { id: 5, action: 'deduct', actor: '爸爸', detail: '扣分 -10 分钟 (晚睡)', time: '2026-06-04 22:45' },
+    { id: 6, action: 'submit', actor: '小明', detail: '提交 +30 分钟 (周末想多玩)', time: '2026-06-04 19:12' },
+    // v2: new action types
+    { id: 7, action: 'task_complete', actor: '小明', detail: '完成任务 🎯 按时上床 +5 代币 → 游戏时间', time: '2026-06-04 21:00' },
+    { id: 8, action: 'exchange', actor: '爸爸', detail: '兑换 10 元零花钱 → 10 分钟游戏时间', time: '2026-06-02 20:00' },
+    { id: 9, action: 'weekly', actor: '爸爸', detail: '发放周额度 +60 元零花钱 (2026-W22)', time: '2026-06-01 09:01' },
+  ],
+  nextId: 100,
+};
+
+// ============== Helpers ==============
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+
+function recomputeBalance() {
+  state.balance = state.events
+    .filter(e => e.status === 'approved')
+    .reduce((sum, e) => sum + e.change, 0);
+}
+
+function badge(status) {
+  const map = { pending: '待审批', approved: '已通过', rejected: '已拒绝', revoked: '已撤销' };
+  return `<span class="badge ${status}">${map[status]}</span>`;
+}
+
+function fmtTime(t) { return t; }
+
+function showToast(msg) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function openModal(id) { $('#' + id).classList.add('show'); }
+function closeAllModals() { $$('.modal-back').forEach(m => m.classList.remove('show')); }
+
+// ============== Child view render ==============
+function renderChildEvents() {
+  recomputeBalance();
+  $('#balance').textContent = state.balance;
+  document.querySelectorAll('.child-name').forEach(el => el.textContent = state.child.name);
+  $('#week-id').textContent = state.week;
+  $('#event-count').textContent = state.events.length;
+
+  const sorted = [...state.events].sort((a, b) => b.id - a.id).slice(0, 20);
+  const html = sorted.map(e => {
+    const isDeduct = e.change < 0;
+    return `
+      <div class="event">
+        <div class="event-icon ${isDeduct ? 'deduct' : 'game'}">${isDeduct ? '😢' : '🎮'}</div>
+        <div class="event-body">
+          <div class="event-reason">${e.reason}</div>
+          <div class="event-meta">${e.who} · ${fmtTime(e.created_at)} · ${badge(e.status)}</div>
+        </div>
+        <div class="event-value ${isDeduct ? 'neg' : 'pos'}">${e.change > 0 ? '+' : ''}${e.change} 分</div>
+      </div>
+    `;
+  }).join('');
+
+  $('#child-events').innerHTML = html || `<div class="empty"><div class="empty-icon">📭</div>还没有任何事件</div>`;
+}
+
+// ============== PM view render ==============
+function renderPM() {
+  if (!state.pmLoggedIn) {
+    $('#pm-login').style.display = 'block';
+    $('#pm-dashboard').style.display = 'none';
+    return;
+  }
+  $('#pm-login').style.display = 'none';
+  $('#pm-dashboard').style.display = 'block';
+
+  // Pending
+  const pending = state.events.filter(e => e.status === 'pending');
+  $('#pending-count').textContent = pending.length;
+  $('#pending-list').innerHTML = pending.length ? pending.map(e => `
+    <div class="pending-card" style="margin-bottom:12px">
+      <div class="top">
+        <div class="event-icon ${e.change < 0 ? 'deduct' : 'game'}">${e.change < 0 ? '😢' : '🎮'}</div>
+        <div style="flex:1">
+          <div class="event-reason">${e.reason}</div>
+          <div class="who">${e.who} 提交 · ${fmtTime(e.created_at)}</div>
+        </div>
+        <div class="val" style="color:${e.change < 0 ? '#ef4444' : '#10b981'}">${e.change > 0 ? '+' : ''}${e.change} 分</div>
+      </div>
+      <div class="row">
+        <button class="btn btn-success" data-approve="${e.id}">✓ 通过</button>
+        <button class="btn btn-danger" data-reject="${e.id}">✗ 拒绝</button>
+        <button class="btn btn-ghost" data-edit="${e.id}">✏️</button>
+      </div>
+    </div>
+  `).join('') : `<div class="empty"><div class="empty-icon">✨</div>没有待审批的申请</div>`;
+
+  // All events
+  const sorted = [...state.events].sort((a, b) => b.id - a.id);
+  $('#pm-events').innerHTML = sorted.map(e => {
+    const isDeduct = e.change < 0;
+    const actions = e.status === 'approved' ? `<button class="btn btn-warn" style="padding:8px 14px;font-size:14px" data-revoke="${e.id}">撤销</button>` : '';
+    return `
+      <div class="event">
+        <div class="event-icon ${isDeduct ? 'deduct' : 'game'}">${isDeduct ? '😢' : '🎮'}</div>
+        <div class="event-body">
+          <div class="event-reason">${e.reason}</div>
+          <div class="event-meta">${e.who} · ${fmtTime(e.created_at)} · ${badge(e.status)}</div>
+        </div>
+        <div class="event-value ${isDeduct ? 'neg' : 'pos'}">${e.change > 0 ? '+' : ''}${e.change}</div>
+        ${actions ? `<div style="margin-left:8px">${actions}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+
+  // Audit log
+  const audit = [...state.audit].sort((a, b) => b.id - a.id);
+  const actionMap = { login: '登录', submit: '提交', approve: '通过', reject: '拒绝', revoke: '撤销', grant: '发放游戏时间', deduct: '扣分', task_complete: '任务', exchange: '兑换', weekly: '零花钱周额度' };
+  const iconMap = { task_complete: '⚡ ', exchange: '💱 ', weekly: '📅 ' };
+  const classMap = { task_complete: 'task_complete', exchange: 'exchange', weekly: 'weekly' };
+  $('#audit-log').innerHTML = audit.map(a => {
+    const label = actionMap[a.action] || a.action;
+    const icon = iconMap[a.action] || '';
+    const cls = classMap[a.action];
+    const inner = cls
+      ? `<span class="audit-actor ${cls}">${icon}${label}</span> · ${a.actor}`
+      : `${label} · ${a.actor}`;
+    return `
+      <div class="tl-item">
+        <div class="action">${inner}</div>
+        <div class="time">${fmtTime(a.time)}</div>
+        <div class="detail">${a.detail}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ============== Event handlers ==============
+function switchView(view) {
+  $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  $('#view-child').style.display = view === 'child' ? 'block' : 'none';
+  $('#view-pm').style.display = view === 'pm' ? 'block' : 'none';
+  if (view === 'child') renderChildEvents();
+  if (view === 'pm') renderPM();
+  window.scrollTo(0, 0);
+}
+
+function fireConfetti() {
+  if (typeof confetti === 'function') {
+    const burst = (originX) => confetti({ particleCount: 80, spread: 70, startVelocity: 45, origin: { x: originX, y: 0.6 } });
+    burst(0.2); burst(0.5); burst(0.8);
+    setTimeout(() => confetti({ particleCount: 120, spread: 100, startVelocity: 50, origin: { x: 0.5, y: 0.5 } }), 250);
+  }
+}
+
+function doRename() {
+  const newName = $('#rename-input').value.trim();
+  if (!newName) { showToast('名字不能为空'); return; }
+  if (newName.length > 20) { showToast('名字太长啦'); return; }
+  state.child.name = newName;
+  closeAllModals();
+  fireConfetti();
+  showToast('🎉 改名成功!');
+  state.audit.push({ id: state.audit.length + 1, action: 'rename', actor: '小明', detail: `改名为 "${newName}"`, time: nowStr() });
+  renderChildEvents();
+}
+
+function doSubmit() {
+  const type = $('#submit-type').value;
+  const value = parseInt($('#submit-value').value, 10);
+  const reason = $('#submit-reason').value.trim();
+  if (!reason) { showToast('请填写原因'); return; }
+  if (!value || value < 1) { showToast('数量要大于 0'); return; }
+  const change = type === 'game_time_pos' ? Math.abs(value) : -Math.abs(value);
+  state.events.push({
+    id: state.nextId++,
+    type: 'game_time',
+    change,
+    reason,
+    status: 'pending',
+    submitted_by: 'child',
+    created_at: nowStr(),
+    who: state.child.name,
+  });
+  state.audit.push({ id: state.audit.length + 1, action: 'submit', actor: state.child.name, detail: `提交 ${change > 0 ? '+' : ''}${change} 分钟 (${reason})`, time: nowStr() });
+  closeAllModals();
+  showToast('✓ 已提交, 等待爸爸审批');
+  $('#submit-reason').value = '';
+  renderChildEvents();
+}
+
+function doApprove(id) {
+  const e = state.events.find(x => x.id === id);
+  if (!e) return;
+  e.status = 'approved';
+  state.audit.push({ id: state.audit.length + 1, action: 'approve', actor: state.pm.name, detail: `通过 #${id} (${e.change > 0 ? '+' : ''}${e.change} 分钟)`, time: nowStr() });
+  showToast('✓ 已通过');
+  renderPM();
+  renderChildEvents();
+}
+
+function doReject(id) {
+  const e = state.events.find(x => x.id === id);
+  if (!e) return;
+  e.status = 'rejected';
+  state.audit.push({ id: state.audit.length + 1, action: 'reject', actor: state.pm.name, detail: `拒绝 #${id} (${e.reason})`, time: nowStr() });
+  showToast('✗ 已拒绝');
+  renderPM();
+  renderChildEvents();
+}
+
+function doRevoke(id) {
+  if (!confirm('确定要撤销这条记录吗? 余额会回滚, 但记录保留。')) return;
+  const e = state.events.find(x => x.id === id);
+  if (!e) return;
+  e.status = 'revoked';
+  state.audit.push({ id: state.audit.length + 1, action: 'revoke', actor: state.pm.name, detail: `撤销 #${id} (${e.change > 0 ? '+' : ''}${e.change} 分钟)`, time: nowStr() });
+  showToast('↩ 已撤销');
+  renderPM();
+  renderChildEvents();
+}
+
+function doEdit(id) {
+  const e = state.events.find(x => x.id === id);
+  if (!e) return;
+  const newReason = prompt('修改原因:', e.reason);
+  if (newReason == null || !newReason.trim()) return;
+  const old = e.reason;
+  e.reason = newReason.trim();
+  state.audit.push({ id: state.audit.length + 1, action: 'edit', actor: state.pm.name, detail: `编辑 #${id} 原因: "${old}" → "${e.reason}"`, time: nowStr() });
+  showToast('✏️ 已修改');
+  renderPM();
+  renderChildEvents();
+}
+
+function doGrant() {
+  const minutes = parseInt($('#grant-minutes').value, 10) || 0;
+  const note = $('#grant-note').value.trim() || '周额度发放';
+  if (minutes < 1) { showToast('分钟数要大于 0'); return; }
+  state.events.push({
+    id: state.nextId++,
+    type: 'game_time',
+    change: minutes,
+    reason: `${note} (${state.week})`,
+    status: 'approved',
+    submitted_by: 'pm',
+    created_at: nowStr(),
+    who: state.pm.name,
+  });
+  state.audit.push({ id: state.audit.length + 1, action: 'grant', actor: state.pm.name, detail: `发放周额度 +${minutes} 分钟 (${state.week})`, time: nowStr() });
+  closeAllModals();
+  showToast(`🎁 已发放 +${minutes} 分钟`);
+  renderPM();
+  renderChildEvents();
+}
+
+function nowStr() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ============== Wire up ==============
+$$('.tab').forEach(t => t.addEventListener('click', () => switchView(t.dataset.view)));
+
+$('#btn-rename').addEventListener('click', () => {
+  $('#rename-input').value = state.child.name;
+  openModal('modal-rename');
+  setTimeout(() => $('#rename-input').focus(), 50);
+});
+$('#btn-rename-confirm').addEventListener('click', doRename);
+
+$('#btn-submit').addEventListener('click', () => {
+  $('#submit-reason').value = '';
+  $('#submit-value').value = 15;
+  $('#submit-type').value = 'game_time_pos';
+  openModal('modal-submit');
+  setTimeout(() => $('#submit-reason').focus(), 50);
+});
+$('#btn-submit-confirm').addEventListener('click', doSubmit);
+
+$('#btn-grant').addEventListener('click', () => openModal('modal-grant'));
+$('#btn-grant-confirm').addEventListener('click', doGrant);
+
+$('#btn-refresh').addEventListener('click', () => {
+  renderChildEvents();
+  showToast('🔄 已刷新');
+});
+
+$('#btn-login').addEventListener('click', () => {
+  state.pmLoggedIn = true;
+  state.audit.push({ id: state.audit.length + 1, action: 'login', actor: state.pm.name, detail: 'PM 登录', time: nowStr() });
+  showToast(`👋 欢迎, ${state.pm.name}`);
+  renderPM();
+});
+
+// Close modal handlers
+$$('[data-close]').forEach(b => b.addEventListener('click', closeAllModals));
+$$('.modal-back').forEach(m => m.addEventListener('click', (e) => { if (e.target === m) closeAllModals(); }));
+
+// Delegated handlers for PM actions
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-approve],[data-reject],[data-revoke],[data-edit]');
+  if (!t) return;
+  if (t.dataset.approve) doApprove(parseInt(t.dataset.approve, 10));
+  if (t.dataset.reject) doReject(parseInt(t.dataset.reject, 10));
+  if (t.dataset.revoke) doRevoke(parseInt(t.dataset.revoke, 10));
+  if (t.dataset.edit) doEdit(parseInt(t.dataset.edit, 10));
+});
+
+// Enter to submit in modals
+$('#rename-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doRename(); });
+
+// Initial render
+renderChildEvents();
+renderPM();
+
+// Pre-fill name field for rename
+$('#rename-input').value = state.child.name;
+
+
+// ============== v2: 首次填名字 ==============
+(function() {
+  const modal = document.getElementById('welcomeModal');
+  if (!modal) return;
+  const input = document.getElementById('welcomeName');
+  const btn = document.getElementById('welcomeSubmit');
+  const stored = localStorage.getItem('kiddo_name');
+  if (stored) {
+    document.querySelectorAll('.child-name-display, #childNameText').forEach(el => el.textContent = stored);
+  } else {
+    setTimeout(() => { modal.style.display = 'flex'; input && input.focus(); }, 200);
+  }
+  if (btn) btn.onclick = () => {
+    const name = (input.value || '').trim();
+    if (!name) { input.focus(); return; }
+    localStorage.setItem('kiddo_name', name);
+    document.querySelectorAll('.child-name-display, #childNameText').forEach(el => el.textContent = name);
+    if (typeof confetti === 'function') confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+    showToast('🎉 欢迎 ' + name + '!');
+    setTimeout(() => { modal.style.display = 'none'; }, 1200);
+  };
+  if (input) input.onkeydown = e => { if (e.key === 'Enter' && btn) btn.click(); };
+  // 重置名字按钮
+  const resetBtn = document.getElementById('btn-rename');
+  if (resetBtn) resetBtn.onclick = () => {
+    if (confirm('确定要重置名字吗? (会清除 localStorage 并刷新页面)')) {
+      localStorage.removeItem('kiddo_name');
+      localStorage.removeItem('kiddo_completed');
+      location.reload();
+    }
+  };
+})();
+
+// ============== v2: 任务快捷键 ==============
+const KIDDO_TASKS = [
+  { id: 1, name: '按时上床',     icon: '🎯', reward: 5, target: 'game_time' },
+  { id: 2, name: '英语题 1 道',  icon: '📚', reward: 2, target: 'pocket_money' },
+  { id: 3, name: '数学题 1 道',  icon: '📐', reward: 2, target: 'pocket_money' },
+  { id: 4, name: '整理床铺',     icon: '🛏️', reward: 3, target: 'game_time' }
+];
+function renderTaskShortcuts() {
+  const el = document.getElementById('taskShortcuts');
+  if (!el) return;
+  const done = JSON.parse(localStorage.getItem('kiddo_completed') || '[]');
+  el.innerHTML = '';
+  KIDDO_TASKS.forEach(t => {
+    const isDone = done.includes(t.id);
+    const btn = document.createElement('button');
+    btn.className = 'task-shortcut' + (isDone ? ' completed' : '');
+    btn.disabled = isDone;
+    btn.innerHTML = `${t.icon} ${t.name} <span style="color:#f59e0b;font-weight:700;">+${t.reward}</span>`;
+    btn.onclick = () => completeTask(t);
+    el.appendChild(btn);
+  });
+}
+function completeTask(t) {
+  const done = JSON.parse(localStorage.getItem('kiddo_completed') || '[]');
+  if (done.includes(t.id)) { showToast('⚠️ 今天已经完成过这个任务啦!'); return; }
+  done.push(t.id);
+  localStorage.setItem('kiddo_completed', JSON.stringify(done));
+  // 更新 mock 余额
+  if (state.balance) {
+    if (t.target === 'game_time') state.balance = (state.balance || 0) + t.reward;
+  }
+  // 更新事件 log
+  if (state.events) {
+    state.events.unshift({
+      id: (state.events[0]?.id || 0) + 1,
+      type: t.target,
+      change: t.reward,
+      reason: '任务: ' + t.icon + ' ' + t.name,
+      status: 'approved',
+      submitted_by: 'child',
+      created_at: nowStr(),
+      who: '小明'
+    });
+  }
+  // 更新审计 log
+  if (state.audit) {
+    state.audit.unshift({
+      id: (state.audit[0]?.id || 0) + 1,
+      action: 'task_complete',
+      actor: '小明',
+      detail: '完成任务 ' + t.icon + ' ' + t.name + ' +' + t.reward + ' 代币 → ' + (t.target === 'game_time' ? '游戏时间' : '零花钱'),
+      time: nowStr()
+    });
+  }
+  if (typeof confetti === 'function') confetti({ particleCount: 100, spread: 70, origin: { y: 0.7 } });
+  showToast(`+${t.reward} 代币! ${t.target === 'game_time' ? '🎮 游戏时间' : '💰 零花钱'} +${t.reward}`);
+  renderTaskShortcuts();
+  if (typeof renderChildEvents === 'function') renderChildEvents();
+  if (typeof renderPM === 'function') renderPM();
+}
+renderTaskShortcuts();
+
+</script>
+</body>
+</html>

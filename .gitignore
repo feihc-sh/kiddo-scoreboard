@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.pnp.*
+
+# Build outputs
+dist/
+.wrangler/
+.dev.vars
+
+# Secrets
+.env
+.env.local
+*.dev.vars
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Test artifacts
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Logs
+*.log
