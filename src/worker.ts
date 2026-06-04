@@ -1,5 +1,9 @@
 import { Hono } from 'hono';
 import admin from './routes/admin/index.ts';
+import publicUser from './routes/public/user.ts';
+import publicEvents from './routes/public/events.ts';
+import publicBalance from './routes/public/balance.ts';
+import publicTasks from './routes/public/tasks.ts';
 
 export interface Env {
   DB: D1Database;
@@ -19,5 +23,9 @@ app.get('/', (c) =>
 app.get('/health', (c) => c.json({ status: 'healthy' }));
 
 app.route('/api/admin', admin);
+app.route('/api/public/user', publicUser);
+app.route('/api/public/balance', publicBalance);
+app.route('/api/public/events', publicEvents);
+app.route('/api/public/tasks', publicTasks);
 
 export default app;

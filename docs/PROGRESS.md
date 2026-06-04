@@ -17,8 +17,8 @@
 |------|------|----------|------|------|
 | **M0** 脚手架 | ✅ Done | 2026-06-04 | 3 e2e | Hono + Wrangler 4 + D1 + Playwright |
 | **M1** 数据模型 + 工具 | ✅ Done | 2026-06-04 | 39 unit + 3 e2e | 5 张表 + week/balance/audit 工具 |
-| **M2** PM 认证 | ⏳ Pending | - | - | PIN + Session cookie + 锁 5 分钟 |
-| M3** 只读 API | ⏳ Pending | - | - | 余额 / 事件 / 任务列表 |
+| **M2** PM 认证 | ✅ Done | 2026-06-04 | 42 unit | PIN + Session cookie + 锁 5 分钟 |
+| **M3** 只读 API | ✅ Done | 2026-06-05 | 25 unit + 2 e2e | 余额/用户/事件/任务 + today-status |
 | **M4** 任务系统 | ⏳ Pending | - | - | 完成任务 / 撤销 |
 | **M5** 申请审批 | ⏳ Pending | - | - | 提交 / 通过 / 拒绝 / 撤销 |
 | **M6** 兑换 | ⏳ Pending | - | - | 双账户 1:1 转换 |
@@ -28,7 +28,7 @@
 | **M10** 部署 | ⏳ Pending | - | - | Cloudflare Pages + D1 |
 | **M11** 备份监控（可选）| ⏳ Optional | - | - | 后续 |
 
-**总测试数（截至 M2）**: 84 个（81 unit + 3 e2e）全绿
+**总测试数（截至 M3）**: 133 个（106 unit + 5 e2e）全绿
 
 ---
 
@@ -184,4 +184,45 @@
 
 ---
 
-**下次更新**: 完成 M2 后
+## ✅ M3：只读 API（Done, 2026-06-05）
+
+### 目标
+实现 6 个公开只读 API：余额 / 用户信息 / 事件列表+详情 / 任务列表+today-status。无 schema 变更。
+
+### 交付
+- `src/routes/public/balance.ts`（31 行）— `GET /api/public/balance?user_id=N`
+- `src/routes/public/user.ts`（35 行）— `GET /api/public/user/:id`（不含 pin_hash）
+- `src/routes/public/events.ts`（106 行）— `GET /api/public/events` 列表 + `:id` 详情
+- `src/routes/public/tasks.ts`（70 行）— `GET /api/public/tasks` + `/today-status`
+- `src/worker.ts` — 4 个 `app.route` mount
+- `tests/unit/public-{balance,user,events,tasks}.test.ts`（782 行）— 25 个单测
+- `tests/e2e/public-api.spec.ts` — 2 个 e2e（验证 routes 真挂上）
+
+### 端点
+| Method | Path | 角色 | 行为 |
+|--------|------|------|------|
+| GET | `/api/public/balance?user_id=N` | 公开 | 双账户余额，仅 approved |
+| GET | `/api/public/user/:id` | 公开 | 用户 + is_first_time，不含 pin_hash |
+| GET | `/api/public/events?user_id=&status=&type=&limit=` | 公开 | 事件列表（filter + clamp limit≤200）|
+| GET | `/api/public/events/:id` | 公开 | 单事件详情 |
+| GET | `/api/public/tasks?user_id=&active=true` | 公开 | 任务列表（按 sort_order 排序）|
+| GET | `/api/public/tasks/today-status?user_id=` | 公开 | 今日已完成的任务 id 列表 |
+
+### 验收
+- ✅ 106/106 单测全绿（M1+M2 81 + M3 新增 25）
+- ✅ 5/5 e2e 全绿（3 旧 + 2 新）
+- ✅ `npm run typecheck` 0 错误
+- ✅ **4 个 CC 并行完成**（A/B/C 第一波 + D 第二波），单 CC 不超时
+
+### 默认决策（与原 PLAN 偏差）
+- **每个 route 独立 mount，不走 `public/index.ts` 聚合器**：与 `admin/index.ts` 不一致，但每个子-Hono 独立挂更简单，跳过一层抽象。
+- **`user_id` 校验严格化**（`Number.isInteger` + `> 0`）：拒绝负数、0、浮点、非数字字符串。比 PRD 字面要求更严。
+- **`limit` 钳制** `Math.min(200, Math.max(1, …))`：防止 NaN/Infinity/负数。
+- **mount 顺序按字母**：balance → events → tasks → user（无关功能，仅可读性）。
+
+### 阻塞
+- 无。Module 1 工具（`computeBalance`、`todayShanghai`）已就绪。
+
+---
+
+**下次更新**: 完成 M4 后
