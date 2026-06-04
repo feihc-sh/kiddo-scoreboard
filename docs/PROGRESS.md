@@ -19,7 +19,7 @@
 | **M1** 数据模型 + 工具 | ✅ Done | 2026-06-04 | 39 unit + 3 e2e | 5 张表 + week/balance/audit 工具 |
 | **M2** PM 认证 | ✅ Done | 2026-06-04 | 42 unit | PIN + Session cookie + 锁 5 分钟 |
 | **M3** 只读 API | ✅ Done | 2026-06-05 | 25 unit + 2 e2e | 余额/用户/事件/任务 + today-status |
-| **M4** 任务系统 | ⏳ Pending | - | - | 完成任务 / 撤销 |
+| **M4** 任务系统 | ✅ Done | 2026-06-05 | 14 unit + 3 e2e | 完成任务 (事务) + PM 撤销 |
 | **M5** 申请审批 | ⏳ Pending | - | - | 提交 / 通过 / 拒绝 / 撤销 |
 | **M6** 兑换 | ⏳ Pending | - | - | 双账户 1:1 转换 |
 | **M7** 改名 + 审计 UI | ⏳ Pending | - | - | 首次填名字 + log 时间线 |
@@ -28,7 +28,7 @@
 | **M10** 部署 | ⏳ Pending | - | - | Cloudflare Pages + D1 |
 | **M11** 备份监控（可选）| ⏳ Optional | - | - | 后续 |
 
-**总测试数（截至 M3）**: 133 个（106 unit + 5 e2e）全绿
+**总测试数（截至 M4）**: 147 个（120 unit + 8 e2e）全绿
 
 ---
 
@@ -225,4 +225,41 @@
 
 ---
 
-**下次更新**: 完成 M4 后
+## ✅ M4：任务系统（Done, 2026-06-05）
+
+### 目标
+儿子端完成任务（每天 1 次，事务原子性） + PM 撤销完成任务（同步撤销 score_event）。
+
+### 交付
+- `src/routes/me/tasks.ts`（137 行）— `POST /api/me/tasks/:id/complete`
+- `src/routes/me/index.ts`（13 行）— aggregator
+- `src/routes/admin/task-completions.ts`（116 行）— `POST /api/admin/task-completions/:id/revoke`
+- `src/routes/admin/index.ts` — 添加新 route mount
+- `src/worker.ts` — 挂载 `/api/me` + admin aggregator 自动保护
+- `tests/unit/me-tasks-complete.test.ts`（462 行）— 8 tests 含事务断言
+- `tests/unit/admin-task-revoke.test.ts`（429 行）— 6 tests 含 PM 守卫
+- `tests/e2e/task-system.spec.ts` — 3 e2e（mount + 守卫）
+
+### 端点
+| Method | Path | 角色 | 行为 |
+|--------|------|------|------|
+| POST | `/api/me/tasks/:id/complete` | 儿子（user_id=2 hardcoded） | 一天 1 次，事务写 task_completion + score_event + audit |
+| POST | `/api/admin/task-completions/:id/revoke` | PM | 事务撤销 completion + score_event + audit |
+
+### 验收
+- ✅ 120/120 单测全绿（M1-M3 106 + M4 新增 14）
+- ✅ 8/8 e2e 全绿（5 旧 + 3 新）
+- ✅ `npm run typecheck` 0 错误
+
+### 默认决策（与原 PLAN 偏差）
+- **儿子端 user_id 写死 2**（M5 才会加 auth）。代码内嵌 `CHILD_USER_ID` 常量 + 注释。
+- **`db.batch()` 显式包含 3 个 SQL**（不用 `logAuditInBatch` 因为它是 no-op wrapper）。Audit INSERT 内联到事务保证原子性。
+- **`awarded_event_id` 用 SQL `last_insert_rowid()`** 取（不二次查表），匹配 D1 连接级 rowid 语义。
+- **`status='active'` 唯一阻止**（revoked completion 不阻挡重新完成）。专门有 test 验证。
+
+### 阻塞
+- 无。任务系统完全可用，但 M5 加 auth 后 user_id 才会从 hardcoded 2 改为 session-derived。
+
+---
+
+**下次更新**: 完成 M5 后

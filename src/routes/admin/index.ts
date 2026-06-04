@@ -5,6 +5,7 @@
 import { Hono } from 'hono';
 import { requirePm } from '../../middleware/requirePm.ts';
 import auth from './auth.ts';
+import taskCompletions from './task-completions.ts';
 import type { Env } from '../../worker.ts';
 
 const admin = new Hono<{ Bindings: Env }>();
@@ -14,5 +15,7 @@ admin.route('/auth', auth);
 
 // All OTHER /api/admin/* routes require a valid PM session.
 admin.use('/*', requirePm);
+
+admin.route('/task-completions', taskCompletions);
 
 export default admin;
