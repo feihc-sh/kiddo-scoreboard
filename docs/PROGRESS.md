@@ -7,7 +7,7 @@
 **用户**: 岑斐灏（爸爸 / PM）
 **总模块数**: 11 段
 **当前进度**: 🟢 Module 1/11 完成
-**最近更新**: 2026-06-06（Task+seg-btn+server hotfix commit 1474487，3 bugs fixed）
+**最近更新**: 2026-06-06（§3.12 edge 完成 commit 9ca3732；109 pass + 1 skip baseline）
 
 ---
 
@@ -33,6 +33,8 @@
 | **Phase 2 findings** | ✅ Done | 2026-06-06 | — | 1 bug fixed (form name attrs) + 3 documented（`docs/PHASE2_FINDINGS.md`）|
 | **iPad cache fix** | ✅ Done | 2026-06-06 | — | 3-layer no-store + ?v=2 cache-busting（`bcd906c`）；commit message has user iPad 操作指南 |
 | **Task+seg-btn+server hotfix** | ✅ Done | 2026-06-06 | 1 new + 100 e2e | 3 bugs (CSS .task-btn 缺, seg-btn class mismatch, server tasks.ts:100 bind 多 1 arg) + helpers/db.ts 换 sqlite3 CLI（workerd sync fix）（`1474487`）|
+| **F2 debounce fix** | ✅ Done | 2026-06-06 | 1 spec update | admin.js approve/reject/revoke 用 inFlight Set 防 5-click race（`9d2a1c3`）|
+| **§3.12 edge** | ✅ Done | 2026-06-06 | 9 pass + 1 skip | 10 edge scenarios（`9ca3732`）；E9 PM-approve-→-child-refresh 跳过（hang，需修 cookie race）|
 
 **总测试数（截至 Phase 2 完成）**: 297 个（198 unit + 99 e2e = 98 pass + 1 pre-existing flaky）全绿
 
