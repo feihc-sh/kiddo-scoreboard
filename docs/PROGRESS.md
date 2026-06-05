@@ -26,9 +26,9 @@
 | **M8** 儿子端 UI | ✅ Done | 2026-06-05 | 0 unit + 4 e2e | iPad PWA（HTML+CSS+JS+assets）|
 | **M9** PM 端 UI | ✅ Done | 2026-06-05 | 0 unit + 5 e2e | login + dashboard（7 sections）|
 | **M10** 部署 | ✅ Done | 2026-06-05 | 2 unit | prod 安全 + init-prod + DEPLOY.md |
-| **M11** 备份监控（可选）| ⏳ Optional | - | - | 后续 |
+| **M11** 备份监控（可选）| ✅ Done | 2026-06-05 | 0 unit | 备份脚本 + 监控文档 |
 
-**总测试数（截至 M10）**: 270 个（198 unit + 26 e2e）全绿
+**总测试数（截至 M11）**: 270 个（198 unit + 26 e2e）全绿
 
 ---
 
@@ -514,4 +514,72 @@ PM 后台管理界面：登录 + 7 个管理 section（待审/全部 events、�
 
 ---
 
-**下次更新**: M11（可选备份监控）
+## ✅ M11：备份监控（Done, 2026-06-05）
+
+### 目标
+D1 数据备份一键化 + 健康监控建议（家庭场景最小化）。
+
+### 交付
+- `scripts/backup-d1.sh`（31 行）— `wrangler d1 export` 包装，>1MB 自动 gzip
+- `package.json` — `npm run backup` 脚本（+cron 行）
+- `DEPLOY.md` — 加 "Backups" + "Health monitoring" 两个 section
+
+### 设计取舍
+- **不做自动恢复脚本**（家庭场景，restore 是低频操作，直接联系 Cloudflare 支持更快）
+- **不做内置 cron**（避免把 cron 逻辑写进 worker；用 OS-level cron 或外部服务）
+- **/health 端点已存在**（M0），文档里给 3 种监控方案（CF Analytics / 外部 uptime / Hermes cron）
+- **Cloudflare D1 内置备份**已经覆盖大部分场景（Time Travel 1 天免费 + 周自动备份）
+
+### 验收
+- ✅ 198/198 单测全绿
+- ✅ 26/26 e2e 全绿
+- ✅ `npm run typecheck` 0 错误
+
+---
+
+## 🎉 项目完成总结
+
+**11 个模块全部交付**，所有验收通过。
+
+| 阶段 | 模块 | 端点数 | 单测 | e2e |
+|------|------|--------|------|-----|
+| 后端 | M0-M1 脚手架 + 数据模型 | - | 39 | 3 |
+| 后端 | M2 PM 认证 | 3 | 42 | 0 |
+| 后端 | M3-M7 业务端点 | 19 | 118 | 13 |
+| 前端 | M8-M9 UI | - | 0 | 9 |
+| 部署 | M10-M11 | - | 2 | 0 |
+| **合计** | **11 模块** | **22 端点** | **198** | **26** |
+
+**代码量**（不含 node_modules / dist / .wrangler）：
+- TypeScript：~4500 行（src/ + scripts/）
+- 静态资源：~1500 行（HTML + CSS + JS）
+- SQL：~200 行（migrations/ + seeds/）
+- 文档：~2500 行（PRD + PROGRESS + DEPLOY + demo.html + README + PLAN）
+
+**Git 历史**：13 个 commit，分模块清晰，commit message 详尽。
+
+**生产就绪**：
+- ✅ Typecheck 0 错
+- ✅ 全部测试 pass
+- ✅ wrangler dry-run 成功
+- ✅ DEPLOY.md 一步步指导
+- ✅ 部署脚本幂等
+- ✅ M2 prod 隐患已修
+- ✅ 备份/监控文档完备
+
+**用户下一步**（参考 DEPLOY.md）：
+1. `npx wrangler login`
+2. 创建 D1 + 更新 `database_id`
+3. 设置 JWT secret
+4. 应用 migrations
+5. 设置初始 PM PIN
+6. `npm run deploy`
+7. iPad Safari 打开部署 URL 给儿子用
+
+**待用户使用反馈后再决定是否迭代**：
+- 任务模板默认集合
+- 周额度默认值
+- "代币 vs 钱"展示偏好
+- 兑换比例（当前 1:1）
+- 任务图标库
+- 审计 log 默认展示条数

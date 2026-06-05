@@ -154,6 +154,55 @@ on first dev start.
 
 ---
 
+## Backups
+
+### Manual backup
+```bash
+npm run backup                    # writes backups/<timestamp>.sql
+npm run backup /path/to/file.sql  # writes to specified path
+```
+The script wraps `wrangler d1 export` and auto-compresses files > 1 MB.
+
+### Automatic backup (cron)
+Add to your crontab (runs daily at 3am):
+```
+0 3 * * * cd /path/to/kiddo-scoreboard && npm run backup /path/to/backups/daily-$(date +\%F).sql
+```
+
+### Cloudflare D1 built-in
+Cloudflare D1 also has built-in point-in-time recovery (Time Travel, 1 day on
+the free tier, 30 days on paid) and a weekly automatic backup. See:
+- https://developers.cloudflare.com/d1/reference/time-travel/
+
+For most single-family use cases, the built-in Cloudflare backups + an
+occasional manual `npm run backup` is enough. Restore from a backup is
+out of scope for this app — contact Cloudflare support with the backup ID
+if needed.
+
+---
+
+## Health monitoring (optional)
+
+The `/health` endpoint returns 200 + `{"status":"healthy"}` when the worker
+and D1 are operational. To set up monitoring, you can:
+
+1. **Cloudflare Workers Analytics** (free): see requests/errors/percentiles
+   in the Cloudflare dashboard → Workers → kiddo-scoreboard → Metrics.
+2. **External uptime checker**: use a service like UptimeRobot, Better Stack,
+   or Cronitor to ping `https://<your-url>/health` every 5 minutes.
+3. **Local cron + Hermes notification** (if you're using Hermes Agent):
+   ```bash
+   hermes cron create --name "kiddo-health" --schedule "*/5 * * * *" \
+     --prompt "curl -fsS https://<your-url>/health || echo 'kiddo DOWN'"
+   ```
+
+The app itself is designed to fail safely: if D1 is unreachable, the worker
+returns 500 but the static UI still serves (children can see their last
+known balance from the localStorage cache — though M8 doesn't currently
+implement that, treat the live API as the source of truth).
+
+---
+
 ## Security checklist
 
 Before going live, confirm:

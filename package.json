@@ -11,6 +11,7 @@
     "deploy:migrate": "wrangler d1 migrations apply kiddo-scoreboard-db --remote",
     "deploy:init": "bash scripts/init-prod.sh",
     "deploy:check": "wrangler whoami && wrangler d1 list | grep kiddo-scoreboard",
+    "backup": "bash scripts/backup-d1.sh",
     "test": "playwright test",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
