@@ -204,15 +204,12 @@ test.describe('UI: PM Pending Events (Section A)', () => {
     }
     // Wait for the in-flight request to complete
     await page.waitForTimeout(6000);
-    // KNOWN FINDING (PHASE2): admin.js:approveEvent() has no debounce/disabled
-    // protection. Real behavior: rapid clicks fire 5 separate POST requests.
-    // Server-side: only the first wins (200 + balance updated); the rest get
-    // 409 (already approved) or 200 (idempotent). UI side: user can spam the
-    // 通过 button without feedback. Tracking issue: PHASE2-FIX-debounce.
-    // This test asserts current (un-debounced) behavior so any future fix
-    // that adds debouncing will be a positive signal.
-    expect(approveCalls).toBeGreaterThanOrEqual(5);  // current: 5
-    expect(approveCalls).toBeLessThanOrEqual(5);
+    // PHASE2-FIX-debounce applied: module-level inFlight Set in admin.js
+    // blocks duplicate approve/reject/revoke calls per event id, even though
+    // renderAll() recreates the buttons (which would reset .disabled).
+    // The inFlight set persists across renders, so the 2nd-5th clicks are
+    // silently no-op'd before they hit the API.
+    expect(approveCalls).toBe(1);
   });
 
   // ---------- Negative ----------

@@ -325,17 +325,27 @@ function rowEl(html) {
 }
 
 // ---------- Actions ----------
+// In-flight set prevents double-clicks from firing duplicate approve/reject/revoke
+// requests, even though renderAll() recreates the buttons (which would reset .disabled).
+const inFlight = new Set();
+
 async function approveEvent(id) {
+  if (inFlight.has(id)) return;
+  inFlight.add(id);
   try {
     await api('POST', `/api/admin/events/${id}/approve`);
     toast('已通过', 'success');
     await Promise.all([loadPendingEvents(), loadAllEvents(), loadBalance(), loadAudit()]);
     renderAll();
   } catch (e) {
-    if (e.message !== 'UNAUTHORIZED') toast('操作失败：' + e.message, 'error');
+    toast('操作失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete(id);
   }
 }
 async function rejectEvent(id) {
+  if (inFlight.has(id)) return;
+  inFlight.add(id);
   try {
     await api('POST', `/api/admin/events/${id}/reject`);
     toast('已拒绝', 'success');
@@ -343,10 +353,14 @@ async function rejectEvent(id) {
     renderAll();
   } catch (e) {
     if (e.message !== 'UNAUTHORIZED') toast('操作失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete(id);
   }
 }
 async function revokeEvent(id) {
-  if (!confirm('确定要撤销这个事件吗？')) return;
+  if (inFlight.has(id)) return;
+  inFlight.add(id);
+  if (!confirm('确定要撤销这个事件吗？')) { inFlight.delete(id); return; }
   try {
     await api('POST', `/api/admin/events/${id}/revoke`);
     toast('已撤销', 'success');
@@ -354,6 +368,8 @@ async function revokeEvent(id) {
     renderAll();
   } catch (e) {
     if (e.message !== 'UNAUTHORIZED') toast('操作失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete(id);
   }
 }
 
