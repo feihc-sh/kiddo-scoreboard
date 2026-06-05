@@ -24,11 +24,11 @@
 | **M6** 兑换 + 周额度 | ✅ Done | 2026-06-05 | 13 unit + 2 e2e | 双账户 1:1 转换 + 周末发工资 |
 | **M7** 改名 + 审计 + 任务配置 | ✅ Done | 2026-06-05 | 42 unit + 4 e2e | profile + audit-log + tasks CRUD + completions list |
 | **M8** 儿子端 UI | ✅ Done | 2026-06-05 | 0 unit + 4 e2e | iPad PWA（HTML+CSS+JS+assets）|
-| **M9** PM 端 UI | ⏳ Pending | - | - | 后台管理 |
+| **M9** PM 端 UI | ✅ Done | 2026-06-05 | 0 unit + 5 e2e | login + dashboard（7 sections）|
 | **M10** 部署 | ⏳ Pending | - | - | Cloudflare Pages + D1 |
 | **M11** 备份监控（可选）| ⏳ Optional | - | - | 后续 |
 
-**总测试数（截至 M8）**: 263 个（196 unit + 21 e2e）全绿
+**总测试数（截至 M9）**: 268 个（196 unit + 26 e2e）全绿
 
 ---
 
@@ -423,4 +423,48 @@ iPad 优化的 SPA，调用真实后端 API，Warm Playful 设计。
 
 ---
 
-**下次更新**: 完成 M9 后
+## ✅ M9：PM 端 UI（Done, 2026-06-05）
+
+### 目标
+PM 后台管理界面：登录 + 7 个管理 section（待审/全部 events、任务 CRUD、审计 log、兑换、周额度、完成历史）。
+
+### 交付
+- `public/admin/login.html`（208 行）— PIN 数字键盘登录页（iPad 友好）
+- `public/admin/login.js`（214 行）— 登录逻辑（4-8 位 PIN、429 lockout、shake 动画）
+- `public/admin/index.html`（311 行）— 单页 dashboard，7 个 `<details>` section
+- `public/admin/admin.js`（564 行）— 全部 PM 操作逻辑（CRUD + 审批 + 兑换 + 周额度）
+- `tests/e2e/admin-login.spec.ts` — 2 e2e
+- `tests/e2e/admin-dashboard.spec.ts` — 3 e2e
+
+### 屏幕
+- **/admin/login**：8-dot PIN 显示 + 3×4 数字键盘 + backspace + 自动 4 位提交 + shake 错误动画
+- **/admin/**：深色顶栏 + Logout + 7 个折叠 section
+  - A. 待审 events（approve/reject）
+  - B. 全部 events（revoke）
+  - C. 任务 config（CRUD + 表单双用）
+  - D. 审计 log（actor filter）
+  - E. 兑换（from/to/amount）
+  - F. 周额度发放（双账户 + note）
+  - G. 任务完成历史
+
+### 验收
+- ✅ 196/196 单测全绿（无回归）
+- ✅ 26/26 e2e 全绿（21 旧 + 5 新）
+- ✅ `npm run typecheck` 0 错误
+
+### 默认决策
+- **登录后 redirect 到 /admin/**（index.html 是真实 dashboard）
+- **未登录访问 /admin/ 自动跳 /admin/login**（admin.js 启动时 GET /me，401 则 redirect）
+- **8-dot PIN 显示**（不是 4）以支持 4-8 位 PIN 不重新渲染
+- **数字键盘自动 4 位提交**（120ms delay 让最后一个 dot 显示）+ 错 PIN shake 动画
+- **single-page dashboard with `<details>` collapsibles**（不用 tab 路由，减少 state 复杂度）
+- **新/编辑任务共用一个表单**（state.editingTaskId 切换 POST/PUT）
+- **All-events 用 4 个并行 GET**（按 status 拆分然后合并排序）— 没有 list-all 端点
+- **复用 /app.css**（design tokens）+ 页内 `<style>` 块加 admin-specific overrides
+
+### 阻塞
+- 无。M10（Cloudflare 部署）开始。
+
+---
+
+**下次更新**: 完成 M10 后

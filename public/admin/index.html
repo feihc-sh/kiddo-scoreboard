@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#FFF9F0">
+  <title>📊 PM 控制台</title>
+  <link rel="stylesheet" href="/app.css">
+  <style>
+    /* ===== Admin-specific overrides (reuse design tokens from /app.css) ===== */
+    .pm-app { max-width: 960px; margin: 0 auto; padding: 16px 16px 60px; }
+
+    .pm-topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin: 8px 0 20px;
+      background: linear-gradient(135deg, #1F2937 0%, #374151 100%);
+      color: #fff; border-radius: var(--radius-lg);
+      padding: 18px 22px; box-shadow: var(--shadow-md);
+    }
+    .pm-topbar h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+    .pm-topbar .pm-user { font-size: 13px; opacity: 0.85; margin-top: 2px; }
+    .pm-topbar .pm-balance { font-size: 13px; opacity: 0.85; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .pm-topbar .pm-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .pm-topbar .btn-logout {
+      background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.25);
+      padding: 10px 16px; min-height: 44px; border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .pm-topbar .btn-logout:hover { background: rgba(255,255,255,0.2); }
+
+    /* Collapsible sections */
+    .pm-section {
+      background: var(--bg-card); border-radius: var(--radius-lg);
+      margin: 14px 0; box-shadow: var(--shadow-sm); overflow: hidden;
+    }
+    .pm-section > summary {
+      list-style: none; cursor: pointer;
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 18px; font-size: 16px; font-weight: 700;
+      user-select: none;
+    }
+    .pm-section > summary::-webkit-details-marker { display: none; }
+    .pm-section > summary::before {
+      content: '▸'; display: inline-block; transition: transform 0.2s var(--ease);
+      color: var(--text-soft); font-size: 14px;
+    }
+    .pm-section[open] > summary::before { transform: rotate(90deg); }
+    .pm-section > summary .pm-count {
+      margin-left: auto; font-size: 12px; font-weight: 700;
+      background: var(--border-soft); color: var(--text-soft);
+      padding: 2px 10px; border-radius: var(--radius-pill);
+    }
+    .pm-section[open] > summary { border-bottom: 1px solid var(--border-soft); }
+    .pm-section-body { padding: 14px 18px 18px; }
+
+    /* Row lists (events, audit, tasks, completions) */
+    .pm-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; background: var(--bg-soft);
+      border-radius: var(--radius-sm); margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .pm-row:last-child { margin-bottom: 0; }
+    .pm-row .pm-row-main { flex: 1; min-width: 0; }
+    .pm-row .pm-row-title { font-weight: 700; font-size: 15px; word-break: break-word; }
+    .pm-row .pm-row-meta { font-size: 12px; color: var(--text-soft); margin-top: 2px; }
+    .pm-row .pm-row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .pm-btn {
+      min-height: 44px; padding: 8px 14px; font-size: 14px;
+      border: 0; border-radius: var(--radius-sm); cursor: pointer;
+      font-family: inherit; font-weight: 700;
+      transition: transform 0.15s var(--bounce), opacity 0.15s var(--ease);
+    }
+    .pm-btn:active { transform: scale(0.95); }
+    .pm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pm-btn.primary { background: var(--game-green); color: #fff; }
+    .pm-btn.danger  { background: #EF4444; color: #fff; }
+    .pm-btn.warn    { background: var(--money-gold); color: #fff; }
+    .pm-btn.ghost   { background: #fff; color: var(--text-strong); border: 1px solid var(--border-med); }
+
+    /* Status badges (reuse semantic colors from app.css) */
+    .pm-badge {
+      display: inline-block; padding: 2px 8px; border-radius: var(--radius-pill);
+      font-size: 11px; font-weight: 700; white-space: nowrap;
+    }
+    .pm-badge.pending  { background: #FEF3C7; color: #B45309; }
+    .pm-badge.approved { background: var(--game-green-soft); color: #065F46; }
+    .pm-badge.rejected { background: #FEE2E2; color: #991B1B; }
+    .pm-badge.revoked  { background: #FED7AA; color: #9A3412; }
+
+    /* Forms (E, F, new-task) */
+    .pm-form { display: grid; gap: 12px; }
+    .pm-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pm-form-row.single { grid-template-columns: 1fr; }
+    .pm-form input, .pm-form select, .pm-form textarea {
+      width: 100%; padding: 10px 12px;
+      border: 2px solid var(--border-med); border-radius: var(--radius-sm);
+      font-size: 15px; font-family: inherit; background: #fff; outline: none;
+    }
+    .pm-form input:focus, .pm-form select:focus, .pm-form textarea:focus {
+      border-color: var(--accent-orange);
+    }
+    .pm-form label { display: block; font-size: 13px; color: var(--text-soft); font-weight: 600; margin-bottom: 4px; }
+
+    .pm-toolbar {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .pm-toolbar select, .pm-toolbar input {
+      padding: 8px 10px; font-size: 14px;
+      border: 2px solid var(--border-med); border-radius: var(--radius-sm);
+      font-family: inherit; background: #fff;
+    }
+    .pm-empty { text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px; }
+
+    .pm-mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--text-soft); }
+
+    @media (min-width: 768px) {
+      .pm-app { padding: 24px 24px 80px; }
+      .pm-topbar h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="pm-app">
+
+    <!-- ====== Top bar ====== -->
+    <header class="pm-topbar">
+      <div>
+        <h1>📊 PM 控制台</h1>
+        <div class="pm-user" id="pm-user">未登录</div>
+        <div class="pm-balance" id="pm-balance">—</div>
+      </div>
+      <div class="pm-actions">
+        <button id="btn-refresh" class="btn-logout" type="button">🔄 刷新</button>
+        <button id="btn-logout" class="btn-logout" type="button">退出</button>
+      </div>
+    </header>
+
+    <!-- ====== A. Pending Events ====== -->
+    <details class="pm-section" open id="sec-pending">
+      <summary>⏳ 待审 Events <span class="pm-count" id="count-pending">0</span></summary>
+      <div class="pm-section-body">
+        <div id="pending-list"></div>
+        <div class="pm-empty" id="pending-empty" hidden>没有待审事件</div>
+      </div>
+    </details>
+
+    <!-- ====== B. All Events ====== -->
+    <details class="pm-section" id="sec-all-events">
+      <summary>📋 所有 Events <span class="pm-count" id="count-all-events">0</span></summary>
+      <div class="pm-section-body">
+        <div class="pm-toolbar">
+          <label style="font-size:13px;color:var(--text-soft);font-weight:600;">筛选</label>
+          <select id="filter-event-status">
+            <option value="all">全部</option>
+            <option value="pending">待审</option>
+            <option value="approved">已通过</option>
+            <option value="rejected">已拒</option>
+            <option value="revoked">已撤销</option>
+          </select>
+        </div>
+        <div id="all-events-list"></div>
+        <div class="pm-empty" id="all-events-empty" hidden>没有事件</div>
+      </div>
+    </details>
+
+    <!-- ====== C. Tasks Config ====== -->
+    <details class="pm-section" id="sec-tasks">
+      <summary>🎯 任务 Config <span class="pm-count" id="count-tasks">0</span></summary>
+      <div class="pm-section-body">
+        <div class="pm-toolbar">
+          <button id="btn-new-task" class="pm-btn primary" type="button">+ 新建任务</button>
+        </div>
+        <div id="new-task-form-wrap" hidden style="background:var(--bg-soft);padding:14px;border-radius:var(--radius-sm);margin-bottom:12px;">
+          <form id="new-task-form" class="pm-form">
+            <div class="pm-form-row">
+              <div><label>名称 *</label><input name="name" required maxlength="40" placeholder="比如：刷牙"></div>
+              <div><label>图标 (emoji)</label><input name="icon" maxlength="4" placeholder="🦷"></div>
+            </div>
+            <div class="pm-form-row">
+              <div><label>奖励 *</label><input name="token_reward" type="number" min="1" step="1" value="5" required></div>
+              <div><label>目标账户 *</label>
+                <select name="target_account" required>
+                  <option value="game_time">🎮 游戏时间</option>
+                  <option value="pocket_money">💰 零花钱</option>
+                </select>
+              </div>
+            </div>
+            <div class="pm-form-row">
+              <div><label>分类 *</label>
+                <select name="category" required>
+                  <option value="habit">习惯 habit</option>
+                  <option value="study">学习 study</option>
+                  <option value="chore">家务 chore</option>
+                  <option value="custom">自定义 custom</option>
+                </select>
+              </div>
+              <div><label>排序</label><input name="sort_order" type="number" step="1" value="0"></div>
+            </div>
+            <div class="pm-row" style="background:transparent;padding:0;margin-top:4px;">
+              <div class="pm-row-actions" style="margin-left:auto;">
+                <button type="button" id="new-task-cancel" class="pm-btn ghost">取消</button>
+                <button type="submit" class="pm-btn primary">保存</button>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div id="tasks-list"></div>
+        <div class="pm-empty" id="tasks-empty" hidden>没有任务</div>
+      </div>
+    </details>
+
+    <!-- ====== D. Audit Log ====== -->
+    <details class="pm-section" id="sec-audit">
+      <summary>🔍 审计 Log <span class="pm-count" id="count-audit">0</span></summary>
+      <div class="pm-section-body">
+        <div class="pm-toolbar">
+          <label style="font-size:13px;color:var(--text-soft);font-weight:600;">操作者</label>
+          <select id="filter-audit-actor">
+            <option value="">全部</option>
+            <option value="pm">pm</option>
+            <option value="child">child</option>
+            <option value="system">system</option>
+          </select>
+        </div>
+        <div id="audit-list"></div>
+        <div class="pm-empty" id="audit-empty" hidden>没有审计记录</div>
+      </div>
+    </details>
+
+    <!-- ====== E. Exchange ====== -->
+    <details class="pm-section" id="sec-exchange">
+      <summary>🔁 兑换 (双账户转账)</summary>
+      <div class="pm-section-body">
+        <form id="exchange-form" class="pm-form">
+          <div class="pm-form-row">
+            <div><label>从</label>
+              <select name="from_account" required>
+                <option value="game_time">🎮 游戏时间</option>
+                <option value="pocket_money">💰 零花钱</option>
+              </select>
+            </div>
+            <div><label>到</label>
+              <select name="to_account" required>
+                <option value="pocket_money">💰 零花钱</option>
+                <option value="game_time">🎮 游戏时间</option>
+              </select>
+            </div>
+          </div>
+          <div class="pm-form-row single">
+            <div><label>数量（1:1） *</label><input name="amount" type="number" min="1" step="1" value="10" required></div>
+          </div>
+          <div class="pm-row" style="background:transparent;padding:0;">
+            <div class="pm-row-actions" style="margin-left:auto;">
+              <button type="submit" class="pm-btn primary">执行兑换</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </details>
+
+    <!-- ====== F. Weekly Grant ====== -->
+    <details class="pm-section" id="sec-grant">
+      <summary>📅 周额度发放</summary>
+      <div class="pm-section-body">
+        <form id="grant-form" class="pm-form">
+          <div class="pm-form-row">
+            <div><label>🎮 游戏时间（分钟）</label><input name="game_time" type="number" min="0" step="1" value="0"></div>
+            <div><label>💰 零花钱（元）</label><input name="pocket_money" type="number" min="0" step="1" value="0"></div>
+          </div>
+          <div class="pm-form-row single">
+            <div><label>备注</label><input name="note" maxlength="80" placeholder="比如：第 23 周"></div>
+          </div>
+          <div class="pm-row" style="background:transparent;padding:0;">
+            <div class="pm-row-actions" style="margin-left:auto;">
+              <button type="submit" class="pm-btn primary">发放</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </details>
+
+    <!-- ====== G. Task Completions History ====== -->
+    <details class="pm-section" id="sec-completions">
+      <summary>✅ 任务完成历史 <span class="pm-count" id="count-completions">0</span></summary>
+      <div class="pm-section-body">
+        <div class="pm-toolbar">
+          <label style="font-size:13px;color:var(--text-soft);font-weight:600;">日期</label>
+          <input type="date" id="filter-completion-date">
+          <label style="font-size:13px;color:var(--text-soft);font-weight:600;">状态</label>
+          <select id="filter-completion-status">
+            <option value="active">active</option>
+            <option value="revoked">revoked</option>
+          </select>
+        </div>
+        <div id="completions-list"></div>
+        <div class="pm-empty" id="completions-empty" hidden>没有完成记录</div>
+      </div>
+    </details>
+
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="/admin/admin.js" defer></script>
+</body>
+</html>
