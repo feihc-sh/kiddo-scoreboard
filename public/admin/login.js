@@ -143,11 +143,8 @@ function onDigit(d) {
   state.pin += String(d);
   renderDots();
   els.submit.disabled = state.pin.length < MIN_LEN;
-  // Optional UX: auto-submit at 4 digits (most common PM PIN length)
-  if (state.pin.length === MIN_LEN) {
-    // brief delay so the user sees the last dot fill in
-    setTimeout(login, 120);
-  }
+  // No auto-submit: user must tap ✓ (or press Enter) to login.
+  // Previous "auto-submit at 4 digits" caused wrong submissions for 5-8 digit PINs.
 }
 function onBackspace() {
   if (state.locked) return;
