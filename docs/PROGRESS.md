@@ -21,14 +21,14 @@
 | **M3** 只读 API | ✅ Done | 2026-06-05 | 25 unit + 2 e2e | 余额/用户/事件/任务 + today-status |
 | **M4** 任务系统 | ✅ Done | 2026-06-05 | 14 unit + 3 e2e | 完成任务 (事务) + PM 撤销 |
 | **M5** 申请审批 | ✅ Done | 2026-06-05 | 21 unit + 4 e2e | submit/approve/reject/revoke/edit |
-| **M6** 兑换 + 周额度 | ⏳ Pending | - | - | 双账户 1:1 转换 + 周末发工资 |
+| **M6** 兑换 + 周额度 | ✅ Done | 2026-06-05 | 13 unit + 2 e2e | 双账户 1:1 转换 + 周末发工资 |
 | **M7** 改名 + 审计 UI | ⏳ Pending | - | - | 首次填名字 + log 时间线 |
 | **M8** 儿子端 UI | ⏳ Pending | - | - | iPad Safari PWA |
 | **M9** PM 端 UI | ⏳ Pending | - | - | 后台管理 |
 | **M10** 部署 | ⏳ Pending | - | - | Cloudflare Pages + D1 |
 | **M11** 备份监控（可选）| ⏳ Optional | - | - | 后续 |
 
-**总测试数（截至 M5）**: 168 个（141 unit + 12 e2e）全绿
+**总测试数（截至 M6）**: 181 个（154 unit + 14 e2e）全绿
 
 ---
 
@@ -301,4 +301,39 @@
 
 ---
 
-**下次更新**: 完成 M6 后
+## ✅ M6：兑换 + 周额度发放（Done, 2026-06-05）
+
+### 目标
+PM 双账户 1:1 兑换 + 周末"发工资"（单/双账户可）。
+
+### 交付
+- `src/routes/admin/exchange.ts`（138 行）— `POST /api/admin/exchange`
+- `src/routes/admin/weekly-grant.ts`（190 行）— `POST /api/admin/weekly-grant`
+- `src/routes/admin/index.ts` — 2 个 mount
+- `tests/unit/admin-exchange.test.ts`（412 行）— 5 tests
+- `tests/unit/admin-weekly-grant.test.ts`（482 行）— 8 tests
+- `tests/e2e/exchange-grant.spec.ts` — 2 e2e（requirePm 守卫）
+
+### 端点
+| Method | Path | 角色 | 行为 |
+|--------|------|------|------|
+| POST | `/api/admin/exchange` | PM | 双向 1:1 转换，1 个 batch 写 2 events + 1 audit |
+| POST | `/api/admin/weekly-grant` | PM | 单/双账户发放，1 个 batch 写 0-2 events + 1 audit |
+
+### 验收
+- ✅ 154/154 单测全绿（M1-M5 141 + M6 新增 13）
+- ✅ 14/14 e2e 全绿（12 旧 + 2 新）
+- ✅ `npm run typecheck` 0 错误
+
+### 默认决策
+- **允许负数余额**（透支）— per PRD §3.5
+- **`week_of=currentWeek()`** 自动写入 weekly_grant events（ISO 8601 周编号），便于按周审计
+- **Note 嵌入 reason + audit details**（双留痕）
+- **Sibling 协调**：A 修了一个 CC-B 留下的重复 `import auth` + 缺失 `weeklyGrant` 导入
+
+### 阻塞
+- 无。M7（改名 + 审计 log API + 任务配置 API）继续。
+
+---
+
+**下次更新**: 完成 M7 后
