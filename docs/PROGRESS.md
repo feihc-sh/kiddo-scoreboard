@@ -27,8 +27,11 @@
 | **M9** PM 端 UI | ✅ Done | 2026-06-05 | 0 unit + 5 e2e | login + dashboard（7 sections）|
 | **M10** 部署 | ✅ Done | 2026-06-05 | 2 unit | prod 安全 + init-prod + DEPLOY.md |
 | **M11** 备份监控（可选）| ✅ Done | 2026-06-05 | 0 unit | 备份脚本 + 监控文档 |
+| **测试计划** | ✅ Done | 2026-06-05 | 1270 行 | `docs/TEST_PLAN.md`（13 features × 157 scenarios）|
+| **Phase 1 smoke** | ✅ Done | 2026-06-05 | 14 e2e | 13 spec + 2 helpers（`tests/e2e/helpers/`）|
+| **Phase 2 验证** | ⚠️ Partial | 2026-06-05 | 43 e2e | §3.1/§3.9/§3.10 done；§3.3/§3.12 pending |
 
-**总测试数（截至 M11）**: 270 个（198 unit + 26 e2e）全绿
+**总测试数（截至 Phase 2 部分）**: 284 个（199 unit + 85 e2e）全绿
 
 ---
 
@@ -583,3 +586,79 @@ D1 数据备份一键化 + 健康监控建议（家庭场景最小化）。
 - 兑换比例（当前 1:1）
 - 任务图标库
 - 审计 log 默认展示条数
+
+---
+
+## 🧪 测试补全（Phase 1 + Phase 2，2026-06-05）
+
+### 阶段一：smoke + helpers ✅
+- 建了 `tests/e2e/helpers/db.ts`（reset/seed/query）+ `tests/e2e/helpers/auth.ts`（loginAsPm API/UI 双模式）
+- 13 个 smoke spec 文件覆盖每个 feature 核心路径
+- **结果**: 14/14 smoke pass，总 41 e2e
+
+### 阶段二：happy path 关键 feature（部分完成）
+按 `docs/TEST_PLAN.md` 优先级补 5 个最关键 happy path：
+- ✅ **§3.1 PM Login** — `tests/e2e/ui-admin-login.spec.ts`（14 tests）
+  - 注意：lockout test 触发需 **6 次**失败（5 次后才 429）
+- ✅ **§3.9 Child First-time** — `tests/e2e/ui-child-firsttime.spec.ts`（13 tests）
+- ✅ **§3.10 Child Main Page** — `tests/e2e/ui-child-main.spec.ts`（16 tests）
+- ⏳ **§3.12 Child Event Submit** — 还没写 spec（PLAN §3.12 4 happy + 8 edge = 12 tests）
+- ⏳ **§3.3 PM Pending Events** — 还没写 spec（PLAN §3.3 1 smoke + 3 happy + 6 edge + 1 negative = 11 tests）
+
+### 🐛 Phase 2 发现的 2 个真 bug（已修）
+1. **M9-A login auto-submit**：4 位 PIN 自动提交 → 改为必须点 ✓ 或按 Enter（`public/admin/app.js:147-150`）
+2. **child events query 默认过滤 status=approved**：`/api/me/events` 默认只返回 approved，但儿子需要看自己的 pending。改为无 status 过滤返回全部（`src/routes/public/events.ts`）
+   - 同时发现 `/api/public/tasks` 默认返回 inactive 任务，UI 看不到。改 child 端加 `?active=true`（`public/app.js`）
+
+### 当前总测试数
+- 199 unit + 85 e2e = **284 个全绿**
+- 第 84 号 e2e 是最长的跑 13.7s
+
+---
+
+## 🔧 工具/流程笔记（给新 session）
+
+### Code Agent 调用方式（2026-06-05 发现的问题）
+之前 memory 写的 `claude -p 'task' --workdir <path> --max-turns N` **已经失效**：
+
+- `claude` CLI **不接受 `--workdir`**（错：`unknown option '--workdir'`）
+- `claude` CLI **不接受 `--max-turns`**（没有这个 flag）
+- 正确做法（delegate_task 时）：
+  1. acp_args 里**不要传** `--workdir` 和 `--max-turns`
+  2. 改用 `--add-dir /path/to/project`（让 Claude Code 能访问该目录）
+  3. prompt 里**显式**写"Always `cd /Users/tidusmaomao/workspace/kiddo-scoreboard` first"
+- 可用 flag 列表：`claude --help` 查（只有 `-p` `--add-dir` `--dangerously-skip-permissions` 等）
+
+### 并发限制
+- `delegation.max_concurrent_children` 默认 3
+- 改 `~/.hermes/profiles/pm-for-claude/config.yaml` 改成 4 不生效（daemon 缓存了）
+- **正确做法**：想跑 4+ 个 CC 就分批（先 3 后 1）
+
+### 临时部署还在跑
+- `wrangler dev` (pid 33060) + `localtunnel` (pid 33265)
+- URL: `https://nasty-hotels-lose.loca.lt`（密码：你的公网 IP `20.191.144.84`）
+- PM PIN: `123654`
+- 真实部署等 Cloudflare token 修好
+
+---
+
+## 📋 Phase 2 剩余工作清单（新 session 接手）
+
+1. **修 CC 调用方式**（见上面"工具/流程笔记"）
+2. **§3.12 Child Event Submit** — 12 tests
+   - happy: 4（modal 渲染、+10 game_time、-5 pocket_money、4 种组合、PM 跨 tab 审批）
+   - edge: 8（amount=0 拦截、空 reason、250 字截断、whitespace、取消、离线、负数 DOM 篡改、seg 重置）
+3. **§3.3 PM Pending Events** — 11 tests
+   - smoke: 1（Section A 渲染）
+   - happy: 3（approve、reject、approve+revoke 链）
+   - edge: 6（离线、并发、空状态、按钮防抖、长 reason、revoke 已 revoke）
+   - negative: 1（404 不存在 id）
+4. **commit** 测试进度到 git
+5. **可选**：测试覆盖率从 85 → 130+（补 §3.4-§3.11 + Phase 3 边界 + Phase 4 5 个 cross-cutting flow）
+
+### 启动命令
+```bash
+cd /Users/tidusmaomao/workspace/kiddo-scoreboard
+npm test  # 跑所有测试，应全绿
+git log --oneline -5  # 看最新进度
+```
