@@ -22,13 +22,13 @@
 | **M4** 任务系统 | ✅ Done | 2026-06-05 | 14 unit + 3 e2e | 完成任务 (事务) + PM 撤销 |
 | **M5** 申请审批 | ✅ Done | 2026-06-05 | 21 unit + 4 e2e | submit/approve/reject/revoke/edit |
 | **M6** 兑换 + 周额度 | ✅ Done | 2026-06-05 | 13 unit + 2 e2e | 双账户 1:1 转换 + 周末发工资 |
-| **M7** 改名 + 审计 UI | ⏳ Pending | - | - | 首次填名字 + log 时间线 |
+| **M7** 改名 + 审计 + 任务配置 | ✅ Done | 2026-06-05 | 42 unit + 4 e2e | profile + audit-log + tasks CRUD + completions list |
 | **M8** 儿子端 UI | ⏳ Pending | - | - | iPad Safari PWA |
 | **M9** PM 端 UI | ⏳ Pending | - | - | 后台管理 |
 | **M10** 部署 | ⏳ Pending | - | - | Cloudflare Pages + D1 |
 | **M11** 备份监控（可选）| ⏳ Optional | - | - | 后续 |
 
-**总测试数（截至 M6）**: 181 个（154 unit + 14 e2e）全绿
+**总测试数（截至 M7）**: 242 个（196 unit + 18 e2e）全绿
 
 ---
 
@@ -336,4 +336,50 @@ PM 双账户 1:1 兑换 + 周末"发工资"（单/双账户可）。
 
 ---
 
-**下次更新**: 完成 M7 后
+## ✅ M7：改名 + 审计 + 任务配置（Done, 2026-06-05）
+
+### 目标
+首次填名字（一次性）+ 审计 log 查询 + 任务模板 CRUD + 任务完成历史查询。
+
+### 交付
+- `src/routes/me/profile.ts`（130 行）— PATCH /api/me/profile
+- `src/routes/admin/audit-log.ts`（98 行）— GET /api/admin/audit-log
+- `src/routes/admin/tasks.ts`（508 行）— 4 endpoints: GET/POST/PUT/DELETE
+- `src/routes/admin/task-completions.ts`（192 行，+76 by D）— 加 GET / 列表
+- `tests/unit/me-profile.test.ts`（341 行）— 9 tests
+- `tests/unit/admin-audit-log.test.ts`（302 行）— 10 tests
+- `tests/unit/admin-tasks-config.test.ts`（660 行）— 16 tests
+- `tests/unit/admin-task-completions-list.test.ts`（303 行）— 7 tests
+- `tests/e2e/admin-extras.spec.ts` — 4 e2e
+
+### 端点
+| Method | Path | 角色 | 行为 |
+|--------|------|------|------|
+| PATCH | `/api/me/profile` | 儿子 | 一次性设置名字，name 不可改 |
+| GET | `/api/admin/audit-log` | PM | 审计 log 列表 + filter（actor/action/user/limit）|
+| GET | `/api/admin/tasks` | PM | 任务列表（含/不含停用）|
+| POST | `/api/admin/tasks` | PM | 新建任务 |
+| PUT | `/api/admin/tasks/:id` | PM | 编辑任务（动态 SET）|
+| DELETE | `/api/admin/tasks/:id` | PM | 软删（is_active=0），若有 active completion 则 409 |
+| GET | `/api/admin/task-completions` | PM | 完成历史（user_id+date+status 过滤）|
+
+### 验收
+- ✅ 196/196 单测全绿（M1-M6 154 + M7 新增 42）
+- ✅ 18/18 e2e 全绿（14 旧 + 4 新）
+- ✅ `npm run typecheck` 0 错误
+
+### 默认决策
+- **PATCH profile 一旦设定不可再改**（业务规则）
+- **DELETE task = 软删**（is_active=0，保留审计历史）。有 active completion 时返回 409 防止丢历史。
+- **task_completions 的 GET 列表合并到 task-completions.ts**（避免 Hono mount 冲突）
+- **audit log 的 details JSON 解析**：parse 失败时 fallback 到 `{_raw: ...}` 不静默丢数据
+- **filter 宽松**（未知 actor 静默忽略）：read endpoint 不阻塞探索性查询
+- **limit 钳制** `Math.min(500, Math.max(1, n))`：NaN/garbage fallback to 100
+- **Sibling 协调**：3 个 CC 共享 admin/index.ts；D 主动合入 task-completions.ts 而非新建文件以避免 mount 冲突
+
+### 阻塞
+- 无。M8（儿子端 UI）开始。auth swap（M5 计划的 hardcoded user_id 替换）可以推后到 M8/M9 一起做。
+
+---
+
+**下次更新**: 完成 M8 后
