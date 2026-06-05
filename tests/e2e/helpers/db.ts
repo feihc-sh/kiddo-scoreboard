@@ -11,21 +11,30 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
+import { globSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const WRANGLER_CWD = '/Users/tidusmaomao/workspace/kiddo-scoreboard';
 
-/** Run a SQL command against local D1. Returns parsed JSON. */
+// Locate the workerd D1 sqlite file (used by both wrangler d1 execute and
+// the running workerd process — both read the same file).
+function d1SqlitePath(): string {
+  const dir = `${WRANGLER_CWD}/.wrangler/state/v3/d1/miniflare-D1DatabaseObject`;
+  const files = globSync(`${dir}/*.sqlite`).filter(p => !p.includes('-shm') && !p.includes('-wal'));
+  if (files.length === 0) throw new Error(`No D1 sqlite file found in ${dir}`);
+  return files[0];
+}
+
+/** Run a SQL command against the local D1 sqlite file. Both wrangler dev and
+ *  `wrangler d1 execute` read this file, so changes are immediately visible
+ *  to the running workerd process (no cache-stale issue). */
 function d1Exec(sql: string): unknown {
-  // Use execFileSync to avoid shell escaping entirely.
-  // args are passed directly to the wrangler subprocess.
   const out = execFileSync(
-    'npx',
-    ['wrangler', 'd1', 'execute', 'kiddo-scoreboard-db', '--local', '--command', sql],
-    { cwd: WRANGLER_CWD, encoding: 'utf-8', timeout: 15000 }
+    'sqlite3',
+    [d1SqlitePath(), sql],
+    { encoding: 'utf-8', timeout: 15000 }
   );
-  // wrangler prints JSON-ish output; the last "results" array is what we want
-  const m = out.match(/\[\s*\{[\s\S]*?\}\s*\]/);
-  return m ? JSON.parse(m[0]) : null;
+  return out;
 }
 
 /** SQL string literal. Use single quotes; escape any single quotes in the value by doubling. */

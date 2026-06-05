@@ -236,7 +236,14 @@ function showWelcomeError(msg) {
   e.textContent = msg;
   e.hidden = false;
 }
-function openSubmitModal() { $('#submit-modal').hidden = false; $('#submit-reason').focus(); }
+function openSubmitModal() {
+  $('#submit-modal').hidden = false;
+  // Reset to "想要" (+) as the default direction every time modal opens,
+  // and sync the visual seg-btn state with state.selectedDir.
+  state.selectedDir = 1;
+  $$('.seg-btn').forEach((b) => b.classList.toggle('seg-btn-active', Number(b.dataset.dir) === 1));
+  $('#submit-reason').focus();
+}
 function closeSubmitModal() { $('#submit-modal').hidden = true; $('#submit-form').reset(); state.selectedDir = 1; $$('.seg-btn').forEach((b) => b.classList.toggle('seg-btn-active', Number(b.dataset.dir) === 1)); }
 
 // ---------- Confetti ----------

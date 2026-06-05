@@ -97,7 +97,7 @@ tasks.post('/:id/complete', async (c) => {
            (task_id, user_id, status, completed_date, completed_at)
          VALUES (?, ?, 'active', ?, unixepoch())`,
       )
-      .bind(taskId, CHILD_USER_ID, 'active', today),
+      .bind(taskId, CHILD_USER_ID, today),
     db
       .prepare(
         `INSERT INTO score_events

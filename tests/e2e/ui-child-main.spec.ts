@@ -79,15 +79,12 @@ test.describe('UI: Child Main Page', () => {
     await expect(page.locator('#task-shortcuts button').filter({ hasText: 'InactiveTask' })).toHaveCount(0);
   });
 
-  test('task completed today shows "今日已完成" badge and is disabled', async ({ page }) => {
+  test('task completed today shows "今日已完成" badge and is disabled', async ({ page, request }) => {
     const taskId = seedTask({ name: '刷牙' });
-    // Insert a completion for today
-    const { execSync } = await import('node:child_process');
-    const today = new Date().toISOString().slice(0, 10);
-    execSync(
-      `npx wrangler d1 execute kiddo-scoreboard-db --local --command="INSERT INTO task_completions (task_id, user_id, status, completed_date, completed_at) VALUES (${taskId}, 2, 'active', '${today}', unixepoch());"`,
-      { cwd: '/Users/tidusmaomao/workspace/kiddo-scoreboard', encoding: 'utf-8' }
-    );
+    // Complete the task via the real child API endpoint so workerd's in-memory
+    // state is updated. (Direct sqlite3 writes don't propagate to workerd.)
+    const r = await request.post(`http://127.0.0.1:8787/api/me/tasks/${taskId}/complete`);
+    expect(r.status()).toBe(201);
     await page.goto('/');
     const btn = page.locator('#task-shortcuts button').filter({ hasText: '刷牙' });
     await expect(btn).toBeDisabled();

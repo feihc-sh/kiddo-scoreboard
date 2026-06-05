@@ -244,6 +244,74 @@ body {
   font-weight: 700;
   line-height: 1.2;
 }
+
+/* ---------- Task buttons (rendered by app.js renderTasks) ---------- */
+/* JS uses .task-btn + .task-btn-done class names (not the legacy .task-shortcut above). */
+.task-btn {
+  flex: 0 0 auto;
+  min-width: 140px;
+  min-height: 100px;
+  scroll-snap-align: start;
+  padding: 16px 18px;
+  background: var(--bg-card);
+  border: 2px solid var(--border-med);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 16px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-strong);
+  -webkit-user-select: none;
+  user-select: none;
+  transition: transform 0.2s var(--bounce),
+              box-shadow 0.2s var(--ease),
+              background 0.2s var(--ease),
+              border-color 0.2s var(--ease);
+}
+.task-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--accent-orange);
+  box-shadow: 0 6px 16px rgba(255, 138, 76, 0.2);
+}
+.task-btn:active:not(:disabled) { transform: scale(0.94); }
+.task-btn:disabled { cursor: not-allowed; }
+
+.task-btn.task-btn-done {
+  background: linear-gradient(135deg, var(--game-green), #059669);
+  border-color: var(--game-green);
+  color: #fff;
+  box-shadow: var(--shadow-game);
+  opacity: 0.95;
+}
+.task-btn-icon { font-size: 26px; line-height: 1; }
+.task-btn .task-name,
+.task-btn .task-icon,
+.task-btn .task-reward {
+  color: inherit;
+}
+.task-btn .task-name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.task-btn .task-reward {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+.task-done-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 4px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-pill);
+}
 .task-shortcut-reward {
   color: var(--money-gold);
   font-weight: 800;
@@ -495,10 +563,12 @@ body {
   color: var(--text-strong);
   transition: all 0.15s var(--ease);
 }
-.seg-btn.active {
+.seg-btn.active,
+.seg-btn.seg-btn-active {
   background: linear-gradient(135deg, var(--accent-orange), var(--accent-orange-dark));
   border-color: var(--accent-orange);
   color: #fff;
+  box-shadow: var(--shadow-sm);
 }
 .seg-btn:active { transform: scale(0.96); }
 
