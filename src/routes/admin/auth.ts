@@ -16,16 +16,17 @@ const auth = new Hono<{ Bindings: Env }>();
 
 const COOKIE_NAME = 'pm_session';
 
-function buildCookie(value: string, maxAgeSec: number): string {
+function buildCookie(value: string, maxAgeSec: number, isHttps: boolean): string {
   // HttpOnly + SameSite=Strict + Path=/ + Max-Age
-  // In prod, `Secure` should be added when the origin is https. Wrangler dev is http,
-  // so we only add Secure when an env var signals production.
-  const secure = '';
+  // `Secure` is required in production (HTTPS) so the cookie is never sent over plaintext.
+  // Wrangler dev is HTTP on localhost, so we leave it off there.
+  const secure = isHttps ? '; Secure' : '';
   return `${COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSec}${secure}`;
 }
 
-function clearCookie(): string {
-  return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
+function clearCookie(isHttps: boolean): string {
+  const secure = isHttps ? '; Secure' : '';
+  return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
 }
 
 /** Find the PM user (only one expected). */
@@ -77,13 +78,15 @@ auth.post('/login', async (c) => {
   const token = await signSession({ user_id: pm.id, exp }, secret);
   await logAudit(db, { actor: 'pm', action: 'login', target_user_id: pm.id, details: { ip } });
 
-  c.header('Set-Cookie', buildCookie(token, SESSION_MAX_AGE_SECONDS), { append: true });
+  const isHttps = new URL(c.req.url).protocol === 'https:';
+  c.header('Set-Cookie', buildCookie(token, SESSION_MAX_AGE_SECONDS, isHttps), { append: true });
   return c.json({ user: { id: pm.id, name: pm.name, role: pm.role } });
 });
 
 auth.post('/logout', async (c) => {
   const uid = await getPmUserId(c);
-  c.header('Set-Cookie', clearCookie(), { append: true });
+  const isHttps = new URL(c.req.url).protocol === 'https:';
+  c.header('Set-Cookie', clearCookie(isHttps), { append: true });
   if (uid != null) {
     await logAudit(c.env.DB, { actor: 'pm', action: 'logout', target_user_id: uid });
   }

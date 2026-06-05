@@ -137,6 +137,10 @@ async function call(path: string, init: RequestInit = {}, env = envObj()) {
   return app.request(`http://test.local${path}`, init, env);
 }
 
+async function callHttps(path: string, init: RequestInit = {}, env = envObj()) {
+  return app.request(`https://test.local${path}`, init, env);
+}
+
 async function addPmUser(pin = '1234') {
   const hash = await hashPin(pin, SECRET);
   users.push({
@@ -207,10 +211,44 @@ describe('POST /api/admin/auth/login', () => {
     expect(setCookie).toMatch(/pm_session=[^;]+;/);
     expect(setCookie).toMatch(/HttpOnly/);
     expect(setCookie).toMatch(/SameSite=Strict/);
+    // http (test/wrangler dev): no Secure flag
+    expect(setCookie).not.toMatch(/;\s*Secure/);
     const body = (await r.json()) as { error?: { code?: string; message?: string }; user?: { id: number; name: string; role: string }; ok?: boolean };
     expect(body.user).toEqual({ id: 1, name: 'PM', role: 'pm' });
     expect(attempts.filter((a) => a.success === 1)).toHaveLength(1);
     expect(audit.some((a) => a.action === 'login')).toBe(true);
+  });
+
+  it('sets Secure flag on cookie when request is HTTPS (production)', async () => {
+    await addPmUser('9999');
+    const r = await callHttps('/api/admin/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: '9999' }),
+    });
+    expect(r.status).toBe(200);
+    const setCookie = r.headers.get('set-cookie');
+    expect(setCookie).toMatch(/;\s*Secure/);
+  });
+
+  it('clears Secure flag on logout cookie when request is HTTPS (production)', async () => {
+    // First login to get a session
+    await addPmUser('8888');
+    const loginR = await callHttps('/api/admin/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: '8888' }),
+    });
+    const cookie = loginR.headers.get('set-cookie')!.split(';')[0];
+    // Then logout
+    const r = await callHttps('/api/admin/auth/logout', {
+      method: 'POST',
+      headers: { Cookie: cookie },
+    });
+    expect(r.status).toBe(200);
+    const setCookie = r.headers.get('set-cookie');
+    expect(setCookie).toMatch(/Max-Age=0/);
+    expect(setCookie).toMatch(/;\s*Secure/);
   });
 
   it('returns 429 when IP is locked out', async () => {

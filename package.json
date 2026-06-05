@@ -7,6 +7,10 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "deploy:dry-run": "wrangler deploy --dry-run --outdir=dist",
+    "deploy:migrate": "wrangler d1 migrations apply kiddo-scoreboard-db --remote",
+    "deploy:init": "bash scripts/init-prod.sh",
+    "deploy:check": "wrangler whoami && wrangler d1 list | grep kiddo-scoreboard",
     "test": "playwright test",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",

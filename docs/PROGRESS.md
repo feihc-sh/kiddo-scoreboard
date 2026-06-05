@@ -25,10 +25,10 @@
 | **M7** 改名 + 审计 + 任务配置 | ✅ Done | 2026-06-05 | 42 unit + 4 e2e | profile + audit-log + tasks CRUD + completions list |
 | **M8** 儿子端 UI | ✅ Done | 2026-06-05 | 0 unit + 4 e2e | iPad PWA（HTML+CSS+JS+assets）|
 | **M9** PM 端 UI | ✅ Done | 2026-06-05 | 0 unit + 5 e2e | login + dashboard（7 sections）|
-| **M10** 部署 | ⏳ Pending | - | - | Cloudflare Pages + D1 |
+| **M10** 部署 | ✅ Done | 2026-06-05 | 2 unit | prod 安全 + init-prod + DEPLOY.md |
 | **M11** 备份监控（可选）| ⏳ Optional | - | - | 后续 |
 
-**总测试数（截至 M9）**: 268 个（196 unit + 26 e2e）全绿
+**总测试数（截至 M10）**: 270 个（198 unit + 26 e2e）全绿
 
 ---
 
@@ -467,4 +467,51 @@ PM 后台管理界面：登录 + 7 个管理 section（待审/全部 events、�
 
 ---
 
-**下次更新**: 完成 M10 后
+## ✅ M10：部署（Done, 2026-06-05）
+
+### 目标
+生产部署就绪：prod HTTPS cookie 安全 + 一键 init PM PIN + 部署文档 + wrangler config 验证。
+
+### 交付
+- `src/routes/admin/auth.ts` — `Secure` cookie flag 按请求协议切换（http→无；https→有）
+- `tests/unit/admin-auth.test.ts` — +2 tests（Secure on login + on logout）
+- `scripts/init-prod.sh`（84 行）— 交互式 PM PIN 初始化/重置
+- `DEPLOY.md`（190 行）— 完整部署指南
+- `package.json` — 4 个 deploy scripts（deploy/dry-run/migrate/init/check）
+
+### 修复（M2 已知隐患）
+- **`buildCookie` / `clearCookie` 加 `isHttps` 参数** — 检测 `c.req.url` 协议
+- http（wrangler dev）→ 无 Secure（开发友好）
+- https（生产）→ 有 Secure（防 cookie 走明文）
+- 2 个新单测：login/logout 在 https 下 cookie 含 `; Secure`
+
+### Wrangler 验证
+- `npx wrangler deploy --dry-run --outdir=dist` ✅
+  - 8 assets / 120 KiB / gzip 25 KiB
+  - 2 bindings（DB + ASSETS）
+  - worker.js 编译成功（122 KiB）
+- 生产部署需用户：`wrangler login` → 创建 D1 → 更新 `database_id` → `wrangler secret put JWT_SECRET` → `npm run deploy:migrate` → `npm run deploy:init` → `npm run deploy`
+
+### 默认决策
+- **Secure flag 按 URL 协议动态切换**（不引环境变量）— Cloudflare Workers 总是 https on prod, http on wrangler dev
+- **init-prod 用 `node scripts/hash-pin.mjs` 直接生成 hash**（复用 M2 的 PBKDF2 实现，不引 Python/外部工具）
+- **init-prod 用 `INSERT ... ON CONFLICT DO UPDATE`** — 幂等，重复跑就改 PIN
+- **DEPLOY.md 写给"有基本 cloudflare 概念但没部署过"的用户** — 一遍 10 步走完
+- **dist/ 加 .gitignore**（dry-run 输出）
+
+### 阻塞
+- 无。M11（备份监控）可选。
+
+### 用户操作清单（部署到生产）
+1. `npx wrangler login`
+2. `npx wrangler d1 create kiddo-scoreboard-db --remote` → 复制 database_id
+3. 改 `wrangler.toml` 的 `database_id`
+4. `openssl rand -hex 32 | npx wrangler secret put JWT_SECRET` → 保存该值
+5. `npm run deploy:migrate`
+6. `PIN=1234 JWT_SECRET=<saved> npm run deploy:init`
+7. `npm run deploy`
+8. 浏览器访问 https://kiddo-scoreboard.<sub>.workers.dev
+
+---
+
+**下次更新**: M11（可选备份监控）
