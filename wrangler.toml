@@ -10,9 +10,16 @@ database_id = "local-dev-placeholder"  # replaced at deploy time
 migrations_dir = "migrations"
 
 # Static assets (M8 child UI + future M9 PM UI)
+# cache_control: no-store prevents iPad Safari from caching old HTML/JS during dev,
+# so users see HTML/JS changes immediately after wrangler dev restarts.
 [assets]
 directory = "./public"
 binding = "ASSETS"
+
+[assets.cache_control]
+"**/*.html" = "no-store, no-cache, must-revalidate"
+"**/*.js" = "no-store, no-cache, must-revalidate"
+"**/*.css" = "no-store, no-cache, must-revalidate"
 
 [dev]
 port = 8787

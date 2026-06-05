@@ -5,8 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#FFF9F0">
+  <!-- Dev mode: prevent iPad Safari from caching stale HTML/JS across wrangler dev restarts. -->
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>📊 PM 控制台</title>
-  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/app.css?v=2">
   <style>
     /* ===== Admin-specific overrides (reuse design tokens from /app.css) ===== */
     .pm-app { max-width: 960px; margin: 0 auto; padding: 16px 16px 60px; }
@@ -306,6 +310,6 @@
   <!-- Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="/admin/admin.js" defer></script>
+  <script src="/admin/admin.js?v=2" defer></script>
 </body>
 </html>

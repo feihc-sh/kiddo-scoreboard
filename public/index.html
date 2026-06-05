@@ -5,8 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#FFF9F0">
+  <!-- Dev mode: prevent iPad Safari from caching stale HTML/JS across wrangler dev restarts. -->
+  <!-- In production (after wrangler deploy), remove these 3 lines for real CDN caching. -->
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>🎮 kiddo 计分板</title>
-  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/app.css?v=2">
 </head>
 <body>
 
@@ -112,6 +117,6 @@
   <!-- ====== Confetti canvas ====== -->
   <canvas id="confetti" class="confetti-canvas" aria-hidden="true"></canvas>
 
-  <script src="/app.js" defer></script>
+  <script src="/app.js?v=2" defer></script>
 </body>
 </html>
