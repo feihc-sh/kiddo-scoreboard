@@ -33,7 +33,9 @@ events.get('/', async (c) => {
     );
   }
 
-  const status = c.req.query('status') ?? 'approved';
+  // Status filter: explicit only. No default = return all statuses.
+  // (The child UI needs to see their own pending/rejected/revoked events.)
+  const status = c.req.query('status');
   const type = c.req.query('type');
 
   // Limit: default 50, clamp to [1, 200].

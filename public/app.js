@@ -69,7 +69,7 @@ async function loadBalance() {
 }
 async function loadTasks() {
   const [tasksRes, todayRes] = await Promise.all([
-    api('GET', `/api/public/tasks?user_id=${CHILD_USER_ID}`),
+    api('GET', `/api/public/tasks?user_id=${CHILD_USER_ID}&active=true`),
     api('GET', `/api/public/tasks/today-status?user_id=${CHILD_USER_ID}`),
   ]);
   state.tasks = tasksRes.tasks;

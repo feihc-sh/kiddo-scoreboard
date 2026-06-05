@@ -45,15 +45,22 @@ function makeEvent(overrides: Partial<ScoreEvent> = {}): ScoreEvent {
 
 /**
  * Apply the WHERE-clause params against the in-memory event table.
- * Order matches what the route generates: user_id, status (optional), type (optional).
- * Excludes the trailing LIMIT param.
+ * Bind order (positional): [user_id, status?, type?, limit].
+ * user_id is at position 0 (always). Strings are status/type filters.
+ * Numbers after position 0 are limit (skip).
  */
 function filterEvents(filterParams: unknown[]): ScoreEvent[] {
   return events.filter((e) => {
-    let i = 0;
-    if (filterParams[0] !== undefined && e.user_id !== filterParams[i++]) return false;
-    if (filterParams[1] !== undefined && e.status !== filterParams[i++]) return false;
-    if (filterParams[2] !== undefined && e.type !== filterParams[i++]) return false;
+    // Position 0: user_id
+    if (filterParams[0] !== undefined && e.user_id !== filterParams[0]) return false;
+    // Remaining: status / type / limit. Strings are filters; numbers are limit.
+    for (let i = 1; i < filterParams.length; i++) {
+      const p = filterParams[i];
+      if (typeof p === 'number') continue;
+      if (e.status === p) continue;
+      if (e.type === p) continue;
+      return false;
+    }
     return true;
   });
 }
@@ -139,7 +146,7 @@ describe('GET /api/public/events (list)', () => {
     expect(body.error?.code).toBe('BAD_REQUEST');
   });
 
-  it('returns 200 with events array, default status filter = approved', async () => {
+  it('returns 200 with all events for the user when no status filter (default = all)', async () => {
     const a1 = makeEvent({ user_id: 2, status: 'approved' });
     const a2 = makeEvent({ user_id: 2, status: 'approved' });
     const p1 = makeEvent({ user_id: 2, status: 'pending' });
@@ -149,13 +156,26 @@ describe('GET /api/public/events (list)', () => {
     const r = await call('/api/public/events?user_id=2');
     expect(r.status).toBe(200);
     const body = (await r.json()) as ListBody;
+    // Default returns ALL statuses (changed from "approved only" so child can see own pending)
+    expect(body.events).toHaveLength(4);
+    expect(body.total).toBe(4);
+    const ids = (body.events ?? []).map((e) => e.id);
+    expect(ids).toEqual(expect.arrayContaining([a1.id, a2.id, p1.id, r1.id]));
+    expect(ids).not.toContain(otherUser.id);
+  });
+
+  it('filters by ?status=approved (explicit)', async () => {
+    const a1 = makeEvent({ user_id: 2, status: 'approved' });
+    const a2 = makeEvent({ user_id: 2, status: 'approved' });
+    const p1 = makeEvent({ user_id: 2, status: 'pending' });
+
+    const r = await call('/api/public/events?user_id=2&status=approved');
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as ListBody;
     expect(body.events).toHaveLength(2);
-    expect(body.total).toBe(2);
     const ids = (body.events ?? []).map((e) => e.id);
     expect(ids).toEqual(expect.arrayContaining([a1.id, a2.id]));
     expect(ids).not.toContain(p1.id);
-    expect(ids).not.toContain(r1.id);
-    expect(ids).not.toContain(otherUser.id);
   });
 
   it('filters by ?status=rejected', async () => {
