@@ -23,12 +23,12 @@
 | **M5** 申请审批 | ✅ Done | 2026-06-05 | 21 unit + 4 e2e | submit/approve/reject/revoke/edit |
 | **M6** 兑换 + 周额度 | ✅ Done | 2026-06-05 | 13 unit + 2 e2e | 双账户 1:1 转换 + 周末发工资 |
 | **M7** 改名 + 审计 + 任务配置 | ✅ Done | 2026-06-05 | 42 unit + 4 e2e | profile + audit-log + tasks CRUD + completions list |
-| **M8** 儿子端 UI | ⏳ Pending | - | - | iPad Safari PWA |
+| **M8** 儿子端 UI | ✅ Done | 2026-06-05 | 0 unit + 4 e2e | iPad PWA（HTML+CSS+JS+assets）|
 | **M9** PM 端 UI | ⏳ Pending | - | - | 后台管理 |
 | **M10** 部署 | ⏳ Pending | - | - | Cloudflare Pages + D1 |
 | **M11** 备份监控（可选）| ⏳ Optional | - | - | 后续 |
 
-**总测试数（截至 M7）**: 242 个（196 unit + 18 e2e）全绿
+**总测试数（截至 M8）**: 263 个（196 unit + 21 e2e）全绿
 
 ---
 
@@ -382,4 +382,45 @@ PM 双账户 1:1 兑换 + 周末"发工资"（单/双账户可）。
 
 ---
 
-**下次更新**: 完成 M8 后
+## ✅ M8：儿子端 UI（Done, 2026-06-05）
+
+### 目标
+iPad 优化的 SPA，调用真实后端 API，Warm Playful 设计。
+
+### 交付
+- `public/index.html`（117 行）— 完整 SPA 骨架：欢迎弹窗、提交弹窗、余额卡、任务快捷键、事件列表、Toast、Confetti canvas
+- `public/app.css`（589 行）— Warm Playful 设计系统（design tokens + 全部组件样式）
+- `public/app.js`（336 行）— Vanilla JS 状态机 + API 调用 + UI 渲染
+- `wrangler.toml` — 加 `[assets] directory = "./public"` binding
+- `src/worker.ts` — Env 加 `ASSETS: Fetcher` 字段
+- `tests/e2e/child-ui.spec.ts` — 4 e2e（HTML/CSS/JS 加载 + UI shell 渲染）
+- `tests/e2e/hello.spec.ts` — 改用 `/health` 替代 `/`（避免和 static index 冲突）
+
+### 屏幕与交互
+1. **首次填名字弹窗**：进入页面 → 检测 `is_first_time` → 全屏弹窗 → 输入 → 彩纸动画
+2. **主页面**：问候语 + 2 个大余额卡（🎮💰，pulse 动画）+ 任务快捷键（一行按钮，✅ 今日已完成置灰）+ 提交申请按钮 + 刷新按钮 + 最近 10 条事件
+3. **提交申请弹窗**：类型/方向（+/−）/数量/原因 → 提交后弹 toast
+4. **错误横幅**：网络错误显示 + 重试按钮
+5. **Toast**：操作反馈（成功绿色 / 错误红色 / 信息蓝色）
+6. **彩纸**：首次填名字触发 canvas 粒子动画
+
+### 验收
+- ✅ 196/196 单测全绿（无回归）
+- ✅ 21/21 e2e 全绿（18 旧 + 4 新 M8 + 0 旧 hello.spec.ts 失败）
+- ✅ `npm run typecheck` 0 错误
+- ✅ Static assets 配置正确（[assets] binding）
+
+### 默认决策
+- **CHILD_USER_ID=2 写死在 app.js**（M5-later auth swap）
+- **No framework**（不用 React/Vue/Svelte）— vanilla JS 350 行足以
+- **CSS 抽出到 app.css**（不进 index.html）— 易维护 + browser cache 友好
+- **Confetti 用 Canvas + requestAnimationFrame**（不引 50KB canvas-confetti 库）— 自己写 30 行
+- **Pulse 动画**用 CSS class toggle + offsetWidth reflow trick（强制重排触发动画）
+- **错误横幅 vs Toast**：网络/加载错用 banner（可重试），单次操作错用 toast（即时反馈）
+
+### 阻塞
+- 无。M9（PM 端 UI）开始。视觉验证留给用户实际操作（iPad Safari）。
+
+---
+
+**下次更新**: 完成 M9 后

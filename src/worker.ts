@@ -9,6 +9,7 @@ import me from './routes/me/index.ts';
 export interface Env {
   DB: D1Database;
   JWT_SECRET: string;
+  ASSETS: Fetcher;
 }
 
 const app = new Hono<{ Bindings: Env }>();

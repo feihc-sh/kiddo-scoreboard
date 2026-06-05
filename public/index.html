@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#FFF9F0">
+  <title>🎮 kiddo 计分板</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+  <!-- ====== Name prompt modal (first-time only) ====== -->
+  <div id="welcome-modal" class="modal-back welcome-modal" hidden>
+    <div class="modal welcome-content">
+      <div class="welcome-emoji" aria-hidden="true">🎮</div>
+      <h2 class="welcome-title">欢迎来到你的计分板！</h2>
+      <p class="welcome-hint">请输入你的名字（之后就不能改啦）</p>
+      <input id="welcome-name" class="welcome-input" type="text"
+             placeholder="你的名字" maxlength="20" autocomplete="off">
+      <button id="welcome-submit" class="btn btn-primary welcome-btn">开始 🚀</button>
+      <p id="welcome-error" class="welcome-error" role="alert" hidden></p>
+    </div>
+  </div>
+
+  <!-- ====== Submit request modal ====== -->
+  <div id="submit-modal" class="modal-back" hidden>
+    <div class="modal">
+      <h2 class="modal-title">📝 提交申请</h2>
+      <p class="modal-hint">请描述原因，家长审核后会处理～</p>
+      <form id="submit-form" class="form">
+        <div class="field">
+          <label for="submit-type">类型</label>
+          <select id="submit-type" required>
+            <option value="game_time">🎮 游戏时间</option>
+            <option value="pocket_money">💰 零花钱</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>方向</label>
+          <div class="seg">
+            <button type="button" class="seg-btn" data-dir="1">➕ 想要</button>
+            <button type="button" class="seg-btn" data-dir="-1">➖ 扣分</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="submit-amount">数量</label>
+          <input id="submit-amount" type="number" min="1" step="1" value="5" required>
+        </div>
+        <div class="field">
+          <label for="submit-reason">原因</label>
+          <textarea id="submit-reason" rows="2" maxlength="200" required
+                    placeholder="比如：今天主动整理了书桌"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="submit-cancel" class="btn btn-secondary">取消</button>
+          <button type="submit" class="btn btn-primary">提交</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ====== Error banner (network/load failures) ====== -->
+  <div id="error-banner" class="error-banner" hidden>
+    <span id="error-banner-text">出错了</span>
+    <button id="error-banner-retry" class="error-banner-retry">重试</button>
+  </div>
+
+  <!-- ====== App shell ====== -->
+  <main class="app">
+    <header class="hero">
+      <h1 class="hero-greeting" id="hero-greeting">你好！👋</h1>
+      <p class="hero-sub" id="hero-sub">点击下面完成任务赚代币吧</p>
+    </header>
+
+    <section class="balance-row" aria-label="账户余额">
+      <div class="balance-card game-time" id="card-game-time">
+        <span class="balance-icon" aria-hidden="true">🎮</span>
+        <div class="balance-label">游戏时间</div>
+        <div class="balance-value"><span id="balance-game-time">0</span><span class="balance-unit">分钟</span></div>
+      </div>
+      <div class="balance-card pocket-money" id="card-pocket-money">
+        <span class="balance-icon" aria-hidden="true">💰</span>
+        <div class="balance-label">零花钱</div>
+        <div class="balance-value"><span id="balance-pocket-money">0</span><span class="balance-unit">元</span></div>
+      </div>
+    </section>
+
+    <section class="section task-shortcuts-section" aria-label="今日任务">
+      <h2 class="section-title">⚡ 今日任务 <span class="section-hint">每天每项 1 次</span></h2>
+      <div id="task-shortcuts" class="task-shortcuts"></div>
+    </section>
+
+    <section class="actions">
+      <button id="btn-submit" class="btn btn-primary action-btn">📝 提交申请</button>
+      <button id="btn-refresh" class="btn btn-secondary action-btn">🔄 刷新</button>
+    </section>
+
+    <section class="section events-section" aria-label="最近事件">
+      <h2 class="section-title">最近事件 <span class="count" id="event-count">0</span></h2>
+      <div id="event-list" class="event-list"></div>
+      <div id="event-empty" class="empty" hidden>
+        <div class="empty-icon">📭</div>
+        <div>还没有事件哦～</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ====== Toast ====== -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- ====== Confetti canvas ====== -->
+  <canvas id="confetti" class="confetti-canvas" aria-hidden="true"></canvas>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

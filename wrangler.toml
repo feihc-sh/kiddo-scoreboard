@@ -9,5 +9,10 @@ database_name = "kiddo-scoreboard-db"
 database_id = "local-dev-placeholder"  # replaced at deploy time
 migrations_dir = "migrations"
 
+# Static assets (M8 child UI + future M9 PM UI)
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
 [dev]
 port = 8787
