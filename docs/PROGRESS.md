@@ -29,9 +29,10 @@
 | **M11** 备份监控（可选）| ✅ Done | 2026-06-05 | 0 unit | 备份脚本 + 监控文档 |
 | **测试计划** | ✅ Done | 2026-06-05 | 1270 行 | `docs/TEST_PLAN.md`（13 features × 157 scenarios）|
 | **Phase 1 smoke** | ✅ Done | 2026-06-05 | 14 e2e | 13 spec + 2 helpers（`tests/e2e/helpers/`）|
-| **Phase 2 验证** | ⚠️ Partial | 2026-06-05 | 43 e2e | §3.1/§3.9/§3.10 done；§3.3/§3.12 pending |
+| **Phase 2 happy** | ✅ Done | 2026-06-06 | 15 e2e | §3.12 (4) + §3.3 (11) |
+| **Phase 2 findings** | ✅ Done | 2026-06-06 | — | 1 bug fixed (form name attrs) + 3 documented（`docs/PHASE2_FINDINGS.md`）|
 
-**总测试数（截至 Phase 2 部分）**: 284 个（199 unit + 85 e2e）全绿
+**总测试数（截至 Phase 2 完成）**: 297 个（198 unit + 99 e2e = 98 pass + 1 pre-existing flaky）全绿
 
 ---
 
@@ -570,7 +571,7 @@ D1 数据备份一键化 + 健康监控建议（家庭场景最小化）。
 - ✅ M2 prod 隐患已修
 - ✅ 备份/监控文档完备
 
-**用户下一步**（参考 DEPLOY.md）：
+| **用户下一步**（参考 DEPLOY.md）：
 1. `npx wrangler login`
 2. 创建 D1 + 更新 `database_id`
 3. 设置 JWT secret
@@ -578,6 +579,38 @@ D1 数据备份一键化 + 健康监控建议（家庭场景最小化）。
 5. 设置初始 PM PIN
 6. `npm run deploy`
 7. iPad Safari 打开部署 URL 给儿子用
+
+---
+
+## ✅ Phase 2 happy path（Done, 2026-06-06）
+
+### 目标
+补 §3.12 Child Event Submit (4 happy) + §3.3 PM Pending Events (11 tests = 1 smoke + 3 happy + 6 edge + 1 negative)。共 15 个新 e2e tests，1 个 bug 修复 + 3 个发现记录在 `docs/PHASE2_FINDINGS.md`。
+
+### 交付
+- `public/index.html` — 修 submit modal 字段缺 `name` 属性（3 行）
+- `tests/e2e/ui-child-submit-happy.spec.ts`（113 行）— §3.12 4 happy tests
+- `tests/e2e/ui-admin-pending.spec.ts`（225 行）— §3.3 11 tests
+- `scripts/screenshot-phase2.mjs`（160 行）— 走 happy path + 截 8 张图
+- `docs/phase2-screenshots/01-08*.png` — 8 张 happy path 截图
+- `docs/phase2-logs/baseline-*.log` — 完整 baseline test log
+- `docs/PHASE2_FINDINGS.md` — 1 bug 修复 + 3 documented 行为
+
+### 验收
+- ✅ 15/15 新 e2e pass（§3.12 happy 4 + §3.3 11）
+- ✅ Baseline 98/99 pass（1 pre-existing flaky 不是我引入）
+- ✅ `npm run typecheck` 0 错误
+- ✅ 8 张 happy path 截图全成功（iPad 1024×768 + Desktop 1280×800）
+
+### 4 个 Phase 2 发现
+详见 `docs/PHASE2_FINDINGS.md`：
+- **F1 (FIXED)**: submit modal form 缺 `name` 属性 → 5 行 HTML patch
+- **F2 (DEFERRED)**: admin.js approve 无防抖，5 click 发 5 请求
+- **F3 (DOCUMENTED)**: Playwright `request` fixture 不与 page 共享 cookie
+- **F4 (DOCUMENTED)**: pending-list 不渲染 badge（只有 all-events 渲染）
+
+### Commit
+- 待 commit（PM 审批流程）
 
 **待用户使用反馈后再决定是否迭代**：
 - 任务模板默认集合

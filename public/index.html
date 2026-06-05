@@ -31,7 +31,7 @@
       <form id="submit-form" class="form">
         <div class="field">
           <label for="submit-type">类型</label>
-          <select id="submit-type" required>
+          <select id="submit-type" name="type" required>
             <option value="game_time">🎮 游戏时间</option>
             <option value="pocket_money">💰 零花钱</option>
           </select>
@@ -45,11 +45,11 @@
         </div>
         <div class="field">
           <label for="submit-amount">数量</label>
-          <input id="submit-amount" type="number" min="1" step="1" value="5" required>
+          <input id="submit-amount" name="amount" type="number" min="1" step="1" value="5" required>
         </div>
         <div class="field">
           <label for="submit-reason">原因</label>
-          <textarea id="submit-reason" rows="2" maxlength="200" required
+          <textarea id="submit-reason" name="reason" rows="2" maxlength="200" required
                     placeholder="比如：今天主动整理了书桌"></textarea>
         </div>
         <div class="modal-actions">

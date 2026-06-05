@@ -2,6 +2,12 @@
 // D1 reset + seed helpers for e2e tests.
 // Uses `wrangler d1 execute --local` to clear and re-seed the local D1.
 // All tests should call clearAllData() in beforeEach to ensure isolation.
+//
+// 3-shard limitation: wrangler 4.98 d1 execute --persist-to <abs-path> resolves
+// <abs-path> as relative to CWD (strips the leading /), so we cannot give each
+// shard its own D1 sqlite file. All shards share the default D1 at
+// <CWD>/.wrangler/state/v3/d1/. Tests are short and isolation is best-effort.
+// TODO: switch to sqlite3 CLI direct read/write to bypass wrangler's path quirk.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';

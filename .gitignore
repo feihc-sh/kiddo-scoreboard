@@ -27,5 +27,10 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# Claude Code agent settings (local-only, not part of repo)
+.claude/
+
 # Logs
 *.log
+# But keep test logs under docs/ (audit trail for Phase 2+)
+!docs/**/*.log

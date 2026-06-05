@@ -1,0 +1,78 @@
+
+Running 15 tests using 1 worker
+
+[1A[2K[1/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:33:3 › UI: PM Pending Events (Section A) › Section A renders pending events with correct fields
+[1A[2K[2/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:58:3 › UI: PM Pending Events (Section A) › approve pending event: moves to all-events approved + balance updates + audit
+[1A[2K  1) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:58:3 › UI: PM Pending Events (Section A) › approve pending event: moves to all-events approved + balance updates + audit 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
+
+    Received: [31mundefined[39m
+
+      78 |     const audit = await auditRes.json();
+      79 |     const evApprove = audit.entries.find((e: any) => e.action === 'event_approve');
+    > 80 |     expect(evApprove).toBeTruthy();
+         |                       ^
+      81 |     expect(evApprove.actor).toBe('pm');
+      82 |   });
+      83 |
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:80:23
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-4bd98-roved-balance-updates-audit-iPad-Safari/error-context.md
+
+
+[1A[2K[3/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:84:3 › UI: PM Pending Events (Section A) › reject pending event: moves to rejected, balance unchanged, audit logged
+[1A[2K  2) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:84:3 › UI: PM Pending Events (Section A) › reject pending event: moves to rejected, balance unchanged, audit logged 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
+
+    Received: [31mundefined[39m
+
+      100 |     const auditRes = await page.context().request.get('/api/admin/audit-log?actor=pm&limit=20');
+      101 |     const audit = await auditRes.json();
+    > 102 |     expect(audit.entries.find((e: any) => e.action === 'event_reject')).toBeTruthy();
+          |                                                                         ^
+      103 |   });
+      104 |
+      105 |   test('approve then revoke chain: balance goes up then back down, status pending→approved→revoked', async ({ page }) => {
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:102:73
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-e05ac-ance-unchanged-audit-logged-iPad-Safari/error-context.md
+
+
+[1A[2K[4/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:105:3 › UI: PM Pending Events (Section A) › approve then revoke chain: balance goes up then back down, status pending→approved→revoked
+[1A[2K[5/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:131:3 › UI: PM Pending Events (Section A) › offline approve: network error toast, row stays pending
+[1A[2K[6/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:145:3 › UI: PM Pending Events (Section A) › concurrent approve same event (second via API): UI does not crash
+[1A[2K[7/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:164:3 › UI: PM Pending Events (Section A) › empty pending list shows "没有待审事件" empty state
+[1A[2K[8/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:171:3 › UI: PM Pending Events (Section A) › approve with 200-char reason: layout not broken, approve still works
+[1A[2K[9/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:186:3 › UI: PM Pending Events (Section A) › approve a 5s-slow API: click 5x in 200ms, only 1 request fires (debounce)
+[1A[2K  3) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:186:3 › UI: PM Pending Events (Section A) › approve a 5s-slow API: click 5x in 200ms, only 1 request fires (debounce) 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m1[39m
+    Received: [31m5[39m
+
+      209 |     // This test DOCUMENTS the current behavior, expecting 1 (server only accepts 1 approve,
+      210 |     // others get 409). The UI side allows 5 — see PHASE2_FINDINGS.md.
+    > 211 |     expect(approveCalls).toBe(1);
+          |                          ^
+      212 |   });
+      213 |
+      214 |   // ---------- Negative ----------
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:211:26
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-e1f0c-y-1-request-fires-debounce--iPad-Safari/error-context.md
+
+
+[1A[2K[10/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:216:3 › UI: PM Pending Events (Section A) › API approve id=9999 (does not exist) → 404
+[1A[2K[11/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:225:3 › UI: PM Pending Events (Section A) › UI login path: PM enters PIN, lands on dashboard, sees pending events
+[1A[2K[12/15] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:17:3 › UI: Child Submit (Happy Path) › submit modal renders all 4 fields and 2 buttons when opened
+[1A[2K[13/15] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:35:3 › UI: Child Submit (Happy Path) › submit +10 game_time: event appears as pending, balance unchanged
+[1A[2K[14/15] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:64:3 › UI: Child Submit (Happy Path) › submit -5 pocket_money (self-report penalty): balance unchanged
+[1A[2K[15/15] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:88:3 › UI: Child Submit (Happy Path) › submit all 4 type/direction combos: 4 pending events created
+[1A[2K  3 failed
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:58:3 › UI: PM Pending Events (Section A) › approve pending event: moves to all-events approved + balance updates + audit 
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:84:3 › UI: PM Pending Events (Section A) › reject pending event: moves to rejected, balance unchanged, audit logged 
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:186:3 › UI: PM Pending Events (Section A) › approve a 5s-slow API: click 5x in 200ms, only 1 request fires (debounce) 
+  12 passed (1.5m)

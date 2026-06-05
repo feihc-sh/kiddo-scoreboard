@@ -1,0 +1,322 @@
+
+Running 15 tests using 1 worker
+
+[1A[2K[1/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:31:3 › UI: PM Pending Events (Section A) › Section A renders pending events with correct fields
+[1A[2K  1) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:31:3 › UI: PM Pending Events (Section A) › Section A renders pending events with correct fields 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  locator('#pending-list .pm-row')
+    Expected: [32m2[39m
+    Received: [31m0[39m
+    Timeout:  10000ms
+
+    Call log:
+    [2m  - Expect "toHaveCount" with timeout 10000ms[22m
+    [2m  - waiting for locator('#pending-list .pm-row')[22m
+    [2m    - waiting for navigation to finish...[22m
+    [2m    - navigated to "http://127.0.0.1:8787/admin/login"[22m
+    [2m    24 × locator resolved to 0 elements[22m
+    [2m       - unexpected value "0"[22m
+
+
+      36 |     // Section A is open by default (index.html:143)
+      37 |     const rows = page.locator('#pending-list .pm-row');
+    > 38 |     await expect(rows).toHaveCount(2);
+         |                        ^
+      39 |     // Each row: account icon, amount with sign, .pm-badge.pending, reason
+      40 |     const gtRow = rows.filter({ hasText: 'gt test' });
+      41 |     await expect(gtRow).toContainText('🎮');
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:38:24
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-aa771--events-with-correct-fields-iPad-Safari/error-context.md
+
+
+[1A[2K[2/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:53:3 › UI: PM Pending Events (Section A) › approve pending event: moves to all-events approved + balance updates + audit
+[1A[2K  2) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:53:3 › UI: PM Pending Events (Section A) › approve pending event: moves to all-events approved + balance updates + audit 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  locator('#pending-list .pm-row')
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Timeout:  10000ms
+
+    Call log:
+    [2m  - Expect "toHaveCount" with timeout 10000ms[22m
+    [2m  - waiting for locator('#pending-list .pm-row')[22m
+    [2m    - waiting for" http://127.0.0.1:8787/admin/login" navigation to finish...[22m
+    [2m    - navigated to "http://127.0.0.1:8787/admin/login"[22m
+    [2m    24 × locator resolved to 0 elements[22m
+    [2m       - unexpected value "0"[22m
+
+
+      54 |     seedEvent({ type: 'game_time', change_value: 10, status: 'pending', reason: 'gt approve' });
+      55 |     await page.goto('/admin/');
+    > 56 |     await expect(page.locator('#pending-list .pm-row')).toHaveCount(1);
+         |                                                         ^
+      57 |
+      58 |     await page.locator('[data-act="approve"]').first().click();
+      59 |     // Toast
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:56:57
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-4bd98-roved-balance-updates-audit-iPad-Safari/error-context.md
+
+
+[1A[2K[3/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:78:3 › UI: PM Pending Events (Section A) › reject pending event: moves to rejected, balance unchanged, audit logged
+[1A[2K  3) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:78:3 › UI: PM Pending Events (Section A) › reject pending event: moves to rejected, balance unchanged, audit logged 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  locator('#pending-list .pm-row')
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Timeout:  10000ms
+
+    Call log:
+    [2m  - Expect "toHaveCount" with timeout 10000ms[22m
+    [2m  - waiting for locator('#pending-list .pm-row')[22m
+    [2m    - waiting for" http://127.0.0.1:8787/admin/login" navigation to finish...[22m
+    [2m    - navigated to "http://127.0.0.1:8787/admin/login"[22m
+    [2m    24 × locator resolved to 0 elements[22m
+    [2m       - unexpected value "0"[22m
+
+
+      79 |     seedEvent({ type: 'pocket_money', change_value: 5, status: 'pending', reason: 'pm reject' });
+      80 |     await page.goto('/admin/');
+    > 81 |     await expect(page.locator('#pending-list .pm-row')).toHaveCount(1);
+         |                                                         ^
+      82 |
+      83 |     await page.locator('[data-act="reject"]').first().click();
+      84 |     await expect(page.locator('#toast').filter({ hasText: '已拒绝' })).toBeVisible({ timeout: 5000 });
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:81:57
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-e05ac-ance-unchanged-audit-logged-iPad-Safari/error-context.md
+
+
+[1A[2K[4/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:97:3 › UI: PM Pending Events (Section A) › approve then revoke chain: balance goes up then back down, status pending→approved→revoked
+[1A[2K  4) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:97:3 › UI: PM Pending Events (Section A) › approve then revoke chain: balance goes up then back down, status pending→approved→revoked 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  locator('#pending-list .pm-row')
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Timeout:  10000ms
+
+    Call log:
+    [2m  - Expect "toHaveCount" with timeout 10000ms[22m
+    [2m  - waiting for locator('#pending-list .pm-row')[22m
+    [2m    - waiting for" http://127.0.0.1:8787/admin/login" navigation to finish...[22m
+    [2m    - navigated to "http://127.0.0.1:8787/admin/login"[22m
+    [2m    24 × locator resolved to 0 elements[22m
+    [2m       - unexpected value "0"[22m
+
+
+       98 |     seedEvent({ type: 'pocket_money', change_value: 7, status: 'pending', reason: 'chain test' });
+       99 |     await page.goto('/admin/');
+    > 100 |     await expect(page.locator('#pending-list .pm-row')).toHaveCount(1);
+          |                                                         ^
+      101 |
+      102 |     // Approve
+      103 |     await page.locator('[data-act="approve"]').first().click();
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:100:57
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-5ea3f-us-pending→approved→revoked-iPad-Safari/error-context.md
+
+
+[1A[2K[5/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:123:3 › UI: PM Pending Events (Section A) › offline approve: network error toast, row stays pending
+[1A[2K  5) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:123:3 › UI: PM Pending Events (Section A) › offline approve: network error toast, row stays pending 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  locator('#pending-list .pm-row')
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Timeout:  10000ms
+
+    Call log:
+    [2m  - Expect "toHaveCount" with timeout 10000ms[22m
+    [2m  - waiting for locator('#pending-list .pm-row')[22m
+    [2m    - waiting for navigation to finish...[22m
+    [2m    - navigated to "http://127.0.0.1:8787/admin/login"[22m
+    [2m    24 × locator resolved to 0 elements[22m
+    [2m       - unexpected value "0"[22m
+
+
+      124 |     seedEvent({ type: 'game_time', change_value: 3, status: 'pending', reason: 'offline test' });
+      125 |     await page.goto('/admin/');
+    > 126 |     await expect(page.locator('#pending-list .pm-row')).toHaveCount(1);
+          |                                                         ^
+      127 |
+      128 |     await context.setOffline(true);
+      129 |     await page.locator('[data-act="approve"]').first().click();
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:126:57
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-eac73-ror-toast-row-stays-pending-iPad-Safari/error-context.md
+
+
+[1A[2K[6/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:137:3 › UI: PM Pending Events (Section A) › concurrent approve same event (second via API): UI does not crash
+[1A[2K  6) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:137:3 › UI: PM Pending Events (Section A) › concurrent approve same event (second via API): UI does not crash 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  locator('#pending-list .pm-row')
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Timeout:  10000ms
+
+    Call log:
+    [2m  - Expect "toHaveCount" with timeout 10000ms[22m
+    [2m  - waiting for locator('#pending-list .pm-row')[22m
+    [2m    - waiting for" http://127.0.0.1:8787/admin/login" navigation to finish...[22m
+    [2m    - navigated to "http://127.0.0.1:8787/admin/login"[22m
+    [2m    24 × locator resolved to 0 elements[22m
+    [2m       - unexpected value "0"[22m
+
+
+      138 |     const evId = seedEvent({ type: 'pocket_money', change_value: 4, status: 'pending', reason: 'concurrent' });
+      139 |     await page.goto('/admin/');
+    > 140 |     await expect(page.locator('#pending-list .pm-row')).toHaveCount(1);
+          |                                                         ^
+      141 |
+      142 |     // First click UI approve
+      143 |     await page.locator('[data-act="approve"]').first().click();
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:140:57
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-ae481-d-via-API-UI-does-not-crash-iPad-Safari/error-context.md
+
+
+[1A[2K[7/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:155:3 › UI: PM Pending Events (Section A) › empty pending list shows "没有待审事件" empty state
+[1A[2K  7) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:155:3 › UI: PM Pending Events (Section A) › empty pending list shows "没有待审事件" empty state 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('#pending-empty')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 10000ms[22m
+    [2m  - waiting for locator('#pending-empty')[22m
+    [2m    - waiting for" http://127.0.0.1:8787/admin/login" navigation to finish...[22m
+    [2m    - navigated to "http://127.0.0.1:8787/admin/login"[22m
+
+
+      156 |     await page.goto('/admin/');
+      157 |     await expect(page.locator('#pending-list .pm-row')).toHaveCount(0);
+    > 158 |     await expect(page.locator('#pending-empty')).toBeVisible();
+          |                                                  ^
+      159 |     await expect(page.locator('#pending-empty')).toContainText('没有待审事件');
+      160 |   });
+      161 |
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:158:50
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-1c102-st-shows-没有待审事件-empty-state-iPad-Safari/error-context.md
+
+
+[1A[2K[8/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:162:3 › UI: PM Pending Events (Section A) › approve with 200-char reason: layout not broken, approve still works
+[1A[2K  8) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:162:3 › UI: PM Pending Events (Section A) › approve with 200-char reason: layout not broken, approve still works 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('#pending-list .pm-row').first()
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 10000ms[22m
+    [2m  - waiting for locator('#pending-list .pm-row').first()[22m
+    [2m    - waiting for" http://127.0.0.1:8787/admin/login" navigation to finish...[22m
+    [2m    - navigated to "http://127.0.0.1:8787/admin/login"[22m
+
+
+      166 |     // Row exists and contains the long reason
+      167 |     const row = page.locator('#pending-list .pm-row').first();
+    > 168 |     await expect(row).toBeVisible();
+          |                       ^
+      169 |     await expect(row).toContainText('a'.repeat(50));  // truncated display ok
+      170 |     // Approve succeeds
+      171 |     await page.locator('[data-act="approve"]').first().click();
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:168:23
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-226ab--broken-approve-still-works-iPad-Safari/error-context.md
+
+
+[1A[2K[9/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:177:3 › UI: PM Pending Events (Section A) › approve a 5s-slow API: click 5x in 200ms, only 1 request fires (debounce)
+[1A[2K  9) [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:177:3 › UI: PM Pending Events (Section A) › approve a 5s-slow API: click 5x in 200ms, only 1 request fires (debounce) 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  locator('#pending-list .pm-row')
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Timeout:  10000ms
+
+    Call log:
+    [2m  - Expect "toHaveCount" with timeout 10000ms[22m
+    [2m  - waiting for locator('#pending-list .pm-row')[22m
+    [2m    - waiting for" http://127.0.0.1:8787/admin/login" navigation to finish...[22m
+    [2m    - navigated to "http://127.0.0.1:8787/admin/login"[22m
+    [2m    24 × locator resolved to 0 elements[22m
+    [2m       - unexpected value "0"[22m
+
+
+      183 |     });
+      184 |     await page.goto('/admin/');
+    > 185 |     await expect(page.locator('#pending-list .pm-row')).toHaveCount(1);
+          |                                                         ^
+      186 |
+      187 |     let approveCalls = 0;
+      188 |     page.on('request', (req) => {
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-admin-pending.spec.ts:185:57
+
+    Error Context: test-results/ui-admin-pending-UI-PM-Pen-e1f0c-y-1-request-fires-debounce--iPad-Safari/error-context.md
+
+
+[1A[2K[10/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:205:3 › UI: PM Pending Events (Section A) › API approve id=9999 (does not exist) → 404
+[1A[2K[11/15] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:212:3 › UI: PM Pending Events (Section A) › UI login path: PM enters PIN, lands on dashboard, sees pending events
+[1A[2K[12/15] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:17:3 › UI: Child Submit (Happy Path) › submit modal renders all 4 fields and 2 buttons when opened
+[1A[2K[13/15] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:35:3 › UI: Child Submit (Happy Path) › submit +10 game_time: event appears as pending, balance unchanged
+[1A[2K  10) [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:35:3 › UI: Child Submit (Happy Path) › submit +10 game_time: event appears as pending, balance unchanged 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('#toast.show').filter({ hasText: '已提交' })
+    Expected: visible
+    Timeout: 3000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 3000ms[22m
+    [2m  - waiting for locator('#toast.show').filter({ hasText: '已提交' })[22m
+
+
+      50 |     await expect(page.locator('#submit-modal')).toBeHidden();
+      51 |     // Toast
+    > 52 |     await expect(page.locator('#toast.show').filter({ hasText: '已提交' })).toBeVisible({ timeout: 3000 });
+         |                                                                          ^
+      53 |     // New pending event row in list
+      54 |     const items = page.locator('#event-list .event-item');
+      55 |     await expect(items).toHaveCount(2, { timeout: 5000 });
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-child-submit-happy.spec.ts:52:74
+
+    Error Context: test-results/ui-child-submit-happy-UI-C-2a781-s-pending-balance-unchanged-iPad-Safari/error-context.md
+
+
+[1A[2K[14/15] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:64:3 › UI: Child Submit (Happy Path) › submit -5 pocket_money (self-report penalty): balance unchanged
+[1A[2K[15/15] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:88:3 › UI: Child Submit (Happy Path) › submit all 4 type/direction combos: 4 pending events created
+[1A[2K  10 failed
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:31:3 › UI: PM Pending Events (Section A) › Section A renders pending events with correct fields 
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:53:3 › UI: PM Pending Events (Section A) › approve pending event: moves to all-events approved + balance updates + audit 
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:78:3 › UI: PM Pending Events (Section A) › reject pending event: moves to rejected, balance unchanged, audit logged 
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:97:3 › UI: PM Pending Events (Section A) › approve then revoke chain: balance goes up then back down, status pending→approved→revoked 
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:123:3 › UI: PM Pending Events (Section A) › offline approve: network error toast, row stays pending 
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:137:3 › UI: PM Pending Events (Section A) › concurrent approve same event (second via API): UI does not crash 
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:155:3 › UI: PM Pending Events (Section A) › empty pending list shows "没有待审事件" empty state 
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:162:3 › UI: PM Pending Events (Section A) › approve with 200-char reason: layout not broken, approve still works 
+    [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:177:3 › UI: PM Pending Events (Section A) › approve a 5s-slow API: click 5x in 200ms, only 1 request fires (debounce) 
+    [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:35:3 › UI: Child Submit (Happy Path) › submit +10 game_time: event appears as pending, balance unchanged 
+  5 passed (3.1m)

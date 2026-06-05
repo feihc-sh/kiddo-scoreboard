@@ -1,0 +1,138 @@
+
+Running 99 tests using 1 worker
+
+[1A[2K[1/99] [iPad Safari] › tests/e2e/_diag-cookie.spec.ts:6:1 › diag2: loginAsPm via page.context().request sets cookie
+[1A[2K[iPad Safari] › tests/e2e/_diag-cookie.spec.ts:6:1 › diag2: loginAsPm via page.context().request sets cookie
+COOKIES v2: ["pm_session"]
+
+[1A[2KURL v2: http://127.0.0.1:8787/admin/
+
+[1A[2K[2/99] [iPad Safari] › tests/e2e/admin-dashboard.spec.ts:4:3 › Module 9-B: PM Admin Dashboard (static assets) › GET /admin/ serves admin HTML (or 404 if assets not yet bound)
+[1A[2K[3/99] [iPad Safari] › tests/e2e/admin-dashboard.spec.ts:21:3 › Module 9-B: PM Admin Dashboard (static assets) › GET /admin/admin.js returns the admin JS module
+[1A[2K[4/99] [iPad Safari] › tests/e2e/admin-dashboard.spec.ts:37:3 › Module 9-B: PM Admin Dashboard (static assets) › GET /admin/ redirects to /admin/login when not authenticated
+[1A[2K[5/99] [iPad Safari] › tests/e2e/admin-extras.spec.ts:4:3 › Module 7: Profile + Audit + Task Config + Completions List › PATCH /api/me/profile with missing body → 400
+[1A[2K[6/99] [iPad Safari] › tests/e2e/admin-extras.spec.ts:9:3 › Module 7: Profile + Audit + Task Config + Completions List › GET /api/admin/audit-log without session → 401
+[1A[2K[7/99] [iPad Safari] › tests/e2e/admin-extras.spec.ts:14:3 › Module 7: Profile + Audit + Task Config + Completions List › GET /api/admin/tasks without session → 401
+[1A[2K[8/99] [iPad Safari] › tests/e2e/admin-extras.spec.ts:19:3 › Module 7: Profile + Audit + Task Config + Completions List › GET /api/admin/task-completions without session → 401
+[1A[2K[9/99] [iPad Safari] › tests/e2e/admin-login.spec.ts:4:3 › Module 9-A: PM Admin Login Page (static assets) › GET /admin/login returns 200 HTML
+[1A[2K[10/99] [iPad Safari] › tests/e2e/admin-login.spec.ts:18:3 › Module 9-A: PM Admin Login Page (static assets) › GET /admin/login.js returns 200 JS
+[1A[2K[11/99] [iPad Safari] › tests/e2e/child-ui.spec.ts:4:3 › Module 8: Child UI (iPad PWA) › GET / returns 200 with child UI HTML
+[1A[2K[12/99] [iPad Safari] › tests/e2e/child-ui.spec.ts:15:3 › Module 8: Child UI (iPad PWA) › GET /app.css returns 200 with CSS
+[1A[2K[13/99] [iPad Safari] › tests/e2e/child-ui.spec.ts:24:3 › Module 8: Child UI (iPad PWA) › GET /app.js returns 200 with JS
+[1A[2K[14/99] [iPad Safari] › tests/e2e/child-ui.spec.ts:34:3 › Module 8: Child UI (iPad PWA) › GET /app.js in iPad Safari viewport loads UI shell
+[1A[2K[15/99] [iPad Safari] › tests/e2e/event-approval.spec.ts:4:3 › Module 5: Event Approval Workflow › POST /api/me/events with missing body → 400
+[1A[2K[16/99] [iPad Safari] › tests/e2e/event-approval.spec.ts:9:3 › Module 5: Event Approval Workflow › POST /api/me/events with invalid type → 400
+[1A[2K[17/99] [iPad Safari] › tests/e2e/event-approval.spec.ts:16:3 › Module 5: Event Approval Workflow › POST /api/admin/events/1/approve without session → 401
+[1A[2K[18/99] [iPad Safari] › tests/e2e/event-approval.spec.ts:21:3 › Module 5: Event Approval Workflow › PUT /api/admin/events/1 without session → 401
+[1A[2K[19/99] [iPad Safari] › tests/e2e/exchange-grant.spec.ts:4:3 › Module 6: Exchange + Weekly Grant › POST /api/admin/exchange without session → 401
+[1A[2K[20/99] [iPad Safari] › tests/e2e/exchange-grant.spec.ts:11:3 › Module 6: Exchange + Weekly Grant › POST /api/admin/weekly-grant without session → 401
+[1A[2K[21/99] [iPad Safari] › tests/e2e/hello.spec.ts:4:3 › Module 0: Hello World + Health › GET /health returns healthy
+[1A[2K[22/99] [iPad Safari] › tests/e2e/hello.spec.ts:11:3 › Module 0: Hello World + Health › GET /health works in iPad Safari viewport
+[1A[2K[23/99] [iPad Safari] › tests/e2e/public-api.spec.ts:4:3 › Module 3: Public Read-Only API › GET /api/public/balance without user_id returns 400
+[1A[2K[24/99] [iPad Safari] › tests/e2e/public-api.spec.ts:11:3 › Module 3: Public Read-Only API › GET /api/public/user/9999 returns 404 (route is mounted)
+[1A[2K[25/99] [iPad Safari] › tests/e2e/smoke-admin-all-events.spec.ts:9:3 › Smoke: PM all-events section › sec-all-events and #all-events-list are attached
+[1A[2K[26/99] [iPad Safari] › tests/e2e/smoke-admin-audit.spec.ts:9:3 › Smoke: PM audit log section › sec-audit and #audit-list are attached
+[1A[2K[27/99] [iPad Safari] › tests/e2e/smoke-admin-dashboard.spec.ts:8:3 › Smoke: PM dashboard auth gate › unauthenticated /admin/ redirects to /admin/login within 2s
+[1A[2K[28/99] [iPad Safari] › tests/e2e/smoke-admin-exchange-grant.spec.ts:9:3 › Smoke: PM exchange + grant sections › sec-exchange, sec-grant, and both forms are attached
+[1A[2K[29/99] [iPad Safari] › tests/e2e/smoke-admin-login.spec.ts:7:3 › Smoke: PM login page › /admin/login renders login pad, dots, and submit
+[1A[2K[30/99] [iPad Safari] › tests/e2e/smoke-admin-pending.spec.ts:9:3 › Smoke: PM pending events section › sec-pending and #pending-list are attached
+[1A[2K[31/99] [iPad Safari] › tests/e2e/smoke-admin-shell.spec.ts:10:3 › Smoke: PM dashboard shell (authenticated) › renders 7 sections, pm-balance number, and logout
+[1A[2K[32/99] [iPad Safari] › tests/e2e/smoke-admin-tasks.spec.ts:9:3 › Smoke: PM tasks config section › sec-tasks and #tasks-list are attached
+[1A[2K[33/99] [iPad Safari] › tests/e2e/smoke-child-firsttime.spec.ts:8:3 › Smoke: Child first-time (welcome modal) › welcome modal is visible when child has no name
+[1A[2K[34/99] [iPad Safari] › tests/e2e/smoke-child-main.spec.ts:8:3 › Smoke: Child main page › / renders the child app shell
+[1A[2K[35/99] [iPad Safari] › tests/e2e/smoke-child-recent.spec.ts:8:3 › Smoke: Child recent events › #event-list and #event-count are attached
+[1A[2K[36/99] [iPad Safari] › tests/e2e/smoke-child-submit.spec.ts:14:3 › Smoke: Child submit modal › #btn-submit is attached
+[1A[2K[37/99] [iPad Safari] › tests/e2e/smoke-child-submit.spec.ts:19:3 › Smoke: Child submit modal › clicking #btn-submit opens #submit-modal
+[1A[2K[38/99] [iPad Safari] › tests/e2e/smoke-child-task-complete.spec.ts:8:3 › Smoke: Child task shortcuts › seeded task renders a button in #task-shortcuts
+[1A[2K[39/99] [iPad Safari] › tests/e2e/task-system.spec.ts:4:3 › Module 4: Task System › POST /api/me/tasks/9999/complete → 404 (no such task)
+[1A[2K[40/99] [iPad Safari] › tests/e2e/task-system.spec.ts:11:3 › Module 4: Task System › POST /api/me/tasks/abc/complete → 400 (non-integer id)
+[1A[2K[41/99] [iPad Safari] › tests/e2e/task-system.spec.ts:18:3 › Module 4: Task System › POST /api/admin/task-completions/1/revoke without session → 401
+[1A[2K[42/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:17:3 › UI: PM Login › 4-digit PIN + ✓ submits and redirects to /admin/
+[1A[2K[43/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:31:3 › UI: PM Login › 6-digit PIN (123654) + ✓ submits and redirects to /admin/
+[1A[2K[44/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:48:3 › UI: PM Login › 8-digit PIN (longest allowed) submits successfully
+[1A[2K[45/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:61:3 › UI: PM Login › 3 digits + click ✓: button is disabled
+[1A[2K[46/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:69:3 › UI: PM Login › 9th digit is ignored (max 8)
+[1A[2K[47/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:78:3 › UI: PM Login › wrong PIN: shake animation + PIN cleared, 0 dots
+[1A[2K[48/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:97:3 › UI: PM Login › 5+ wrong PINs triggers lockout banner and disables pad
+[1A[2K[49/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:118:3 › UI: PM Login › Esc key clears PIN
+[1A[2K[50/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:128:3 › UI: PM Login › hardware keyboard digits work
+[1A[2K[51/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:138:3 › UI: PM Login › Backspace key removes last digit
+[1A[2K[52/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:150:3 › UI: PM Login › logout from /admin/ returns to /admin/login
+[1A[2K[53/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:163:3 › UI: PM Login › session cookie persists across page reloads
+[1A[2K[54/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:176:3 › UI: PM Login › visiting /admin/ without session auto-redirects to /admin/login
+[1A[2K[55/99] [iPad Safari] › tests/e2e/ui-admin-login.spec.ts:185:3 › UI: PM Login › server error during login shows error banner with retry
+[1A[2K[56/99] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:33:3 › UI: PM Pending Events (Section A) › Section A renders pending events with correct fields
+[1A[2K[57/99] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:58:3 › UI: PM Pending Events (Section A) › approve pending event: moves to all-events approved + balance updates + audit
+[1A[2K[58/99] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:84:3 › UI: PM Pending Events (Section A) › reject pending event: moves to rejected, balance unchanged, audit logged
+[1A[2K[59/99] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:105:3 › UI: PM Pending Events (Section A) › approve then revoke chain: balance goes up then back down, status pending→approved→revoked
+[1A[2K[60/99] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:131:3 › UI: PM Pending Events (Section A) › offline approve: network error toast, row stays pending
+[1A[2K[61/99] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:145:3 › UI: PM Pending Events (Section A) › concurrent approve same event (second via API): UI does not crash
+[1A[2K[62/99] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:164:3 › UI: PM Pending Events (Section A) › empty pending list shows "没有待审事件" empty state
+[1A[2K[63/99] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:171:3 › UI: PM Pending Events (Section A) › approve with 200-char reason: layout not broken, approve still works
+[1A[2K[64/99] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:186:3 › UI: PM Pending Events (Section A) › approve a 5s-slow API: click 5x in 200ms, only 1 request fires (debounce)
+[1A[2K[65/99] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:220:3 › UI: PM Pending Events (Section A) › API approve id=9999 (does not exist) → 404
+[1A[2K[66/99] [iPad Safari] › tests/e2e/ui-admin-pending.spec.ts:229:3 › UI: PM Pending Events (Section A) › UI login path: PM enters PIN, lands on dashboard, sees pending events
+[1A[2K[67/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:16:3 › UI: Child First-time Flow › welcome modal is visible on first load
+[1A[2K[68/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:25:3 › UI: Child First-time Flow › typing a name fills the input
+[1A[2K[69/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:31:3 › UI: Child First-time Flow › submitting a name hides modal and shows hero with name
+[1A[2K[70/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:43:3 › UI: Child First-time Flow › submitted name persists across page reloads
+[1A[2K[71/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:56:3 › UI: Child First-time Flow › Enter key submits the form
+[1A[2K[72/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:65:3 › UI: Child First-time Flow › empty name shows error and does not submit
+[1A[2K[73/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:75:3 › UI: Child First-time Flow › whitespace-only name is rejected (trimmed)
+[1A[2K[74/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:83:3 › UI: Child First-time Flow › name longer than 20 chars is rejected by maxlength
+[1A[2K[75/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:94:3 › UI: Child First-time Flow › API error (500) shows error message inside modal
+[1A[2K[76/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:105:3 › UI: Child First-time Flow › 409 ALREADY_SET closes modal gracefully (e.g. PM pre-set name)
+[1A[2K[77/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:124:3 › UI: Child First-time Flow › confetti canvas exists and animates after submit
+[1A[2K[78/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:135:3 › UI: Child First-time Flow › balance and tasks load in background while modal is shown
+[1A[2K[79/99] [iPad Safari] › tests/e2e/ui-child-firsttime.spec.ts:151:3 › UI: Child First-time Flow › clicking outside the modal does NOT close it (require explicit submit)
+[1A[2K[80/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:16:3 › UI: Child Main Page › balance cards render with 0/0 when no events
+[1A[2K[81/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:22:3 › UI: Child Main Page › balance reflects approved events
+[1A[2K[82/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:31:3 › UI: Child Main Page › pending events do NOT affect balance
+[1A[2K[83/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:37:3 › UI: Child Main Page › rejected/revoked events do NOT affect balance
+[1A[2K[84/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:46:3 › UI: Child Main Page › greeting shows child name
+[1A[2K[85/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:51:3 › UI: Child Main Page › greeting without name shows generic
+[1A[2K[86/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:63:3 › UI: Child Main Page › task shortcuts show all active tasks as buttons
+[1A[2K[87/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:73:3 › UI: Child Main Page › inactive tasks are NOT shown in shortcuts
+[1A[2K[88/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:82:3 › UI: Child Main Page › task completed today shows "今日已完成" badge and is disabled
+[1A[2K  1) [iPad Safari] › tests/e2e/ui-child-main.spec.ts:82:3 › UI: Child Main Page › task completed today shows "今日已完成" badge and is disabled 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeDisabled[2m([22m[2m)[22m failed
+
+    Locator:  locator('#task-shortcuts button').filter({ hasText: '刷牙' })
+    Expected: disabled
+    Received: enabled
+    Timeout:  10000ms
+
+    Call log:
+    [2m  - Expect "toBeDisabled" with timeout 10000ms[22m
+    [2m  - waiting for locator('#task-shortcuts button').filter({ hasText: '刷牙' })[22m
+    [2m    23 × locator resolved to <button class="task-btn" data-task-id="31413">…</button>[22m
+    [2m       - unexpected value "enabled"[22m
+
+
+      91 |     await page.goto('/');
+      92 |     const btn = page.locator('#task-shortcuts button').filter({ hasText: '刷牙' });
+    > 93 |     await expect(btn).toBeDisabled();
+         |                       ^
+      94 |     await expect(btn).toContainText('今日已完成');
+      95 |   });
+      96 |
+        at /Users/tidusmaomao/workspace/kiddo-scoreboard/tests/e2e/ui-child-main.spec.ts:93:23
+
+    Error Context: test-results/ui-child-main-UI-Child-Mai-1cb6e-今日已完成-badge-and-is-disabled-iPad-Safari/error-context.md
+
+
+[1A[2K[89/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:97:3 › UI: Child Main Page › empty tasks list shows "家长还没设置任务" message
+[1A[2K[90/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:104:3 › UI: Child Main Page › events list shows last 10 events with status badges
+[1A[2K[91/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:116:3 › UI: Child Main Page › event count badge reflects list length
+[1A[2K[92/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:123:3 › UI: Child Main Page › empty events list shows "还没有事件" empty state
+[1A[2K[93/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:131:3 › UI: Child Main Page › clicking 刷新 reloads all data
+[1A[2K[94/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:142:3 › UI: Child Main Page › refresh shows toast
+[1A[2K[95/99] [iPad Safari] › tests/e2e/ui-child-main.spec.ts:150:3 › UI: Child Main Page › API failure shows error banner with retry button
+[1A[2K[96/99] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:17:3 › UI: Child Submit (Happy Path) › submit modal renders all 4 fields and 2 buttons when opened
+[1A[2K[97/99] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:35:3 › UI: Child Submit (Happy Path) › submit +10 game_time: event appears as pending, balance unchanged
+[1A[2K[98/99] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:64:3 › UI: Child Submit (Happy Path) › submit -5 pocket_money (self-report penalty): balance unchanged
+[1A[2K[99/99] [iPad Safari] › tests/e2e/ui-child-submit-happy.spec.ts:88:3 › UI: Child Submit (Happy Path) › submit all 4 type/direction combos: 4 pending events created
+[1A[2K  1 failed
+    [iPad Safari] › tests/e2e/ui-child-main.spec.ts:82:3 › UI: Child Main Page › task completed today shows "今日已完成" badge and is disabled 
+  98 passed (6.0m)
