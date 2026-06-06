@@ -55,16 +55,28 @@ tasks.get('/today-status', async (c) => {
   }
 
   const today = todayShanghai();
-  const rows = await c.env.DB
-    .prepare(
-      `SELECT task_id FROM task_completions ` +
-        `WHERE user_id = ? AND status = 'active' AND completed_date = ?`,
-    )
-    .bind(userId, today)
-    .all<{ task_id: number }>();
+  // §3.11 toggle: also return tasks the child has already revoked today,
+  // so the page remembers the disabled state across reloads.
+  const [activeRows, revokedRows] = await Promise.all([
+    c.env.DB
+      .prepare(
+        `SELECT task_id FROM task_completions
+         WHERE user_id = ? AND status = 'active' AND completed_date = ?`,
+      )
+      .bind(userId, today)
+      .all<{ task_id: number }>(),
+    c.env.DB
+      .prepare(
+        `SELECT task_id FROM task_completions
+         WHERE user_id = ? AND status = 'revoked' AND completed_date = ?`,
+      )
+      .bind(userId, today)
+      .all<{ task_id: number }>(),
+  ]);
 
-  const completed_task_ids = (rows.results ?? []).map((r) => r.task_id);
-  return c.json({ completed_task_ids, today });
+  const completed_task_ids = (activeRows.results ?? []).map((r) => r.task_id);
+  const uncompleted_today_ids = (revokedRows.results ?? []).map((r) => r.task_id);
+  return c.json({ completed_task_ids, uncompleted_today_ids, today });
 });
 
 export default tasks;

@@ -79,7 +79,7 @@ test.describe('UI: Child Main Page', () => {
     await expect(page.locator('#task-shortcuts button').filter({ hasText: 'InactiveTask' })).toHaveCount(0);
   });
 
-  test('task completed today shows "今日已完成" badge and is disabled', async ({ page, request }) => {
+  test('task completed today shows "今日已完成 (点击撤销)" badge and is clickable for toggle', async ({ page, request }) => {
     const taskId = seedTask({ name: '刷牙' });
     // Complete the task via the real child API endpoint so workerd's in-memory
     // state is updated. (Direct sqlite3 writes don't propagate to workerd.)
@@ -87,8 +87,11 @@ test.describe('UI: Child Main Page', () => {
     expect(r.status()).toBe(201);
     await page.goto('/');
     const btn = page.locator('#task-shortcuts button').filter({ hasText: '刷牙' });
-    await expect(btn).toBeDisabled();
+    // §3.11 toggle: completed task is now clickable to revoke (not disabled).
+    await expect(btn).toBeEnabled();
+    await expect(btn).toHaveClass(/task-btn-done/);
     await expect(btn).toContainText('今日已完成');
+    await expect(btn).toContainText('点击撤销');
   });
 
   test('empty tasks list shows "家长还没设置任务" message', async ({ page }) => {

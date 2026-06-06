@@ -14,6 +14,7 @@ const state = {
   balance: { game_time: 0, pocket_money: 0 },
   tasks: [],                      // Task[] (active only)
   completedTaskIds: new Set(),    // Set<number>
+  uncompletedTodayIds: new Set(), // Set<number> §3.11 toggle: tasks revoked today
   events: [],                     // ScoreEvent[] (last 10)
   selectedDir: 1,                 // for submit modal
 };
@@ -74,6 +75,7 @@ async function loadTasks() {
   ]);
   state.tasks = tasksRes.tasks;
   state.completedTaskIds = new Set(todayRes.completed_task_ids);
+  state.uncompletedTodayIds = new Set(todayRes.uncompleted_today_ids ?? []);
 }
 async function loadEvents() {
   const r = await api('GET', `/api/public/events?user_id=${CHILD_USER_ID}&limit=10`);
@@ -122,17 +124,38 @@ function renderTasks() {
   }
   state.tasks.forEach((t) => {
     const done = state.completedTaskIds.has(t.id);
+    const revoked = state.uncompletedTodayIds.has(t.id);
     const btn = document.createElement('button');
-    btn.className = 'task-btn' + (done ? ' task-btn-done' : '');
-    btn.disabled = done;
+    btn.className = 'task-btn'
+      + (done && !revoked ? ' task-btn-done' : '')
+      + (revoked ? ' task-btn-revoked' : '');
+    btn.disabled = revoked;
     btn.dataset.taskId = t.id;
-    btn.innerHTML = `
-      <span class="task-icon">${t.icon || '⭐'}</span>
-      <span class="task-name">${escapeHtml(t.name)}</span>
-      <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '🎮' : '💰'}</span>
-      ${done ? '<span class="task-done-badge">✅ 今日已完成</span>' : ''}
-    `;
-    if (!done) {
+    if (revoked) {
+      btn.innerHTML = `
+        <span class="task-icon">${t.icon || '⭐'}</span>
+        <span class="task-name">${escapeHtml(t.name)}</span>
+        <span class="task-done-badge">明天再来 🌙</span>
+      `;
+    } else if (done) {
+      btn.innerHTML = `
+        <span class="task-icon">${t.icon || '⭐'}</span>
+        <span class="task-name">${escapeHtml(t.name)}</span>
+        <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '🎮' : '💰'}</span>
+        <span class="task-done-badge">✅ 今日已完成 (点击撤销)</span>
+      `;
+    } else {
+      btn.innerHTML = `
+        <span class="task-icon">${t.icon || '⭐'}</span>
+        <span class="task-name">${escapeHtml(t.name)}</span>
+        <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '🎮' : '💰'}</span>
+      `;
+    }
+    if (revoked) {
+      // no-op (disabled)
+    } else if (done) {
+      btn.addEventListener('click', () => tryUncompleteTask(t));
+    } else {
       btn.addEventListener('click', () => completeTask(t.id));
     }
     root.appendChild(btn);
@@ -186,6 +209,40 @@ async function completeTask(taskId) {
   } catch (e) {
     if (e.message === 'ALREADY_COMPLETED_TODAY') {
       state.completedTaskIds.add(taskId);
+      renderTasks();
+    }
+    toast('操作失败：' + e.message, 'error');
+  }
+}
+
+// §3.11 toggle: confirm dialog before revoke.
+function tryUncompleteTask(task) {
+  const ok = window.confirm(
+    `确定要取消今天的「${task.name}」吗？\n你今天不能再点完成了。`,
+  );
+  if (!ok) return;
+  uncompleteTask(task.id);
+}
+
+async function uncompleteTask(taskId) {
+  try {
+    const r = await api('POST', `/api/me/tasks/${taskId}/uncomplete`);
+    state.completedTaskIds.delete(taskId);
+    state.uncompletedTodayIds.add(taskId);
+    state.balance = r.new_balance;
+    renderBalance();
+    renderTasks();
+    toast(`-${r.token_revoked} ${r.target_account === 'game_time' ? '🎮' : '💰'} 已撤销`, 'success');
+    loadEvents().then(renderEvents).catch(() => {});
+  } catch (e) {
+    if (e.message === 'ALREADY_UNCOMPLETED_TODAY') {
+      // sync state (server says already revoked, but UI didn't know)
+      state.completedTaskIds.delete(taskId);
+      state.uncompletedTodayIds.add(taskId);
+      renderTasks();
+    } else if (e.message === 'NOT_COMPLETED_TODAY') {
+      // sync state
+      state.completedTaskIds.delete(taskId);
       renderTasks();
     }
     toast('操作失败：' + e.message, 'error');

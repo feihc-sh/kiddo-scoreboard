@@ -40,3 +40,37 @@ test('SMOKE: task buttons are ≥ 60px tall for iPad touch', async ({ page }) =>
     expect(minHeightPx).toBeGreaterThanOrEqual(60);
   }
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Happy path (TEST_PLAN §3.11 line 760-767) + §3.11 toggle (P1 #16)
+// ────────────────────────────────────────────────────────────────────────────
+
+test('HAPPY-toggle: child completes + uncompletes a task — balance returns to 0', async ({ page }) => {
+  clearAllData();
+  seedPmUser();
+  seedChildUser('Tommy');
+  const t = seedTask({ name: '刷牙', icon: '🦷', token_reward: 5, target_account: 'pocket_money', sort_order: 1 });
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto('/');
+  await page.waitForSelector('#task-shortcuts .task-btn', { state: 'visible' });
+
+  // 1. Complete — balance should be 5.
+  const btn = page.locator(`#task-shortcuts [data-task-id="${t}"]`);
+  await btn.click();
+  await expect(page.locator('#balance-pocket-money')).toHaveText('5');
+  await expect(btn).toHaveClass(/task-btn-done/);
+
+  // 2. Setup dialog handler (auto-accept confirm).
+  page.once('dialog', (d) => d.accept());
+
+  // 3. Click the (now green) button to trigger uncomplete.
+  await btn.click();
+
+  // 4. Balance should drop to 0.
+  await expect(page.locator('#balance-pocket-money')).toHaveText('0', { timeout: 5000 });
+
+  // 5. Button should now be disabled with "明天再来" badge.
+  await expect(btn).toBeDisabled();
+  await expect(btn).toContainText('明天再来');
+});

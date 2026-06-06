@@ -134,4 +134,127 @@ tasks.post('/:id/complete', async (c) => {
   );
 });
 
+// §3.11 toggle: child revokes (uncompletes) a task completed today.
+//   POST /api/me/tasks/:id/uncomplete
+//     :id = task_id
+//     No body required.
+//     Effects (single db.batch() transaction, all soft — no DELETE):
+//       1. UPDATE task_completions SET status='revoked' (active row for today)
+//       2. UPDATE score_events SET status='revoked' (matching approved row)
+//       3. INSERT audit_log (action='task_uncomplete', actor='child')
+//     Returns 200 with revoked amount + new balance, or an error code:
+//       400 BAD_REQUEST       — task_id invalid
+//       404 NOT_FOUND         — task doesn't exist
+//       400 TASK_INACTIVE     — task is disabled
+//       409 ALREADY_UNCOMPLETED_TODAY — already revoked today (1 toggle/day limit)
+//       400 NOT_COMPLETED_TODAY       — no active completion today (must complete first)
+
+tasks.post('/:id/uncomplete', async (c) => {
+  // 1. Validate task_id is a positive integer.
+  const idStr = c.req.param('id');
+  const taskId = Number(idStr);
+  if (!Number.isInteger(taskId) || taskId <= 0) {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'task_id must be a positive integer' } },
+      400,
+    );
+  }
+
+  const db = c.env.DB;
+  const today = todayShanghai();
+
+  // 2. Load task — 404 if not found, 400 TASK_INACTIVE if disabled.
+  const task = await db
+    .prepare(`SELECT ${TASK_COLUMNS} FROM tasks WHERE id = ?`)
+    .bind(taskId)
+    .first<Task>();
+  if (!task) {
+    return c.json(
+      { error: { code: 'NOT_FOUND', message: 'task not found' } },
+      404,
+    );
+  }
+  if (task.is_active === 0) {
+    return c.json(
+      { error: { code: 'TASK_INACTIVE', message: 'task is no longer active' } },
+      400,
+    );
+  }
+
+  // 3. Refuse if already revoked today (1-toggle-per-day limit).
+  //    After revoke, the only way to re-complete is to wait for the next day.
+  const alreadyRevoked = await db
+    .prepare(
+      `SELECT id FROM task_completions
+       WHERE task_id = ? AND user_id = ? AND status = 'revoked' AND completed_date = ?`,
+    )
+    .bind(taskId, CHILD_USER_ID, today)
+    .first<{ id: number }>();
+  if (alreadyRevoked) {
+    return c.json(
+      { error: { code: 'ALREADY_UNCOMPLETED_TODAY', message: 'task already uncompleted today; try again tomorrow' } },
+      409,
+    );
+  }
+
+  // 4. Refuse if no active completion exists (must complete first before revoke).
+  const active = await db
+    .prepare(
+      `SELECT id FROM task_completions
+       WHERE task_id = ? AND user_id = ? AND status = 'active' AND completed_date = ?`,
+    )
+    .bind(taskId, CHILD_USER_ID, today)
+    .first<{ id: number }>();
+  if (!active) {
+    return c.json(
+      { error: { code: 'NOT_COMPLETED_TODAY', message: 'task was not completed today' } },
+      400,
+    );
+  }
+
+  // 5. Atomic soft-revoke: 3 statements in one batch.
+  const sourceRef = `task:${taskId}`;
+  const detailsJson = JSON.stringify({
+    task_id: taskId,
+    task_name: task.name,
+    token_reward: task.token_reward,
+  });
+
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE task_completions SET status = 'revoked'
+         WHERE task_id = ? AND user_id = ? AND status = 'active' AND completed_date = ?`,
+      )
+      .bind(taskId, CHILD_USER_ID, today),
+    db
+      .prepare(
+        `UPDATE score_events SET status = 'revoked'
+         WHERE source_ref = ? AND user_id = ? AND status = 'approved'`,
+      )
+      .bind(sourceRef, CHILD_USER_ID),
+    db
+      .prepare(
+        `INSERT INTO audit_log
+           (actor, action, target_event_id, target_user_id, details, created_at)
+         VALUES ('child', 'task_uncomplete', NULL, ?, ?, unixepoch())`,
+      )
+      .bind(CHILD_USER_ID, detailsJson),
+  ]);
+
+  // 6. Recompute balance so the client can update UI optimistically.
+  const newBalance = await computeBalance(db, CHILD_USER_ID);
+
+  return c.json(
+    {
+      task_id: taskId,
+      task_name: task.name,
+      token_revoked: task.token_reward,
+      target_account: task.target_account,
+      new_balance: newBalance,
+    },
+    200,
+  );
+});
+
 export default tasks;
