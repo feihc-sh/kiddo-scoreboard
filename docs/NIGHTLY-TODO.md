@@ -37,6 +37,54 @@
 
 ---
 
+## 📋 5 个 Item 一句话总结 (你拍板时看这个, 别看下面技术细节)
+
+### Item #001 — Admin 加任务 UI 加 emoji 选择器
+- **你想要的**: 在 Admin 加任务界面, 选 emoji 不用手敲, 给你 20 个常见 emoji 让你挑
+- **当前状态**: 20 个 emoji 我列好了, 你说 OK ✅
+- **待你拍板**: **无**, 可以直接跑
+- **风险**: 🟢 (纯前端)
+
+### Item #002 — "准时上床" 打卡 + 倒计时 + 灰按钮 ⭐
+- **你想要的**: 9:30 之前孩子点 "✓ 我上床了" → +1 min, 9:30 之后按钮自动变灰不可点 (倒计时提醒)
+- **当前状态**: 简化方案, 不录具体时间, 不扣分 ✅
+- **待你拍板**: **0** (PM 默认: 倒计时格式 "距离 9:30 还剩 HH:MM:SS" 显示在按钮上, 不同意告诉我)
+- **风险**: 🟢 (复用现有 task 框架, 加个新字段 `cutoff_time` + 灰按钮逻辑)
+- **隐藏的好处**: 自动 lockout 替代了"PM 审核异常单", 你不用盯着
+
+### Item #003 — 英语阅读任务
+- **你想要的**: 工作日 2 本 = +2 min, 周末 4 本 = +2 min (周末目标多但奖励一样)
+- **当前状态**: 简化方案, 取消之前 1/2/3 本阶梯 ✅
+- **待你拍板**: **2 个**
+  - 孩子说"我做了 N 本" — 你手动确认, 还是让孩子自己报?
+  - 周末算周六+周日? 节假日按工作日?
+- **风险**: 🟢 (现有框架扩展)
+
+### Item #004 — 举一反三 + 老师投诉
+- **你想要的**:
+  - 举一反三: 每天 1 本 = +1 min (每天都, 不分工作日)
+  - 老师投诉: 一次扣 20 min, 你在 Admin UI 能调
+- **当前状态**: 简化方案 ✅
+- **待你拍板**: **4 个** (都是老师投诉相关的)
+  - "20 元" 实际是扣 20 分钟还是 20 个金币? (我猜 20 分钟)
+  - 老师投诉是你手动记, 还是孩子自报? (我猜你手动, 防止滥用)
+  - 一周内多次投诉累加吗? (我猜累加, 不封顶)
+  - 你改 penalty 后, 下次投诉就按新值扣, 还是只对新 task 生效? (我猜立即生效)
+- **风险**: 🟡 (新 task 类型 + UI)
+
+### Item #005 — 三进度条 (当日 / 本月 / 当年) ⭐ 第一个做
+- **你想要的**: child UI 顶部 3 个进度条
+  - **当日**: 今日完成几个, 100% 撒花 ("Combo!")
+  - **本月**: 本月完成多少, 默认 100/月
+  - **当年**: 本年完成多少, 默认 1200/年
+- **当前状态**: 全拍板 ✅
+- **待你拍板**: **无**
+- **风险**: 🟢 (纯前端 + 2 个 config 字段)
+- **注意**: 这是**最先做的** (风险低 + 立刻解决你最痛点"孩子不盯不做"的 30%)
+
+---
+
+
 ## 📝 Item 模板 (PM Agent 复制后改 ID)
 
 ```markdown
@@ -81,45 +129,67 @@
 - 用户没明说 → **20 个 emoji 列表需要 PM 拟一版给他拍板** (在 Action Plan 阶段)
 - 风险: 🟢 (纯前端改动, DB 不动)
 
+**PM 拟的 20 个 emoji (拍板用)**:
+
+| 习惯 (habit, 7) | 学习 (study, 7) | 生活 (chore/custom, 6) |
+|---|---|---|
+| 🦷 刷牙 | 📚 阅读 | 🛏️ 起床/睡觉 |
+| 🛁 洗澡 | ✍️ 练字 | 🍎 吃饭/水果 |
+| 🧹 整理 | 📝 写作业 | 🧺 收衣服 |
+| 🏃 运动 | 🎨 画画 | 🐶 遛狗 |
+| 💤 早睡 | 🎹 练琴 | 🧸 收玩具 |
+| 🥛 喝水 | 🧮 数学 | 🧴 洗手 |
+| 🧼 洗手 | 🗣️ 朗读 | |
+
+(共 20 个, 用户拍板如要调整再改)
+
 **Action Plan**:
-- [ ] PM 拟 20 个 emoji 候选 (生活/学习/习惯分类), 写到这个 Item 的补充
-- [ ] 委派 code-agent: 改 `admin/tasks.js` 的 emoji 字段 → 改成 20 个 button grid + 保留 input
+- [x] PM 拟 20 个 emoji 候选 (生活/学习/习惯分类), 写到这个 Item 的补充
+- [ ] 委派 code-agent: 改 `public/admin/index.html` + `admin.js` + `app.css` 加 20 个 button grid + 保留 input
 - [ ] 写 e2e: 验证选 emoji 后能正确提交任务
-- [ ] 跑 `npx vitest run` + `npx playwright test`
+- [ ] 跑 `npx vitest run`
 - [ ] `git commit -m "feat(admin/tasks): emoji picker (20 presets) for new task form"`
 
-**Status**: ⏳ pending
+**Status**: 🔧 running
 **风险**: 🟢
-**Started**: —
+**Started**: 2026-06-07
 **Completed**: —
 **Commit**: —
 
 ---
 
-## Item #002 — 睡眠时间 track (双向: 按时加分 / 超时扣分)
+## Item #002 — "准时上床" 打卡 + 倒计时 + 自动 lockout
 
 **用户原话**:
-> "晚上不能睡太晚，到9:30，如果睡觉超时的话要扣分。这个不是一个得分项，是一个扣分项，好像这个就没有。但是它是超时，如果提前睡的话是加分。超时的话是扣分。"
+> "002不要填时间了吧，我们就留一个打卡任务，准时上床就可以了，那就不用加了"
+> "超过 930 之后打卡按钮变灰色不可打。那个按钮上需要加个倒计时提醒超过 930 就不可以打了"
 
 **Clarification** (PM 整理):
-- 9:30 = **hard deadline** ✅ (用户确认)
-- 触发: **儿童手动提交** (child UI 自己版面, 填"我 HH:MM 睡的")
-- 加减分: **delta = max(0, (实际睡 - 21:30) in min) → 扣 delta min**
-  - 准时 (≤9:30) → 0
-  - 超时 1 min → -1 min
-  - 超时 30 min → -30 min
-  - **不设上限** (刷夜 = 惨)
-- 信任机制: 儿童诚实提交 (用户判断: 孩子会诚实), PM 审核 + 可撤销异常单
-- 风险: 🟡 (新 task type + child UI 提交入口 + PM 审核 + per-minute 算法)
-- ❓ **还需要用户确认** (Q7 残留): PM 看到异常单 → 直接撤销, 还是先问小朋友? 我建议直接撤销 + 通知, 不打扰流程
+- **简化方案** (用户 2026-06-06 两次拍板):
+  - 任务: **"准时上床"** 单一打卡, **不录具体时间**
+  - 加分: **+1 min/天** (孩子点 "✓ 我 9:30 之前上床了" → 自动 +1)
+  - 没打卡: 0 (不扣分, 不扣时间)
+  - **取消** per-minute 算法 (早 1min+1 / 晚 1min-1)
+- **UI 行为** (用户拍板):
+  - 按钮上**实时倒计时**: "距离 9:30 还剩 HH:MM:SS" (PM 默认, 不同意告诉我)
+  - 9:30 之前: 按钮可点
+  - 9:30 之后: 按钮**变灰 + 不可点** (自动 lockout, 防造假)
+  - **自动 lockout 替代了 PM 审核** — 异常单问题不存在了
+- **时区**: client local time (iPad 浏览器知道 user 时区) + server 二次校验防 client 篡改
+- 风险: 🟢 (新 task type + 倒计时 + 灰按钮逻辑, 复用现有 task 框架)
+- ✅ **已拍板** (用户 2026-06-06): 取消 per-minute, 改成"打卡 + 倒计时 + lockout"
+- ⚠️ **PM 默认** (你不同意告诉我): 倒计时显示在按钮文字内, 格式 "距离 9:30 还剩 HH:MM:SS"
 
 **Action Plan**:
-- [ ] 用户拍板 Q7
-- [ ] 加 migration: `tasks` 加 `is_per_minute_penalty BOOLEAN` 字段 (睡眠用)
-- [ ] 委派 code-agent: child UI 加 "📝 记录睡眠时间" 入口 (HH:MM 输入), 后端算 delta
-- [ ] 委派 code-agent: PM admin 加 "审计" 列表, 异常睡眠单可撤销
-- [ ] 写 e2e: 准时 → 0, 超时 5min → -5, 跨天 → 边界保护, 撤销 → 还原
-- [ ] `git commit -m "feat(tasks): sleep tracking — child-submit + per-minute penalty + PM audit"`
+- [ ] ~~用户拍板 Q7~~ ✅ 不需要 (自动 lockout 替代)
+- [ ] 加 migration: `tasks` 加 `cutoff_time TIME DEFAULT '21:30'` + `is_self_lockout BOOLEAN DEFAULT TRUE` (睡眠用)
+- [ ] 委派 code-agent: child UI "准时上床" 按钮 + 实时倒计时 setInterval(1s)
+- [ ] 委派 code-agent: client-side lockout 逻辑 (Date.now() 21:30 后 → button.disabled = true)
+- [ ] 委派 code-agent: server-side 校验 (POST /api/.../complete 时检查 server time, 防 client 篡改)
+- [ ] 写 e2e: 21:25 点按钮 → +1 min, 21:35 点按钮 → 400 (server 拒绝)
+- [ ] 写 e2e: 倒计时每秒更新 (Playwright 模拟时间)
+- [ ] 写 e2e: 跨天 (00:00) 后 button 重新激活
+- [ ] `git commit -m "feat(tasks): sleep button with countdown + auto-lockout after 21:30"`
 
 **Status**: ⏳ pending
 **风险**: 🟡
@@ -135,21 +205,24 @@
 > "每天英语阅读，完成两本的quiz。这个可以加1分钟的时间。"
 
 **Clarification** (PM 整理):
-- Task: "英语阅读", completion 条件: **完成 2 本 quiz**
-- 加分: **+1 min/天**
+- **新方案** (用户 2026-06-06 简化):
+  - **工作日** (周一-周五, 5天): 完成 2 本 quiz = +2 min (一次奖励)
+  - **周末** (周六-周日, 2天): 完成 4 本 quiz = +2 min (一次奖励, 目标数不同但奖励一样)
+  - **取消** 1本/2本/3本 阶梯, 不再做半奖励
+- 实施: `tasks` 表加 `target_count INTEGER` (工作日) + `weekend_target_count INTEGER` (周末), 周末逻辑用 weekday() 判断
+- 风险: 🟡 (新 schema 字段 + per-weekday logic)
 - ❓ **需要用户确认**:
-  1. 完成 **1 本** quiz 给不给奖励? (我建议 +0.5 min, 阶梯)
-  2. 完成 **3 本以上** 有没有上限? (我建议 max +1 min/天, 别激励堆量)
-  3. "quiz" 怎么 verify? PM 手动 confirm, 还是小朋友自查? (PM 拍板, 我建议手动)
-- 实施: 复用现有 task + 加 `target_count INTEGER` 字段 (per-day target)
-- 风险: 🟢 (现有 task 框架扩展)
+  1. verify 方式: PM 手动 confirm, 还是小朋友自查? (我建议 PM 手动, 防止虚报)
+  2. "周末"定义: 仅 周六+周日? (我建议是, 节假日按工作日算, 不特殊处理)
 
 **Action Plan**:
-- [ ] 用户拍板 3 个 Clarification 问题
-- [ ] 加 migration: `tasks.target_count INTEGER` (默认 1, 英语阅读用 2)
-- [ ] 委派 code-agent: 改 child UI 完成按钮 + PM confirm 弹窗 (count field)
-- [ ] 写 e2e: 完成 2 本 → +1, 完成 1 本 → +0.5, 完成 0 → 0
-- [ ] `git commit -m "feat(tasks): add target_count for multi-completion tasks (e.g. reading 2 quizzes)"`
+- [ ] 用户拍板 2 个 Clarification 问题
+- [ ] 加 migration: `tasks` 加 `target_count INTEGER` + `weekend_target_count INTEGER` (NULL = 跟工作日一样)
+- [ ] 委派 code-agent: child UI 完成按钮支持 "N 本" 输入
+- [ ] 委派 code-agent: 后端按 weekday() 自动选 target_count
+- [ ] 委派 code-agent: PM confirm 弹窗 (数清楚几本)
+- [ ] 写 e2e: 工作日完成 2 本 → +2, 周末完成 4 本 → +2, 周末完成 2 本 → 0
+- [ ] `git commit -m "feat(tasks): add target_count + weekend_target_count for reading tasks"`
 
 **Status**: ⏳ pending
 **风险**: 🟢
@@ -165,15 +238,18 @@
 > "举一反三，完成一个章节也可以加1分钟的时间。然后就是去学校的时候有没有老师投诉？如果有投诉的话就要扣的话是从20元人民币起，然后这个我可以调"
 
 **Clarification** (PM 整理):
-- **举一反三 task**: 完成 1 章节 → +1 min/天
+- **举一反三 task** (用户 2026-06-06 简化):
+  - 每天 1 本 = +1 min (单一奖励, 取消 1/2/3 章阶梯)
+  - **每天都 track**, 不分工作日/周末 (周一-周日不间断)
 - **老师投诉 task** (新机制, 跟睡眠一样是"扣分项"):
   - 默认 -20 min/次
   - PM 在 Admin UI 能调 (用户明示"我可以调")
-- ❓ **需要用户确认**:
-  1. "20 元" 实际是 **-20 min** 还是 -20 个 token?  我建议 -20 min (跟游戏时间同一单位)
-  2. 老师投诉是 PM 手动记, 还是小朋友自报? (我建议 PM 手动, 防止滥用)
-  3. **一周内多次投诉累加吗?**  我建议累加, 不封顶 (你既然能"调", 应该是想多投诉多扣)
-  4. 举一反三: "1 章节" 是固定 1 章节, 还是 1+ 多章节? (我建议 1 章节 = 1 min, 超过按 1 min/step 上限 3 min/天 防止灌水)
+  - 用户说"20 元起, 我可以调" → 我猜: 默认 -20 min, PM 在 UI 调到任意值
+- ❓ **需要用户确认** (4 个, 老师投诉相关的):
+  1. "20 元" 实际是 **-20 min** 还是 -20 个 token?  我建议 **-20 min** (跟游戏时间同一单位)
+  2. 老师投诉是 PM 手动记, 还是小朋友自报? (我建议 **PM 手动**, 防止滥用)
+  3. **一周内多次投诉累加吗?**  (我建议 **累加, 不封顶**, 你既然能"调", 应该是想多投诉多扣)
+  4. PM 在 Admin UI 改 penalty 字段: 改后立即生效 (下次投诉按新值) 还是仅新 task 生效? (我建议 **立即生效**, 简单)
 - 实施: 加 `task_type='penalty'` (无 deadline, PM 触发时直接扣) + `default_penalty_min INTEGER`
 - 风险: 🟡 (新 task type + UI 加 PM 调整 penalty 字段)
 
@@ -198,30 +274,34 @@
 > "我觉得可以用完成任务总数有个进度条，当日是否有全部完成有个进度条"
 
 **Clarification** (PM 整理):
-- **进度条 A (累计)**: 显示 "已完成 N / M 任务" 进度条, M 默认 **1000** (PM 在 Admin 可调)
-- **进度条 B (当日)**: 显示 "今日 X / Y 任务" 进度条 (Y = 当日 active task 数), 100% 时触发**全屏撒花 + "Combo!" 文字**
-- 两个进度条**位置**: child UI 主页**最显眼** (顶部, 占屏 1/3)
+- **进度条 A (本月)**: 显示 "本月已完成 N / 100 任务" 进度条, 默认 **100/月** (用户 2026-06-06 拍板, 不要 1000 累计那么久)
+- **进度条 B (当年)**: 显示 "本年已完成 N / 1200 任务" 进度条, 默认 **1200/年** (≈ 100 × 12 月)
+- **进度条 C (当日)**: 显示 "今日 X / Y 任务" 进度条 (Y = 当日 active task 数), 100% 时触发**全屏撒花 + "Combo!" 文字**
+- 三个进度条**位置**: child UI 主页**最显眼** (顶部, 占屏 1/2) — 当日最显眼, 本月次之, 当年放小一点
+- **每月 1 号自动重置本月计数器**, 每年 1 月 1 号重置当年计数器
 - **完全契合自驱力 3 件套**:
-  - Autonomy: 进度条 B 让孩子自己看到 "今天还差几个"
-  - Mastery: 进度条 A 让孩子看到 "我累计越来越多"
-  - Purpose: 两者 = "每天做一点点, 累计起来有大意义"
-- **不需要新 schema**: 现有 `task_completions` 表 + 简单 `app_config` 加 `total_target_count` 字段
+  - Autonomy: 当日进度条 让孩子自己看到 "今天还差几个"
+  - Mastery: 本月 + 当年进度条 让孩子看到 "我越来越多"
+  - Purpose: 每天做一点点, 月度年度都有可见进展
+- **不需要新 schema**: 现有 `task_completions` 表 + 简单 `app_config` 加 `monthly_target_count` + `yearly_target_count` 字段
 - ✅ **用户拍板** (2026-06-06):
-  1. 累计目标默认 **1000** (推荐采纳, 大约 1 年多完成)
+  1. 本月目标 **100**, 当年目标 **1200**
   2. 撒花动效用 **CSS 粒子** (中等成本, 效果不错)
   3. 撒花触发 **每天 1 次** (避免刷屏, 也防止撤销后反复触发)
-- 风险: 🟢 (纯前端 + 1 个 config 字段)
+- 风险: 🟢 (纯前端 + 2 个 config 字段)
 
 **Action Plan**:
 - [ ] ~~用户拍板 3 个 Clarification 问题~~ ✅ 已拍板 (见上)
-- [ ] 加 migration: `app_config` 表加 `total_target_count INTEGER DEFAULT 1000` (如果表不存在, 创建)
-- [ ] 委派 code-agent: child UI 顶部加 2 个进度条 (累计 + 当日)
+- [ ] 加 migration: `app_config` 表加 `monthly_target_count INTEGER DEFAULT 100` + `yearly_target_count INTEGER DEFAULT 1200` (如果表不存在, 创建)
+- [ ] 委派 code-agent: child UI 顶部加 3 个进度条 (当日 / 本月 / 当年, 当日最显眼)
 - [ ] 委派 code-agent: 100% 撒花动效 (CSS 粒子)
 - [ ] 撒花 daily-once: localStorage 存 `lastConfettiAt` 戳, 跨天重置
-- [ ] 写 e2e: 完成最后一个 task → 进度条 B 100% → 撒花出现
-- [ ] 写 e2e: 累计 100 个 → 进度条 A 显示 10%
+- [ ] 委派 code-agent: 月度 / 年度计数器, 每月 1 号 + 每年 1 月 1 号重置 (用 cron trigger 或 lazy reset on read)
+- [ ] 写 e2e: 完成最后一个 task → 当日进度条 100% → 撒花出现
+- [ ] 写 e2e: 本月累计 50 → 本月进度条显示 50%
+- [ ] 写 e2e: 跨月后本月进度条自动从 0 开始
 - [ ] 写 e2e: 撤销最后一个 task → 撒花不再次触发 (daily-once 生效)
-- [ ] `git commit -m "feat(child-ui): dual progress bars (cumulative total + daily completion) with CSS confetti"`
+- [ ] `git commit -m "feat(child-ui): tri progress bars (daily / monthly / yearly) with CSS confetti"`
 
 **Status**: ⏳ pending
 **风险**: 🟢
