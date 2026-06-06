@@ -5,9 +5,8 @@
 // Why PBKDF2 (not scrypt)?
 // - Web Crypto API spec has PBKDF2 natively, no extra deps
 // - Cloudflare Workers have crypto.subtle, no scrypt support
-// - 600k iterations of PBKDF2-SHA256 = OWASP 2023+ minimum, ~150ms on Workers
-
-const ITERATIONS = 600_000;
+// - 100k iterations of PBKDF2-SHA256 (Cloudflare Workers Web Crypto limit is 100k)
+const ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BYTES = 32;
 

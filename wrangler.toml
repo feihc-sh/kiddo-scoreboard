@@ -6,7 +6,7 @@ compatibility_date = "2025-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "kiddo-scoreboard-db"
-database_id = "local-dev-placeholder"  # replaced at deploy time
+database_id = "b584ebbf-bcb3-45d2-85e8-3ca2d5cb297c"  # created 2026-06-06 via wrangler d1 create
 migrations_dir = "migrations"
 
 # Static assets (M8 child UI + future M9 PM UI)

@@ -3,7 +3,7 @@
 // Usage: node scripts/hash-pin.mjs <pin> <secret>
 const crypto = globalThis.crypto;
 
-const ITERATIONS = 600_000;
+const ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BYTES = 32;
 
