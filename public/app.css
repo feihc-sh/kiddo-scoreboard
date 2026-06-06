@@ -398,6 +398,7 @@ body {
 .event-item.event-status-approved { border-left: 4px solid #10B981; }
 .event-item.event-status-rejected { border-left: 4px solid #EF4444; opacity: 0.7; }
 .event-item.event-status-revoked  { border-left: 4px solid #9CA3AF; opacity: 0.6; }
+.event-item.event-status-revoked .event-amount { text-decoration: line-through; color: var(--text-muted); }
 .event-body { flex: 1; min-width: 0; }
 .event-reason {
   font-weight: 600;
