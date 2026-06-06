@@ -669,6 +669,15 @@ body {
 .progress-bar.monthly .progress-bar-track { height: 14px; }
 .progress-bar.yearly .progress-bar-track { height: 8px; opacity: 0.85; }
 .progress-bar.yearly .progress-bar-text { font-size: 11px; opacity: 0.7; }
+
+/* ===== Emoji picker (Item #001, admin tasks form) ===== */
+.emoji-picker { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; padding: 8px 10px; background: rgba(0,0,0,0.03); border-radius: var(--radius-sm, 6px); }
+.emoji-pick-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.emoji-pick-cat { font-size: 11px; color: #6B5E50; font-weight: 600; min-width: 32px; opacity: 0.7; }
+.emoji-pick { background: white; border: 1.5px solid transparent; border-radius: 8px; padding: 4px 8px; font-size: 20px; cursor: pointer; transition: transform 0.1s, border-color 0.15s, background 0.15s; line-height: 1; }
+.emoji-pick:hover { background: #FFF5E8; transform: scale(1.15); }
+.emoji-pick.selected { border-color: #FF8A4C; background: #FFF5E8; }
+
 @media (max-width: 380px) {
   .balance-value { font-size: 36px; }
   .balance-icon { font-size: 30px; }
