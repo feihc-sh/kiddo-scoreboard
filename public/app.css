@@ -372,7 +372,7 @@ body {
   flex-direction: column;
   gap: 10px;
 }
-.event {
+.event-item {
   background: #fff;
   border-radius: var(--radius-md);
   padding: 14px 16px;
@@ -382,7 +382,7 @@ body {
   box-shadow: var(--shadow-xs);
   border: 1px solid var(--border-soft);
 }
-.event-icon {
+.event-item .event-icon {
   width: 44px;
   height: 44px;
   border-radius: var(--radius-sm);
@@ -392,8 +392,12 @@ body {
   font-size: 22px;
   flex-shrink: 0;
 }
-.event-icon.game { background: var(--game-green-soft); }
-.event-icon.money { background: var(--money-gold-soft); }
+.event-item .event-icon.game { background: var(--game-green-soft); }
+.event-item .event-icon.money { background: var(--money-gold-soft); }
+.event-item.event-status-pending  { border-left: 4px solid #F59E0B; }
+.event-item.event-status-approved { border-left: 4px solid #10B981; }
+.event-item.event-status-rejected { border-left: 4px solid #EF4444; opacity: 0.7; }
+.event-item.event-status-revoked  { border-left: 4px solid #9CA3AF; opacity: 0.6; }
 .event-body { flex: 1; min-width: 0; }
 .event-reason {
   font-weight: 600;
@@ -592,12 +596,12 @@ body {
   text-align: center;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
-.toast.show {
+.toast.toast-show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
-.toast.error { background: #B91C1C; }
-.toast.success { background: var(--game-green); }
+.toast.toast-error { background: #B91C1C; }
+.toast.toast-success { background: var(--game-green); }
 
 /* ---------- Error banner ---------- */
 .error-banner {
