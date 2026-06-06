@@ -18,17 +18,25 @@ const WRANGLER_CWD = '/Users/tidusmaomao/workspace/kiddo-scoreboard';
 
 // Locate the workerd D1 sqlite file (used by both wrangler d1 execute and
 // the running workerd process — both read the same file).
+// §3.11 EDGE-7: skip the empty 00000000-... placeholder that workerd creates
+// for bindings that don't have their own sqlite file yet. The real data lives
+// in the hashed file (e.g. c2048...sqlite) — sort by file size desc so we pick
+// the largest (the actual D1 with tables) over the empty 0-byte placeholder.
 function d1SqlitePath(): string {
   const dir = `${WRANGLER_CWD}/.wrangler/state/v3/d1/miniflare-D1DatabaseObject`;
-  const files = globSync(`${dir}/*.sqlite`).filter(p => !p.includes('-shm') && !p.includes('-wal'));
-  if (files.length === 0) throw new Error(`No D1 sqlite file found in ${dir}`);
-  return files[0];
+  const files = globSync(`${dir}/*.sqlite`)
+    .filter(p => !p.includes('-shm') && !p.includes('-wal'))
+    .map(p => ({ path: p, size: readFileSync(p).length }))
+    .filter(f => f.size > 0)
+    .sort((a, b) => b.size - a.size);
+  if (files.length === 0) throw new Error(`No non-empty D1 sqlite file found in ${dir}`);
+  return files[0].path;
 }
 
 /** Run a SQL command against the local D1 sqlite file. Both wrangler dev and
  *  `wrangler d1 execute` read this file, so changes are immediately visible
  *  to the running workerd process (no cache-stale issue). */
-function d1Exec(sql: string): unknown {
+export function d1Exec(sql: string): unknown {
   const out = execFileSync(
     'sqlite3',
     [d1SqlitePath(), sql],
