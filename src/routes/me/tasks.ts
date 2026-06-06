@@ -90,14 +90,11 @@ tasks.post('/:id/complete', async (c) => {
     token_reward: task.token_reward,
   });
 
+  // Order matters: score_events first so task_completions can reference its
+  // last_insert_rowid() as awarded_event_id. This is what task-completions.ts:revoke
+  // needs to find the score_event to flip to 'revoked'. (PHASE2-FINDING: previously
+  // awarded_event_id was NULL on task_completions rows, so revoke UPDATE found nothing.)
   const results = await db.batch([
-    db
-      .prepare(
-        `INSERT INTO task_completions
-           (task_id, user_id, status, completed_date, completed_at)
-         VALUES (?, ?, 'active', ?, unixepoch())`,
-      )
-      .bind(taskId, CHILD_USER_ID, today),
     db
       .prepare(
         `INSERT INTO score_events
@@ -108,6 +105,13 @@ tasks.post('/:id/complete', async (c) => {
       .bind(CHILD_USER_ID, task.target_account, task.token_reward, reason, sourceRef),
     db
       .prepare(
+        `INSERT INTO task_completions
+           (task_id, user_id, status, completed_date, completed_at, awarded_event_id)
+         VALUES (?, ?, 'active', ?, unixepoch(), last_insert_rowid())`,
+      )
+      .bind(taskId, CHILD_USER_ID, today),
+    db
+      .prepare(
         `INSERT INTO audit_log
            (actor, action, target_event_id, target_user_id, details, created_at)
          VALUES ('child', 'task_complete', last_insert_rowid(), ?, ?, unixepoch())`,
@@ -115,8 +119,8 @@ tasks.post('/:id/complete', async (c) => {
       .bind(CHILD_USER_ID, detailsJson),
   ]);
 
-  // The score_events insert is the 2nd statement (index 1).
-  const eventId = Number(results[1]?.meta?.last_row_id ?? 0);
+  // The score_events insert is now the 1st statement (index 0).
+  const eventId = Number(results[0]?.meta?.last_row_id ?? 0);
 
   // 5. Recompute the balance so the client can update UI optimistically.
   const newBalance = await computeBalance(db, CHILD_USER_ID);
