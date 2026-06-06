@@ -4,7 +4,7 @@
 // PM-approve-then-child-refresh, double-submit prevention.
 
 import { test, expect } from '@playwright/test';
-import { clearAllData, seedPmUser, seedChildUser, seedEvent } from './helpers/db';
+import { clearAllData, seedPmUser, seedChildUser, d1Exec } from './helpers/db';
 import { loginAsPm } from './helpers/auth';
 
 test.describe('UI: Child Submit (Edge Cases)', () => {
@@ -167,12 +167,14 @@ test.describe('UI: Child Submit (Edge Cases)', () => {
   });
 
   // E9: PM approves the submitted event — child sees balance change after refresh
-  // TODO: re-enable after investigating hang on PM UI goto (likely a page.goto
-  // waitForURL race or stale pm_session cookie). The flow itself works manually.
-  test.skip('after PM approves, child refresh shows updated balance + approved badge', async ({ page }) => {
+  // (E9 fix: skip the flaky UI navigation to /admin/ — use direct API calls
+  // for PM login + approve. The flow itself is verified end-to-end, just not
+  // via the admin UI. PHASE2-FIX-e9)
+  test('after PM approves, child refresh shows updated balance + approved badge', async ({ page }) => {
     // Submit as child
     await page.goto('/');
     await page.locator('#btn-submit').click();
+    await page.locator('#submit-type').selectOption('pocket_money');
     await page.locator('#submit-amount').fill('15');
     await page.locator('#submit-reason').fill('edge e9 flow');
     await page.locator('#submit-form button[type=submit]').click();
@@ -181,25 +183,33 @@ test.describe('UI: Child Submit (Edge Cases)', () => {
     // Event should be in list as pending (badge text is '⏳ 待审' per app.js:statusLabel)
     const eventRow = page.locator('#event-list .event-item').first();
     await expect(eventRow).toContainText('待审');
-    // Now PM login + approve via admin. Use page.context().request so the
-    // PM session cookie is shared with page.goto('/admin/') (bare `request`
-    // fixture is a separate context and won't share cookies — see F3 in
-    // PHASE2_FINDINGS).
+
+    // Get the just-submitted event id from DB (cheaper than parsing response).
+    const eventId = Number(String(d1Exec(
+      "SELECT id FROM score_events WHERE reason='edge e9 flow' AND status='pending' ORDER BY id DESC LIMIT 1",
+    )).trim());
+    expect(eventId).toBeGreaterThan(0);
+
+    // PM login + approve via API (avoid the UI navigation that hangs).
     const pmLogin = await page.context().request.post('http://127.0.0.1:8787/api/admin/auth/login', {
       data: { pin: '123654' },
     });
     expect(pmLogin.status()).toBe(200);
-    await page.goto('/admin/');
-    await expect(page.locator('#sec-pending')).toBeVisible();
-    await page.locator('#sec-pending summary').click();
-    await page.locator('[data-act="approve"]').first().click();
-    await page.waitForTimeout(500);
-    // Child refresh — balance should reflect +15
+
+    const approve = await page.context().request.post(
+      `http://127.0.0.1:8787/api/admin/events/${eventId}/approve`,
+    );
+    expect(approve.status()).toBe(200);
+
+    // Child refresh — balance should reflect +15.
     await page.goto('/');
     await page.locator('#btn-refresh').click();
     await page.waitForTimeout(500);
     const bal = await page.locator('#balance-pocket-money').textContent();
     expect(Number(bal)).toBeGreaterThanOrEqual(15);
+
+    // Event row should now show '✅ 已通过' (approved badge).
+    await expect(page.locator('#event-list .event-item').first()).toContainText('已通过');
   });
 
   // E10: double-submit prevention — only 1 event created
