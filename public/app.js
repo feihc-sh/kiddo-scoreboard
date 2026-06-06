@@ -16,7 +16,6 @@ const state = {
   completedTaskIds: new Set(),    // Set<number>
   uncompletedTodayIds: new Set(), // Set<number> §3.11 toggle: tasks revoked today
   events: [],                     // ScoreEvent[] (last 10)
-  progress: null,                 // { daily:{completed,total}, monthly:{completed,target}, yearly:{completed,target} }
   selectedDir: 1,                 // for submit modal
 };
 
@@ -82,14 +81,11 @@ async function loadEvents() {
   const r = await api('GET', `/api/public/events?user_id=${CHILD_USER_ID}&limit=10`);
   state.events = r.events;
 }
-async function loadProgress() {
-  state.progress = await api('GET', `/api/public/tasks/progress?user_id=${CHILD_USER_ID}`);
-}
 
 async function refreshAll() {
   clearError();
   try {
-    await Promise.all([loadBalance(), loadTasks(), loadEvents(), loadProgress()]);
+    await Promise.all([loadBalance(), loadTasks(), loadEvents()]);
     renderAll();
   } catch (e) {
     showError('加载失败：' + e.message, refreshAll);
@@ -100,7 +96,6 @@ async function refreshAll() {
 function renderAll() {
   renderGreeting();
   renderBalance();
-  renderProgress();
   renderTasks();
   renderEvents();
 }
@@ -112,27 +107,7 @@ function renderGreeting() {
 function renderBalance() {
   $('#balance-game-time').textContent = state.balance.game_time;
   $('#balance-pocket-money').textContent = state.balance.pocket_money;
-}
-
-function renderProgress() {
-  const p = state.progress;
-  if (!p) return;
-  // Daily: 显眼 (大), Monthly: 中, Yearly: 小
-  setBar('#pb-daily-fill', '#pb-daily-text', p.daily.completed, p.daily.total, '今日');
-  setBar('#pb-monthly-fill', '#pb-monthly-text', p.monthly.completed, p.monthly.target, '本月');
-  setBar('#pb-yearly-fill', '#pb-yearly-text', p.yearly.completed, p.yearly.target, '本年');
-}
-
-function setBar(fillSel, textSel, done, total, label) {
-  const fill = $(fillSel);
-  const text = $(textSel);
-  if (!fill || !text) return;
-  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
-  fill.style.width = pct + '%';
-  text.textContent = `${label} ${done} / ${total} (${pct}%)`;
-}
-
-function pulseBalanceCards() {
+  // Pulse animation
   ['game-time', 'pocket-money'].forEach((k) => {
     const el = $('#card-' + k);
     el.classList.remove('pulse');
@@ -229,19 +204,8 @@ async function completeTask(taskId) {
     renderBalance();
     renderTasks();
     toast(`+${r.token_awarded} ${r.target_account === 'game_time' ? '🎮' : '💰'}`, 'success');
-    // refresh events + progress in background
+    // refresh events in background
     loadEvents().then(renderEvents).catch(() => {});
-    loadProgress().then(() => {
-      renderProgress();
-      // If daily is now 100% and we haven't fired today, celebrate.
-      if (state.progress?.daily?.total > 0
-          && state.progress.daily.completed >= state.progress.daily.total
-          && !hasFiredConfettiToday()) {
-        fireConfetti();
-        markConfettiFiredToday();
-        toast('🎉 Combo! 今日全完成!', 'success');
-      }
-    }).catch(() => {});
   } catch (e) {
     if (e.message === 'ALREADY_COMPLETED_TODAY') {
       state.completedTaskIds.add(taskId);
@@ -340,11 +304,6 @@ function openSubmitModal() {
 function closeSubmitModal() { $('#submit-modal').hidden = true; $('#submit-form').reset(); state.selectedDir = 1; $$('.seg-btn').forEach((b) => b.classList.toggle('seg-btn-active', Number(b.dataset.dir) === 1)); }
 
 // ---------- Confetti ----------
-function confettiKey() { return 'lastConfettiAt'; }
-function todayStr() { return new Date().toISOString().slice(0, 10); }
-function hasFiredConfettiToday() { return localStorage.getItem(confettiKey()) === todayStr(); }
-function markConfettiFiredToday() { localStorage.setItem(confettiKey(), todayStr()); }
-
 function fireConfetti() {
   const canvas = $('#confetti');
   const ctx = canvas.getContext('2d');

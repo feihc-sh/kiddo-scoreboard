@@ -13,8 +13,7 @@ const tasks = new Hono<{ Bindings: Env }>();
 
 const TASK_COLUMNS =
   'id, name, token_reward, target_account, icon, category, ' +
-  'is_active, sort_order, cutoff_time, is_self_lockout, ' +
-  'created_at, updated_at';
+  'is_active, sort_order, created_at, updated_at';
 
 tasks.get('/', async (c) => {
   const userId = c.req.query('user_id');
@@ -78,99 +77,6 @@ tasks.get('/today-status', async (c) => {
   const completed_task_ids = (activeRows.results ?? []).map((r) => r.task_id);
   const uncompleted_today_ids = (revokedRows.results ?? []).map((r) => r.task_id);
   return c.json({ completed_task_ids, uncompleted_today_ids, today });
-});
-
-// §3 Progress bars (Item #005):
-//   GET /api/public/tasks/progress?user_id=N
-//   Returns the 3 progress numbers the child UI needs for the top-of-page bars.
-//   No auth required (public, child only sees their own).
-//
-//   Response:
-//     {
-//       daily:   { completed: <int>, total: <int> },
-//       monthly: { completed: <int>, target: <int> },
-//       yearly:  { completed: <int>, target: <int> }
-//     }
-//
-//   Note: monthly/yearly counters "reset" lazily on read (we filter by SH
-//   calendar date window) — no cron trigger needed. Once the date rolls over,
-//   the counts automatically reflect only the new month/year.
-const DEFAULT_MONTHLY_TARGET = 100;
-const DEFAULT_YEARLY_TARGET = 1200;
-
-tasks.get('/progress', async (c) => {
-  const userIdStr = c.req.query('user_id');
-  if (!userIdStr) {
-    return c.json(
-      { error: { code: 'BAD_REQUEST', message: 'user_id is required' } },
-      400,
-    );
-  }
-  const userId = Number(userIdStr);
-  if (!Number.isInteger(userId) || userId <= 0) {
-    return c.json(
-      { error: { code: 'BAD_REQUEST', message: 'user_id must be a positive integer' } },
-      400,
-    );
-  }
-
-  const db = c.env.DB;
-  const today = todayShanghai();  // 'YYYY-MM-DD' in Asia/Shanghai
-  const [yyyy, mm] = today.split('-');
-  const monthStart = `${yyyy}-${mm}-01`;  // first day of current month
-  const yearStart = `${yyyy}-01-01`;      // first day of current year
-
-  // task_completions.completed_date is stored as 'YYYY-MM-DD' in Shanghai tz,
-  // so a string range filter on completed_date gives the right SH-day window.
-  const [dailyCompleted, monthlyCompleted, yearlyCompleted, activeTasks, cfg] = await Promise.all([
-    db
-      .prepare(
-        `SELECT COUNT(*) AS n FROM task_completions
-         WHERE user_id = ? AND status = 'active' AND completed_date = ?`,
-      )
-      .bind(userId, today)
-      .first<{ n: number }>(),
-    db
-      .prepare(
-        `SELECT COUNT(*) AS n FROM task_completions
-         WHERE user_id = ? AND status = 'active'
-           AND completed_date >= ? AND completed_date <= ?`,
-      )
-      .bind(userId, monthStart, today)
-      .first<{ n: number }>(),
-    db
-      .prepare(
-        `SELECT COUNT(*) AS n FROM task_completions
-         WHERE user_id = ? AND status = 'active'
-           AND completed_date >= ? AND completed_date <= ?`,
-      )
-      .bind(userId, yearStart, today)
-      .first<{ n: number }>(),
-    db
-      .prepare(`SELECT COUNT(*) AS n FROM tasks WHERE is_active = 1`)
-      .first<{ n: number }>(),
-    db
-      .prepare(
-        `SELECT monthly_target_count, yearly_target_count
-         FROM app_config WHERE id = 1`,
-      )
-      .first<{ monthly_target_count: number; yearly_target_count: number }>(),
-  ]);
-
-  return c.json({
-    daily: {
-      completed: dailyCompleted?.n ?? 0,
-      total: activeTasks?.n ?? 0,
-    },
-    monthly: {
-      completed: monthlyCompleted?.n ?? 0,
-      target: cfg?.monthly_target_count ?? DEFAULT_MONTHLY_TARGET,
-    },
-    yearly: {
-      completed: yearlyCompleted?.n ?? 0,
-      target: cfg?.yearly_target_count ?? DEFAULT_YEARLY_TARGET,
-    },
-  });
 });
 
 export default tasks;

@@ -224,33 +224,6 @@ function renderAllEvents() {
 }
 
 // ---------- C. Tasks ----------
-// Item #001: 20-preset emoji picker — click button → fill icon input, sync highlight.
-// Manual typing in the icon input also syncs highlight (cleared if no match).
-function bindEmojiPicker() {
-  const form = $('#new-task-form');
-  if (!form) return;
-  const iconInput = form.elements['icon'];
-  const picker = form.querySelector('.emoji-picker');
-  if (!picker) return;
-  // Delegated click: one handler covers all 20 buttons.
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('.emoji-pick');
-    if (!btn) return;
-    iconInput.value = btn.dataset.emoji || '';
-    iconInput.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-  const sync = () => syncEmojiPickerHighlight(iconInput, picker);
-  iconInput.addEventListener('input', sync);
-  form.addEventListener('reset', sync);   // form.reset() doesn't fire input events
-  sync();
-}
-function syncEmojiPickerHighlight(iconInput, picker) {
-  const current = iconInput.value.trim();
-  picker.querySelectorAll('.emoji-pick').forEach((b) => {
-    b.classList.toggle('selected', current !== '' && b.dataset.emoji === current);
-  });
-}
-
 function renderTasks() {
   const root = $('#tasks-list');
   const empty = $('#tasks-empty');
@@ -408,7 +381,6 @@ function startEditTask(id) {
   const f = $('#new-task-form');
   f.elements['name'].value = t.name;
   f.elements['icon'].value = t.icon || '';
-  f.elements['icon'].dispatchEvent(new Event('input', { bubbles: true }));  // sync picker highlight
   f.elements['token_reward'].value = t.token_reward;
   f.elements['target_account'].value = t.target_account;
   f.elements['category'].value = t.category;
@@ -592,7 +564,6 @@ async function boot() {
   bindForms();
   bindFilters();
   bindDelegatedActions();
-  bindEmojiPicker();   // Item #001
   try {
     await loadMe();
     await refreshAll();
