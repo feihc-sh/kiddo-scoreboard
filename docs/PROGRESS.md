@@ -699,3 +699,39 @@ cd /Users/tidusmaomao/workspace/kiddo-scoreboard
 npm test  # 跑所有测试，应全绿
 git log --oneline -5  # 看最新进度
 ```
+
+---
+
+## ✅ v2.1 — 准时上床 self-lockout (Item #002) — 2026-06-07
+
+**触发场景**: 三年级 (8-9岁) 晚上 9:30 应该上床, 痛点是妈妈加班没人盯。**解决**: 任务按钮自带倒计时, 9:30 后自动 lockout, 孩子没法自己乱点。
+
+**新增能力**:
+- **任务类型**: `cutoff_time` + `is_self_lockout` 两个新字段, opt-in (普通任务不受影响)
+- **Server 校验**: `POST /api/me/tasks/:id/complete` 在已有 active 校验前新增 cutoff 校验, 9:30 后返回 400 `CUTOFF_PASSED`
+- **Client UI**: 按钮文字内嵌实时倒计时, `setInterval(1s)` 每秒更新, 9:30 后变灰 + disabled
+- **PM 配置**: admin 表单加 "截止时间 (HH:MM)" + "截止后自动锁" 复选框
+- **跨天重置**: 00:00 之后按钮重新激活 (新的一天可打卡)
+
+**Database 变化**: `migrations/0004_sleep_cutoff.sql` — `tasks` 表加 2 列
+- `cutoff_time TIME` (NULL = 普通任务)
+- `is_self_lockout INTEGER NOT NULL DEFAULT 0` (0/1 标志)
+- 已有任务不受影响, 不需 backfill
+
+**实现分工** (本次完成):
+- **后端** (surgical 5 处 patch): `src/db/types.ts` + `src/utils/week.ts` (新增 nowShanghaiHHMM/hhmmAfter) + `src/routes/admin/tasks.ts` (POST 校验 + PUT 回填) + `src/routes/me/tasks.ts` (CUTOFF_PASSED)
+- **前端 child UI** (surgical 3 处 patch): `public/admin/index.html` (表单字段) + `public/admin/admin.js` (submitNewTask body) + `public/app.js` (renderTasks 加倒计时+灰按钮+setInterval) + `public/app.css` (`.task-btn-locked` 样式)
+- **Migration**: `migrations/0004_sleep_cutoff.sql`
+- **测试**: `tests/e2e/ui-child-sleep-lockout.spec.ts` (新, 11 个场景) — 待 Qual Agent 完成
+- **文档**: `docs/PRD.md` (§3.12) + `docs/TEST_PLAN.md` (§3.14 + §3.5 加 3 个 cutoff 测试) + `docs/PROGRESS.md` (本条)
+
+**风险等级**: 🟢
+- 复用现有 task 框架, 零破坏性
+- 新字段全 opt-in, 旧任务行为完全不变
+- Server-side 校验是 authoritative, client disabled 只是 UX
+
+**测试状态**: 后端逻辑 (vitest) 跟前端 patch 一起完成, e2e 待 Qual Agent 写并跑, 预计 8-12 个 spec 全绿。
+
+**Push 计划**: 用户拍板后 push 到 production (🔴 不可逆), URL `https://kiddo-scoreboard.cenfeihao.workers.dev`。
+
+---

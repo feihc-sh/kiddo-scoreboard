@@ -47,10 +47,16 @@
 
 ### Item #002 — "准时上床" 打卡 + 倒计时 + 灰按钮 ⭐
 - **你想要的**: 9:30 之前孩子点 "✓ 我上床了" → +1 min, 9:30 之后按钮自动变灰不可点 (倒计时提醒)
-- **当前状态**: 简化方案, 不录具体时间, 不扣分 ✅
+- **当前状态**: ✅ **实现完成** (后端 migration + 5 处 patch + 文档 PRD §3.12 + TEST_PLAN §3.14, 待 e2e 验证 + commit)
 - **待你拍板**: **0** (PM 默认: 倒计时格式 "距离 9:30 还剩 HH:MM:SS" 显示在按钮上, 不同意告诉我)
 - **风险**: 🟢 (复用现有 task 框架, 加个新字段 `cutoff_time` + 灰按钮逻辑)
 - **隐藏的好处**: 自动 lockout 替代了"PM 审核异常单", 你不用盯着
+- **Commits** (待):
+  - `feat(tasks): sleep button self-lockout — cutoff_time + is_self_lockout fields` (后端: migration 0004 + Task type + 2 路由 + week utils)
+  - `feat(child-ui): sleep button countdown + auto-lockout at cutoff` (前端: renderTasks 倒计时 + 灰按钮 + setInterval)
+  - `feat(admin): cutoff_time + is_self_lockout in task form` (admin 表单字段 + submitNewTask POST)
+  - `test(e2e): sleep lockout spec — countdown + lockout + CUTOFF_PASSED + cross-day` (新 e2e §3.14)
+  - `docs: PRD §3.12 + TEST_PLAN §3.14 + PROGRESS 条目`
 
 ### Item #003 — 英语阅读任务
 - **你想要的**: 工作日 2 本 = +2 min, 周末 4 本 = +2 min (周末目标多但奖励一样)
@@ -181,15 +187,17 @@
 - ⚠️ **PM 默认** (你不同意告诉我): 倒计时显示在按钮文字内, 格式 "距离 9:30 还剩 HH:MM:SS"
 
 **Action Plan**:
-- [ ] ~~用户拍板 Q7~~ ✅ 不需要 (自动 lockout 替代)
-- [ ] 加 migration: `tasks` 加 `cutoff_time TIME DEFAULT '21:30'` + `is_self_lockout BOOLEAN DEFAULT TRUE` (睡眠用)
-- [ ] 委派 code-agent: child UI "准时上床" 按钮 + 实时倒计时 setInterval(1s)
-- [ ] 委派 code-agent: client-side lockout 逻辑 (Date.now() 21:30 后 → button.disabled = true)
-- [ ] 委派 code-agent: server-side 校验 (POST /api/.../complete 时检查 server time, 防 client 篡改)
-- [ ] 写 e2e: 21:25 点按钮 → +1 min, 21:35 点按钮 → 400 (server 拒绝)
-- [ ] 写 e2e: 倒计时每秒更新 (Playwright 模拟时间)
-- [ ] 写 e2e: 跨天 (00:00) 后 button 重新激活
-- [ ] `git commit -m "feat(tasks): sleep button with countdown + auto-lockout after 21:30"`
+- [x] ~~用户拍板 Q7~~ ✅ 不需要 (自动 lockout 替代)
+- [x] ~~加 migration: `tasks` 加 `cutoff_time TIME` + `is_self_lockout INTEGER` (睡眠用)~~ ✅ migrations/0004_sleep_cutoff.sql 已写
+- [x] ~~后端 Task type 加字段 + 2 路由校验 + week utils (nowShanghaiHHMM, hhmmAfter)~~ ✅ types.ts + tasks.ts (admin POST/PUT) + me/tasks.ts (CUTOFF_PASSED) + week.ts
+- [x] ~~admin 表单加 cutoff_time + is_self_lockout 字段 (index.html)~~ ✅
+- [x] ~~admin.js submitNewTask 把字段加进 POST body~~ ✅
+- [x] ~~child UI 渲染 准时上床 按钮 + 倒计时 setInterval(1s) + 灰按钮 (.task-btn-locked)~~ ✅
+- [x] ~~app.css 灰按钮样式~~ ✅
+- [x] ~~PRD §3.12 + TEST_PLAN §3.14 (11 个测试场景) + PROGRESS 条目~~ ✅ 文档已补
+- [ ] **跑 e2e 验证** (本地 D1, 跑 ui-child-sleep-lockout.spec.ts)
+- [ ] `git commit` (上面 5 个 commit 计划)
+- [ ] 推送到 production (待用户拍板 🔴)
 
 **Status**: ⏳ pending
 **风险**: 🟡

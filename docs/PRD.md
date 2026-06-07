@@ -118,6 +118,8 @@ PM 发放周额度时选择"60 元 → 零花钱账户"或"30+30"或"全发游�
 | category | TEXT | `habit` 习惯 / `study` 学习 / `chore` 家务 / `custom` 自定义 |
 | is_active | INTEGER | 1=启用，0=停用 |
 | sort_order | INTEGER | 显示顺序 |
+| **cutoff_time** | **TIME** | **可选，'HH:MM' 格式（Asia/Shanghai）。NULL = 无截止（普通任务）。仅在 §3.12 准时上床等自锁任务使用** |
+| **is_self_lockout** | **INTEGER** | **0/1 标志。1 = 截止后 child UI 按钮变灰 + server 拒绝 /complete。0 = 无时间校验（普通任务）** |
 
 **默认任务**（PM 首次配置时可一键导入）：
 - 🎯 按时上床 → +5 代币 → 游戏时间
@@ -133,6 +135,69 @@ PM 发放周额度时选择"60 元 → 零花钱账户"或"30+30"或"全发游�
 - PM 可**撤销**任务完成（关联的 score_event 也会变 revoked）
 - 撤销后该任务**当天**可重新完成（按"每天 1 次"逻辑，今天还剩 0 次 → 撤销后回到 1 次可用）
 - 写 audit_log: `actor`, `action=task_complete`, `target_event_id`, `details={task_id, task_name}`
+- **§3.12 自锁任务（cutoff）**: 若 `is_self_lockout=1` 且当前 Asia/Shanghai 时间 > `cutoff_time` → server 返回 400 `CUTOFF_PASSED`，拒绝 /complete。Client 端额外在 UI 倒计时到 0 后禁用按钮（防卡顿造成的"刚跨线还能点"），但**以 server 校验为准**
+
+### 3.12 准时上床（self-lockout 任务类型，v2.1 新增）
+
+**用户原话** (2026-06-06 拍板): "002 不要填时间了吧，我们就留一个打卡任务，准时上床就可以了"，"超过 930 之后打卡按钮变灰色不可打。那个按钮上需要加个倒计时提醒超过 930 就不可以打了"
+
+**触发场景**:
+- 三年级 (8-9岁) 晚上 9:30 应该上床
+- 痛点: 妈妈/爸爸在加班时, 没人盯就忘了时间
+- 解决: 任务按钮自带倒计时, 9:30 后自动 lockout, 孩子**没法**自己乱点
+
+**业务规则**:
+- **任务名**: "准时上床" (PM 可改)
+- **奖励**: `+1 min/天` (PM 可改), 计入 `game_time` 账户
+- **不打卡的惩罚**: 0 (不扣分, 不想给孩子压力)
+- **取消**了之前 per-minute 算法 (早 1min+1 / 晚 1min-1) — 简化方案
+- **跨天重置**: 00:00 之后 cutoff 不再生效, 按钮重新激活 (新的一天)
+
+**UI 行为** (child view):
+- 按钮文字内嵌实时倒计时: "🛏️ 准时上床  ·  距离 21:30 还剩 02:15:33"
+- 倒计时每秒更新 (`setInterval(1s)`), 显示到秒
+- **9:30 之前**: 按钮可点 (绿色 / 正常态)
+- **9:30 之后**: 按钮**变灰 + disabled** (CSS `.task-btn-locked` 灰态), 不可点
+- **已完成状态**: 按钮显示 "✅ 今日已完成 (点击撤销)", 跟普通任务一样
+- **已撤销状态**: 按钮显示 "明天再来 🌙", 不可点
+
+**Server 行为** (`POST /api/me/tasks/:id/complete`):
+- 校验 `is_self_lockout=1` 且 `cutoff_time` 不为 NULL
+- 用 `nowShanghaiHHMM()` (Asia/Shanghai) 与 `cutoff_time` 比较
+- `now > cutoff` → 400 `CUTOFF_PASSED`, `message: "已过打卡时间 HH:MM"`
+- `now ≤ cutoff` → 正常奖励流程
+
+**API 变化**:
+- `POST /api/admin/tasks` body 新增可选字段 `cutoff_time: 'HH:MM' | null`, `is_self_lockout: 0 | 1`
+- `PUT /api/admin/tasks/:id` body 新增可选字段同上 (允许 PM 编辑修改)
+- `GET /api/public/tasks?user_id=X&active=true` 返回每个 task 的 `cutoff_time` + `is_self_lockout`
+- `POST /api/me/tasks/:id/complete` 在已有 active 校验前, 新增 cutoff 校验 (400 `CUTOFF_PASSED`)
+
+**Database 变化**:
+- Migration `0004_sleep_cutoff.sql` 在 `tasks` 表加 `cutoff_time TIME` + `is_self_lockout INTEGER NOT NULL DEFAULT 0`
+- 已有任务不受影响 (cutoff_time 默认 NULL, is_self_lockout 默认 0)
+- 兼容旧数据: 不需要 backfill, 新字段是 opt-in
+
+**配置 PM 端 (admin 表单)**:
+- 新增 "截止时间 (可选)" input, type=time, placeholder "21:30", pattern `[0-2][0-9]:[0-5][0-9]`
+- 新增 "截止后自动锁" checkbox, 勾上表示 `is_self_lockout=1`
+- 不勾 / 不填 = 普通任务, 无时间校验
+
+**时区**:
+- Client 端: 浏览器知道 iPad 本地时区 (Asia/Shanghai), 倒计时显示 client local time
+- Server 端: 用 `nowShanghaiHHMM()` (UTC + 8h, hard-code, 因为用户在中国无 DST)
+- **Client 篡改防御**: Client disabled 只是 UX, server 端仍会二次校验 → 双重保护
+
+**风险**:
+- 🟢 复用现有 task 框架 + 任务完成流程
+- 🟢 不破坏旧 task 行为 (新增字段都是 opt-in)
+- 🟢 不影响其他 endpoint (`/submit`, `/exchange`, `/grant` 都不变)
+- 🟢 自动 lockout 替代了之前"PM 审核异常单"机制, PM 不用盯着
+
+**未来扩展** (未拍板, 留作 NIGHTLY-TODO):
+- 多个 cutoff 任务 (不只是 21:30 上床, 还有 7:00 起床, 16:00 写作业...)
+- PM 可配置 "今天第 N 次提醒" (在 21:00 / 21:15 / 21:25 弹 toast 提醒)
+- 跨设备同步 lockout 状态 (目前依赖 localStorage + reload)
 
 ### 3.5 边界 case
 - **超额申请**: 儿子可申请"扣 200 分钟"（即使余额不足），PM 自行判断

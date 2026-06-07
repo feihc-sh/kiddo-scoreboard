@@ -442,6 +442,18 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
   - Assert: Either a `confirm()` dialog or in-app modal asks "确定删除？"; PM can cancel.
   - Document actual behavior; do not auto-delete without confirmation.
 
+- **Scenario: Create with `cutoff_time` + `is_self_lockout=1` — fields persist and appear in admin row + child UI**
+  - Steps: Open new-task form; fill name=`准时上床`, reward=`1`, target=`game_time`, category=`habit`, cutoff_time=`21:30`, check `is_self_lockout`. Save. Open the same task's edit form.
+  - Assert: Row shows task; edit form repopulates `cutoff_time="21:30"` and checkbox checked; child `/api/public/tasks?active=true` returns `cutoff_time:"21:30"`, `is_self_lockout:1`.
+
+- **Scenario: Edit `cutoff_time` to null — self-lockout disabled**
+  - Steps: Open the sleep task's edit form; clear `cutoff_time` field, save.
+  - Assert: Child API returns `cutoff_time:null`, `is_self_lockout:0` (or unchanged but lockout no longer applies). Server `POST /complete` no longer enforces cutoff.
+
+- **Scenario: Submit invalid `cutoff_time` (e.g., `25:99`) — server rejects with 400**
+  - Steps: Use `page.route` to inject `cutoff_time="25:99"`, submit form.
+  - Assert: API returns 400 `BAD_REQUEST` "cutoff_time must match HH:MM (00:00–23:59)"; toast shows error; form stays open.
+
 #### Cross-cutting (covered in §4 Flow A & C)
 - New task appears in child UI after creation — Flow A.
 - Task deletion with completions flow — covered here.
@@ -923,6 +935,73 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 - **Scenario: PM revokes event — child sees status change after refresh**
   - Steps: PM revokes approved event; child refreshes.
   - Assert: Badge becomes `revoked`; color orange.
+
+---
+
+### 3.14 Child Sleep Lockout (self-lockout task type — Item #002)
+
+**Spec file:** `tests/e2e/ui-child-sleep-lockout.spec.ts` (new)
+**Page:** `/` → `#task-shortcuts` → task button with `.task-btn-locked` class for sleep task
+**Element IDs:** `[data-task-id="<sleep-task-id>"]`, `.task-btn-locked`, `#task-cutoff-countdown` (if separate span; otherwise inline in button text)
+**Backend hooks:** `POST /api/me/tasks/:id/complete` returns 400 `CUTOFF_PASSED` when cutoff violated; `GET /api/public/tasks?active=true` returns `cutoff_time` + `is_self_lockout` per task
+**Time control:** tests must use `page.clock` / `Date.now` mocking or seed `tasks.cutoff_time` directly; server time is `nowShanghaiHHMM()` (UTC+8)
+
+#### Smoke
+- **Scenario: Sleep task button shows countdown text before cutoff**
+  - Steps: Seed 1 sleep task (`cutoff_time="21:30"`, `is_self_lockout=1`); freeze page clock at `2026-06-07 20:30:00` Asia/Shanghai; open `/`.
+  - Assert: Sleep task button text contains "距离 21:30 还剩" + a `HH:MM:SS` countdown (e.g., "00:59:5x" or "01:00:00"); button is enabled.
+
+#### Happy path
+- **Scenario: Child clicks sleep task before cutoff — completes successfully, +1 min**
+  - Steps: Clock at `21:25:00`; click sleep task button.
+  - Assert: `POST /api/me/tasks/:id/complete` returns 201; `game_time` balance +1; button greys out to "✅ 今日已完成 (点击撤销)"; new event row in `#event-list` with `+1 分钟 准时上床`.
+
+- **Scenario: Sleep task with `is_self_lockout=0` (cutoff_time set but no lockout) — completes after cutoff**
+  - Steps: Seed task with `cutoff_time="21:30"`, `is_self_lockout=0`; clock at `22:00:00`; click.
+  - Assert: API returns 201; balance +1; no lockout UI behavior. Confirms opt-in: lockout only fires when BOTH fields are set.
+
+#### Edge cases — cutoff enforcement
+- **Scenario: Clock crosses cutoff — button auto-locks (disabled)**
+  - Steps: Seed sleep task; freeze page clock at `21:29:59`; assert button enabled. Advance clock 1 second to `21:30:00`.
+  - Assert: Button receives `.task-btn-locked` class within ≤ 2s; `disabled` attribute set; click is no-op.
+
+- **Scenario: After cutoff — child clicks button — server rejects 400 CUTOFF_PASSED**
+  - Steps: Bypass client lockout (e.g., remove `disabled` via DevTools or send direct API call); clock at `21:30:01`; click.
+  - Assert: `POST /api/me/tasks/:id/complete` returns 400 with `error.code="CUTOFF_PASSED"` and `message` containing "已过打卡时间 21:30"; toast shows server error; client state unchanged.
+
+- **Scenario: Server time vs client time — server enforces cutoff even if client clock is wrong**
+  - Steps: Mock `Date.now` to return a time before cutoff (e.g., `20:00:00`) but real server time is `21:35:00`; click sleep task.
+  - Assert: Server returns 400 `CUTOFF_PASSED`; child sees error toast. **Confirms server-side enforcement is authoritative.**
+
+- **Scenario: Countdown updates every second**
+  - Steps: Open page; record countdown text at T=0; wait 2 seconds; record again.
+  - Assert: Text changed (decreased by ~2 seconds); format remains `HH:MM:SS` zero-padded.
+
+- **Scenario: Cross-day reset — at 00:00 button re-activates**
+  - Steps: Sleep task has been locked for "today"; freeze clock at `23:59:58` (locked). Advance 2 seconds to `00:00:00` of next day.
+  - Assert: Button becomes enabled (`.task-btn-locked` removed); countdown text resets to "距离 21:30 还剩 21:30:0x"; child can complete again (creates new `task_completion` for the new day).
+
+#### Edge cases — admin configuration
+- **Scenario: Admin creates sleep task — child UI sees countdown + lockout**
+  - Steps: In PM admin tab, create task with `cutoff_time="21:30"`, `is_self_lockout=1`; in child tab, refresh.
+  - Assert: Child sees the new task button with countdown; locks at 21:30. (Mirrors §3.5 "create with cutoff_time" but from child side.)
+
+- **Scenario: Admin edits cutoff_time later — child UI re-renders with new cutoff (next reload)**
+  - Steps: Change `cutoff_time` from `21:30` to `22:00`; child refreshes.
+  - Assert: New countdown shows "距离 22:00 还剩 ...". **Document: cutoff changes do NOT take effect mid-day without page reload (acceptable; document limitation).**
+
+#### Negative
+- **Scenario: Click locked button — no network call**
+  - Steps: Clock at `21:30:05`; button disabled; click anyway via `force: true`.
+  - Assert: No `POST /api/me/tasks/:id/complete` request issued (client-side guard); no toast; button remains disabled.
+
+- **Scenario: Network error during cutoff-task complete (pre-cutoff) — toast + balance unchanged, button stays active**
+  - Steps: Mock POST to 500; click at `21:25:00`.
+  - Assert: Error toast; balance unchanged; button still enabled; child can retry before cutoff.
+
+#### Cross-cutting
+- Sleep task flows from §3.5 admin config → §3.14 child UI → §3.11 task complete → §3.13 recent events.
+- Daily progress bar (§3.11 / Item #005) updates correctly when sleep task is the only one completed that day.
 
 ---
 
