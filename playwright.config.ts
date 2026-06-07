@@ -26,7 +26,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'node_modules/.bin/wrangler dev --port 8787',
+    command: 'node_modules/.bin/wrangler pages dev ./public --port 8787',
     url: 'http://127.0.0.1:8787',
     reuseExistingServer: true,
     timeout: 120_000,
