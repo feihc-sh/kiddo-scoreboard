@@ -1,0 +1,109 @@
+name: Deploy to Cloudflare Pages + Auto-Backup
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_backup:
+        description: 'Skip pre-deploy backup'
+        type: boolean
+        default: false
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  pre-deploy-backup:
+    name: "🛡 Pre-deploy D1 backup"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@latest
+
+      - name: D1 Database Backup
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          mkdir -p remote-backup
+          DATE=$(date -u +%Y-%m-%d)
+          BACKUP_FILE="remote-backup/${DATE}.sql"
+          echo "📦 Backing up D1 to ${BACKUP_FILE}..."
+          wrangler d1 export kiddo-scoreboard-db --remote --output="${BACKUP_FILE}"
+          echo "✅ Backup created: $(wc -c < ${BACKUP_FILE}) bytes"
+
+      - name: Upload backup as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backup-${{ github.sha }}
+          path: remote-backup/
+          retention-days: 30
+
+      - name: Notify PM on backup failure (Feishu)
+        if: failure()
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+        run: |
+          echo "❌ PRE-DEPLOY BACKUP FAILED - DEPLOY MUST NOT PROCEED"
+          if [ -z "$FEISHU_WEBHOOK_URL" ]; then
+            echo "⚠️ FEISHU_WEBHOOK_URL secret not set, skipping Feishu notify"
+            echo "::error::D1 backup failed. Deploy aborted."
+            exit 1
+          fi
+          cat > /tmp/notify_feishu.py << 'PYEOF'
+          import json, urllib.request, os
+          msg = "🚨 kiddo-scoreboard pre-deploy backup 失败!\n\nCommit: " + os.environ["GITHUB_SHA"] + "\nActor: " + os.environ["GITHUB_ACTOR"] + "\nRun: " + os.environ["GITHUB_RUN_ID"] + "\n\nDeploy 已阻断, 请检查 wrangler auth + D1 binding."
+          payload = json.dumps({"msg_type": "text", "content": {"text": msg}}).encode("utf-8")
+          req = urllib.request.Request(os.environ["FEISHU_WEBHOOK_URL"], data=payload, headers={"Content-Type": "application/json"})
+          urllib.request.urlopen(req).read()
+          print("✅ Feishu notification sent")
+          PYEOF
+          python3 /tmp/notify_feishu.py
+
+  deploy:
+    name: "🚀 Deploy to Cloudflare Pages"
+    needs: pre-deploy-backup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@latest
+
+      - name: Deploy to Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "🚀 Deploying to Cloudflare Pages..."
+          wrangler pages deploy ./public \
+            --branch main \
+            --project-name kiddo-scoreboard \
+            --commit-dirty=true
+          echo "✅ Deploy complete"
+
+      - name: Smoke test endpoints
+        env:
+          DEPLOY_URL: https://kiddo-scoreboard.pages.dev
+        run: |
+          echo "🔍 Smoke testing endpoints..."
+          for path in "/" "/health" "/api/public/events" "/api/public/balance" "/api/public/tasks/progress"; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "${DEPLOY_URL}${path}")
+            echo "  ${path} -> ${code}"
+            if [ "$code" != "200" ]; then
+              echo "❌ Smoke test failed: ${path} returned ${code}"
+              exit 1
+            fi
+          done
+          echo "✅ All 5 endpoints returned 200"
+
+      - name: Notify PM on deploy failure
+        if: failure()
+        run: |
+          echo "::error::Deploy or smoke test failed. Roll back to last known good deploy via Cloudflare dashboard."
