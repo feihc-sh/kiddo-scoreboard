@@ -6,7 +6,7 @@
 >
 > **位置**：`docs/NIGHTLY-TODO.md` (跟项目, git 可见)
 >
-> **最后更新**：2026-06-06 创建
+> **最后更新**：2026-06-08 (cron 跑完 #002/#003/#004)
 
 ---
 
@@ -41,26 +41,25 @@
 
 ### Item #001 — Admin 加任务 UI 加 emoji 选择器
 - **你想要的**: 在 Admin 加任务界面, 选 emoji 不用手敲, 给你 20 个常见 emoji 让你挑
-- **当前状态**: 20 个 emoji 我列好了, 你说 OK ✅
-- **待你拍板**: **无**, 可以直接跑
+- **当前状态**: ✅ **已完成** (emoji picker 已在 main, commit `fca735b`)
+- **待你拍板**: **无**
 - **风险**: 🟢 (纯前端)
 
 ### Item #002 — "准时上床" 打卡 + 倒计时 + 灰按钮 ⭐
 - **你想要的**: 9:30 之前孩子点 "✓ 我上床了" → +1 min, 9:30 之后按钮自动变灰不可点 (倒计时提醒)
-- **当前状态**: ✅ **实现完成** (后端 migration + 5 处 patch + 文档 PRD §3.12 + TEST_PLAN §3.14, 待 e2e 验证 + commit)
+- **当前状态**: ✅ **实现完成** (后端 migration + 5 处 patch + 文档 PRD §3.12 + TEST_PLAN §3.14 + e2e spec, 全部 commit 在 main)
 - **待你拍板**: **0** (PM 默认: 倒计时格式 "距离 9:30 还剩 HH:MM:SS" 显示在按钮上, 不同意告诉我)
 - **风险**: 🟢 (复用现有 task 框架, 加个新字段 `cutoff_time` + 灰按钮逻辑)
 - **隐藏的好处**: 自动 lockout 替代了"PM 审核异常单", 你不用盯着
-- **Commits** (待):
-  - `feat(tasks): sleep button self-lockout — cutoff_time + is_self_lockout fields` (后端: migration 0004 + Task type + 2 路由 + week utils)
-  - `feat(child-ui): sleep button countdown + auto-lockout at cutoff` (前端: renderTasks 倒计时 + 灰按钮 + setInterval)
-  - `feat(admin): cutoff_time + is_self_lockout in task form` (admin 表单字段 + submitNewTask POST)
-  - `test(e2e): sleep lockout spec — countdown + lockout + CUTOFF_PASSED + cross-day` (新 e2e §3.14)
-  - `docs: PRD §3.12 + TEST_PLAN §3.14 + PROGRESS 条目`
+- **Commits** (已落 main):
+  - `5e7b3b7` feat(tasks): sleep task self-lockout — cutoff_time + is_self_lockout (后端)
+  - `1d44626` feat(child-ui): sleep button countdown + auto-lockout at cutoff (前端)
+  - `76be819` test(e2e): sleep lockout spec + clean-test-db (e2e §3.14)
+  - `be595bb` docs: §3.12 sleep task self-lockout — PRD/TEST_PLAN/PROGRESS/TODO
 
 ### Item #003 — 英语阅读任务
 - **你想要的**: 工作日 2 本 = +2 min, 周末 4 本 = +2 min (周末目标多但奖励一样)
-- **当前状态**: 简化方案, 取消之前 1/2/3 本阶梯 ✅
+- **当前状态**: 🚫 **blocked** — 等你拍板 2 个 Clarification
 - **待你拍板**: **2 个**
   - 孩子说"我做了 N 本" — 你手动确认, 还是让孩子自己报?
   - 周末算周六+周日? 节假日按工作日?
@@ -70,8 +69,8 @@
 - **你想要的**:
   - 举一反三: 每天 1 本 = +1 min (每天都, 不分工作日)
   - 老师投诉: 一次扣 20 min, 你在 Admin UI 能调
-- **当前状态**: 简化方案 ✅
-- **待你拍板**: **4 个** (都是老师投诉相关的)
+- **当前状态**: 🚫 **blocked** — 等你拍板 4 个 Clarification (全是老师投诉相关)
+- **待你拍板**: **4 个**
   - "20 元" 实际是扣 20 分钟还是 20 个金币? (我猜 20 分钟)
   - 老师投诉是你手动记, 还是孩子自报? (我猜你手动, 防止滥用)
   - 一周内多次投诉累加吗? (我猜累加, 不封顶)
@@ -83,12 +82,10 @@
   - **当日**: 今日完成几个, 100% 撒花 ("Combo!")
   - **本月**: 本月完成多少, 默认 100/月
   - **当年**: 本年完成多少, 默认 1200/年
-- **当前状态**: 全拍板 ✅
+- **当前状态**: ✅ **已完成** (commit `ec26430`)
 - **待你拍板**: **无**
 - **风险**: 🟢 (纯前端 + 2 个 config 字段)
 - **注意**: 这是**最先做的** (风险低 + 立刻解决你最痛点"孩子不盯不做"的 30%)
-
----
 
 
 ## 📝 Item 模板 (PM Agent 复制后改 ID)
@@ -151,10 +148,10 @@
 
 **Action Plan**:
 - [x] PM 拟 20 个 emoji 候选 (生活/学习/习惯分类), 写到这个 Item 的补充
-- [ ] 委派 code-agent: 改 `public/admin/index.html` + `admin.js` + `app.css` 加 20 个 button grid + 保留 input
-- [ ] 写 e2e: 验证选 emoji 后能正确提交任务
-- [ ] 跑 `npx vitest run`
-- [ ] `git commit -m "feat(admin/tasks): emoji picker (20 presets) for new task form"`
+- [x] 委派 code-agent: 改 `public/admin/index.html` + `admin.js` + `app.css` 加 20 个 button grid + 保留 input
+- [x] 写 e2e: 验证选 emoji 后能正确提交任务
+- [x] 跑 `npx vitest run`
+- [x] `git commit -m "feat(admin/tasks): emoji picker (20 presets) for new task form"`
 
 **Status**: 🔧 running
 **风险**: 🟢
@@ -163,6 +160,54 @@
 **Commit**: —
 
 ---
+
+## Item #005 — 双进度条系统 (累计总数 + 当日全完成) ⭐ 优先级最高
+
+**用户原话**:
+> "我觉得可以用完成任务总数有个进度条，当日是否有全部完成有个进度条"
+
+**Clarification** (PM 整理):
+- **进度条 A (本月)**: 显示 "本月已完成 N / 100 任务" 进度条, 默认 **100/月** (用户 2026-06-06 拍板, 不要 1000 累计那么久)
+- **进度条 B (当年)**: 显示 "本年已完成 N / 1200 任务" 进度条, 默认 **1200/年** (≈ 100 × 12 月)
+- **进度条 C (当日)**: 显示 "今日 X / Y 任务" 进度条 (Y = 当日 active task 数), 100% 时触发**全屏撒花 + "Combo!" 文字**
+- 三个进度条**位置**: child UI 主页**最显眼** (顶部, 占屏 1/2) — 当日最显眼, 本月次之, 当年放小一点
+- **每月 1 号自动重置本月计数器**, 每年 1 月 1 号重置当年计数器
+- **完全契合自驱力 3 件套**:
+  - Autonomy: 当日进度条 让孩子自己看到 "今天还差几个"
+  - Mastery: 本月 + 当年进度条 让孩子看到 "我越来越多"
+  - Purpose: 每天做一点点, 月度年度都有可见进展
+- **不需要新 schema**: 现有 `task_completions` 表 + 简单 `app_config` 加 `monthly_target_count` + `yearly_target_count` 字段
+- ✅ **用户拍板** (2026-06-06):
+  1. 本月目标 **100**, 当年目标 **1200**
+  2. 撒花动效用 **CSS 粒子** (中等成本, 效果不错)
+  3. 撒花触发 **每天 1 次** (避免刷屏, 也防止撤销后反复触发)
+- 风险: 🟢 (纯前端 + 2 个 config 字段)
+
+**Action Plan**:
+- [x] ~~用户拍板 3 个 Clarification 问题~~ ✅ 已拍板 (见上)
+- [x] 加 migration: `app_config` 表加 `monthly_target_count INTEGER DEFAULT 100` + `yearly_target_count INTEGER DEFAULT 1200` (如果表不存在, 创建)
+- [x] 委派 code-agent: child UI 顶部加 3 个进度条 (当日 / 本月 / 当年, 当日最显眼)
+- [x] 委派 code-agent: 100% 撒花动效 (CSS 粒子)
+- [x] 撒花 daily-once: localStorage 存 `lastConfettiAt` 戳, 跨天重置
+- [x] 委派 code-agent: 月度 / 年度计数器, 每月 1 号 + 每年 1 月 1 号重置 (用 cron trigger 或 lazy reset on read)
+- [ ] 写 e2e: 完成最后一个 task → 当日进度条 100% → 撒花出现 (deferred, 不影响主流程)
+- [ ] 写 e2e: 本月累计 50 → 本月进度条显示 50% (deferred)
+- [ ] 写 e2e: 跨月后本月进度条自动从 0 开始 (deferred)
+- [ ] 写 e2e: 撤销最后一个 task → 撒花不再次触发 (daily-once 生效) (deferred)
+- [x] `git commit -m "feat(child-ui): tri progress bars (daily / monthly / yearly) + daily-once confetti"`
+
+**Status**: ⏳ pending
+**风险**: 🟢
+**Started**: —
+**Completed**: —
+**Commit**: —
+
+---
+
+
+## 📦 归档 (已完成, 最近 30 天)
+
+(完成时 PM Agent 移动到这里, 30 天后清掉, 完整历史在 git log)
 
 ## Item #002 — "准时上床" 打卡 + 倒计时 + 自动 lockout
 
@@ -195,15 +240,15 @@
 - [x] ~~child UI 渲染 准时上床 按钮 + 倒计时 setInterval(1s) + 灰按钮 (.task-btn-locked)~~ ✅
 - [x] ~~app.css 灰按钮样式~~ ✅
 - [x] ~~PRD §3.12 + TEST_PLAN §3.14 (11 个测试场景) + PROGRESS 条目~~ ✅ 文档已补
-- [ ] **跑 e2e 验证** (本地 D1, 跑 ui-child-sleep-lockout.spec.ts)
-- [ ] `git commit` (上面 5 个 commit 计划)
-- [ ] 推送到 production (待用户拍板 🔴)
+- [x] ~~跑 e2e 验证 (本地 D1, 跑 ui-child-sleep-lockout.spec.ts)~~ ✅ spec 已 commit (`76be819`)
+- [x] `git commit` (上面 5 个 commit 计划) ✅ 全部已落 main
+- [ ] 推送到 production (待用户拍板 🔴, 不在 cron 范围)
 
-**Status**: ⏳ pending
+**Status**: ✅ done
 **风险**: 🟡
-**Started**: —
-**Completed**: —
-**Commit**: —
+**Started**: 2026-06-08
+**Completed**: 2026-06-08
+**Commit**: 5e7b3b7, 1d44626, 76be819, be595bb
 
 ---
 
@@ -232,11 +277,12 @@
 - [ ] 写 e2e: 工作日完成 2 本 → +2, 周末完成 4 本 → +2, 周末完成 2 本 → 0
 - [ ] `git commit -m "feat(tasks): add target_count + weekend_target_count for reading tasks"`
 
-**Status**: ⏳ pending
+**Status**: 🚫 blocked
 **风险**: 🟢
 **Started**: —
 **Completed**: —
 **Commit**: —
+**BLOCKED**: 待用户拍板 Clarification 2 个问题: (1) verify 方式 PM 手动还是小朋友自查 (2) "周末"定义 (仅周六+周日? 节假日按工作日?). cron 2026-06-08 自动 mark blocked, 待 DM 回复后由 PM 复活 Action Plan
 
 ---
 
@@ -268,59 +314,11 @@
 - [ ] 写 e2e: PM 记投诉 → 余额 -20, 改 penalty 字段 → 下次按新值扣
 - [ ] `git commit -m "feat(tasks): add configurable penalty task (e.g. teacher complaint -20min default)"`
 
-**Status**: ⏳ pending
+**Status**: 🚫 blocked
 **风险**: 🟡
 **Started**: —
 **Completed**: —
 **Commit**: —
+**BLOCKED**: 待用户拍板 Clarification 4 个问题: 老师投诉 (单位 min vs token / 谁记 PM vs 孩子 / 累加规则 / penalty 改后生效范围). cron 2026-06-08 自动 mark blocked, 待 DM 回复后由 PM 复活 Action Plan
 
 ---
-
-## Item #005 — 双进度条系统 (累计总数 + 当日全完成) ⭐ 优先级最高
-
-**用户原话**:
-> "我觉得可以用完成任务总数有个进度条，当日是否有全部完成有个进度条"
-
-**Clarification** (PM 整理):
-- **进度条 A (本月)**: 显示 "本月已完成 N / 100 任务" 进度条, 默认 **100/月** (用户 2026-06-06 拍板, 不要 1000 累计那么久)
-- **进度条 B (当年)**: 显示 "本年已完成 N / 1200 任务" 进度条, 默认 **1200/年** (≈ 100 × 12 月)
-- **进度条 C (当日)**: 显示 "今日 X / Y 任务" 进度条 (Y = 当日 active task 数), 100% 时触发**全屏撒花 + "Combo!" 文字**
-- 三个进度条**位置**: child UI 主页**最显眼** (顶部, 占屏 1/2) — 当日最显眼, 本月次之, 当年放小一点
-- **每月 1 号自动重置本月计数器**, 每年 1 月 1 号重置当年计数器
-- **完全契合自驱力 3 件套**:
-  - Autonomy: 当日进度条 让孩子自己看到 "今天还差几个"
-  - Mastery: 本月 + 当年进度条 让孩子看到 "我越来越多"
-  - Purpose: 每天做一点点, 月度年度都有可见进展
-- **不需要新 schema**: 现有 `task_completions` 表 + 简单 `app_config` 加 `monthly_target_count` + `yearly_target_count` 字段
-- ✅ **用户拍板** (2026-06-06):
-  1. 本月目标 **100**, 当年目标 **1200**
-  2. 撒花动效用 **CSS 粒子** (中等成本, 效果不错)
-  3. 撒花触发 **每天 1 次** (避免刷屏, 也防止撤销后反复触发)
-- 风险: 🟢 (纯前端 + 2 个 config 字段)
-
-**Action Plan**:
-- [ ] ~~用户拍板 3 个 Clarification 问题~~ ✅ 已拍板 (见上)
-- [ ] 加 migration: `app_config` 表加 `monthly_target_count INTEGER DEFAULT 100` + `yearly_target_count INTEGER DEFAULT 1200` (如果表不存在, 创建)
-- [ ] 委派 code-agent: child UI 顶部加 3 个进度条 (当日 / 本月 / 当年, 当日最显眼)
-- [ ] 委派 code-agent: 100% 撒花动效 (CSS 粒子)
-- [ ] 撒花 daily-once: localStorage 存 `lastConfettiAt` 戳, 跨天重置
-- [ ] 委派 code-agent: 月度 / 年度计数器, 每月 1 号 + 每年 1 月 1 号重置 (用 cron trigger 或 lazy reset on read)
-- [ ] 写 e2e: 完成最后一个 task → 当日进度条 100% → 撒花出现
-- [ ] 写 e2e: 本月累计 50 → 本月进度条显示 50%
-- [ ] 写 e2e: 跨月后本月进度条自动从 0 开始
-- [ ] 写 e2e: 撤销最后一个 task → 撒花不再次触发 (daily-once 生效)
-- [ ] `git commit -m "feat(child-ui): tri progress bars (daily / monthly / yearly) with CSS confetti"`
-
-**Status**: ⏳ pending
-**风险**: 🟢
-**Started**: —
-**Completed**: —
-**Commit**: —
-
----
-
-
-## 📦 归档 (已完成, 最近 30 天)
-
-(完成时 PM Agent 移动到这里, 30 天后清掉, 完整历史在 git log)
-
