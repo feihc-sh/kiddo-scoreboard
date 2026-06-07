@@ -14,7 +14,11 @@ import { readFileSync, existsSync } from 'node:fs';
 import { globSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const WRANGLER_CWD = '/Users/tidusmaomao/workspace/kiddo-scoreboard';
+// Use process.cwd() so this works regardless of where the project is cloned
+// (was hardcoded to /Users/tidusmaomao/workspace/kiddo-scoreboard which broke
+// forks/branches/clones in other paths). Tests must be run from the project
+// root (`npm test` or `playwright test` from package.json cwd).
+const WRANGLER_CWD = process.cwd();
 
 // Locate the workerd D1 sqlite file (used by both wrangler d1 execute and
 // the running workerd process — both read the same file).
