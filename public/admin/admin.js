@@ -443,6 +443,10 @@ async function submitNewTask(form) {
     target_account: form.target_account.value,
     category: form.category.value,
     sort_order: Number(form.sort_order.value) || 0,
+    // §3.12 sleep task (Item #002): self-lockout cutoff. Form inputs exist in
+    // public/admin/index.html. Server validates HH:MM regex on cutoff_time.
+    cutoff_time: form.cutoff_time.value.trim() || null,
+    is_self_lockout: form.is_self_lockout.checked ? 1 : 0,
   };
   try {
     if (state.editingTaskId) {

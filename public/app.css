@@ -287,6 +287,27 @@ body {
   box-shadow: var(--shadow-game);
   opacity: 0.95;
 }
+/* §3.12 sleep task self-lockout (Item #002) — pre-cutoff: dimmed but clickable. */
+.task-btn.task-btn-locked {
+  background: rgba(0,0,0,0.05);
+  border-color: rgba(0,0,0,0.1);
+  color: #4A4A4A;
+  opacity: 0.85;
+}
+.task-btn.task-btn-locked:hover:not(:disabled) {
+  background: rgba(0,0,0,0.08);
+}
+/* Past cutoff: fully grayed + disabled. Server still rejects POST /complete as authoritative. */
+.task-btn.task-btn-locked-out,
+.task-btn.task-btn-locked:disabled {
+  background: rgba(0,0,0,0.08);
+  border-color: rgba(0,0,0,0.08);
+  color: #888;
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.task-btn .task-cutoff-label { font-size: 12px; opacity: 0.7; margin-left: 6px; }
+.task-btn .task-countdown-text { font-variant-numeric: tabular-nums; font-weight: 600; margin-left: 4px; }
 .task-btn-icon { font-size: 26px; line-height: 1; }
 .task-btn .task-name,
 .task-btn .task-icon,

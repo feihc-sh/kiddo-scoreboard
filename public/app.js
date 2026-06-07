@@ -150,13 +150,17 @@ function renderTasks() {
   state.tasks.forEach((t) => {
     const done = state.completedTaskIds.has(t.id);
     const revoked = state.uncompletedTodayIds.has(t.id);
+    // §3.12 sleep task (Item #002): self-lockout state fires before revoked/done/normal.
+    const isSleepLocked = !done && !revoked
+      && t.is_self_lockout === 1 && t.cutoff_time;
     const btn = document.createElement('button');
     btn.className = 'task-btn'
       + (done && !revoked ? ' task-btn-done' : '')
-      + (revoked ? ' task-btn-revoked' : '');
-    btn.disabled = revoked;
+      + (revoked ? ' task-btn-revoked' : '')
+      + (isSleepLocked ? ' task-btn-locked' : '');
     btn.dataset.taskId = t.id;
     if (revoked) {
+      btn.disabled = true;
       btn.innerHTML = `
         <span class="task-icon">${t.icon || '⭐'}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
@@ -169,6 +173,25 @@ function renderTasks() {
         <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '🎮' : '💰'}</span>
         <span class="task-done-badge">✅ 今日已完成 (点击撤销)</span>
       `;
+    } else if (isSleepLocked) {
+      // Initial render: compute diff once. setInterval(updateCountdowns) keeps it fresh.
+      const diff = computeCutoffDiffSec(t.cutoff_time);
+      if (diff <= 0) {
+        btn.classList.add('task-btn-locked-out');
+        btn.disabled = true;
+        btn.innerHTML = `
+          <span class="task-icon">${t.icon || '⭐'}</span>
+          <span class="task-name">${escapeHtml(t.name)}</span>
+          <span class="task-done-badge">已过打卡时间 ${t.cutoff_time} (明天再来)</span>
+        `;
+      } else {
+        btn.innerHTML = `
+          <span class="task-icon">${t.icon || '⭐'}</span>
+          <span class="task-name">${escapeHtml(t.name)}</span>
+          <span class="task-cutoff-label">·  距离 ${t.cutoff_time} 还剩</span>
+          <span class="task-countdown-text" data-cutoff="${t.cutoff_time}">${formatHHMMSS(diff)}</span>
+        `;
+      }
     } else {
       btn.innerHTML = `
         <span class="task-icon">${t.icon || '⭐'}</span>
@@ -180,10 +203,63 @@ function renderTasks() {
       // no-op (disabled)
     } else if (done) {
       btn.addEventListener('click', () => tryUncompleteTask(t));
+    } else if (isSleepLocked) {
+      // Only attach click if button not already past cutoff (disabled).
+      if (!btn.disabled) {
+        btn.addEventListener('click', () => completeTask(t.id));
+      }
     } else {
       btn.addEventListener('click', () => completeTask(t.id));
     }
     root.appendChild(btn);
+  });
+  // Start the per-second countdown loop. Idempotent.
+  startCountdownLoop();
+}
+
+// ---------- §3.12 sleep task countdown helpers ----------
+/** Seconds until HH:MM cutoff in Asia/Shanghai client local time. Negative = past cutoff. */
+function computeCutoffDiffSec(hhmm) {
+  const now = new Date();
+  const [h, m] = hhmm.split(':').map(Number);
+  const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+  return Math.floor((cutoff.getTime() - now.getTime()) / 1000);
+}
+function formatHHMMSS(totalSec) {
+  if (totalSec < 0) totalSec = 0;
+  const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+  const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+  const s = String(totalSec % 60).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+let _countdownTimer = null;
+function startCountdownLoop() {
+  if (_countdownTimer) return; // idempotent
+  _countdownTimer = setInterval(updateCountdowns, 1000);
+}
+function updateCountdowns() {
+  const texts = document.querySelectorAll('.task-countdown-text[data-cutoff]');
+  texts.forEach((el) => {
+    const cutoff = el.getAttribute('data-cutoff');
+    const diff = computeCutoffDiffSec(cutoff);
+    if (diff <= 0) {
+      // Crossed cutoff: lock this button. Replace the countdown span with the
+      // "已过打卡时间" badge so the layout matches a newly-rendered locked-out button.
+      const btn = el.closest('.task-btn-locked');
+      if (!btn) return;
+      btn.classList.add('task-btn-locked-out');
+      btn.disabled = true;
+      // Also detach the click handler: easiest is to clone-replace the node.
+      const fresh = btn.cloneNode(true);
+      fresh.innerHTML = `
+        <span class="task-icon">${btn.querySelector('.task-icon')?.textContent || '⭐'}</span>
+        <span class="task-name">${btn.querySelector('.task-name')?.textContent || ''}</span>
+        <span class="task-done-badge">已过打卡时间 ${cutoff} (明天再来)</span>
+      `;
+      btn.replaceWith(fresh);
+    } else {
+      el.textContent = formatHHMMSS(diff);
+    }
   });
 }
 function renderEvents() {

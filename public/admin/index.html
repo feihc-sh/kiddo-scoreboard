@@ -239,6 +239,17 @@
               </div>
               <div><label>排序</label><input name="sort_order" type="number" step="1" value="0"></div>
             </div>
+            <!-- §3.12 sleep task self-lockout (Item #002) — optional HH:MM cutoff -->
+            <div class="pm-form-row">
+              <div><label>截止时间 (可选, 准时上床类任务)</label>
+                <input name="cutoff_time" type="time" placeholder="21:30" pattern="[0-2][0-9]:[0-5][0-9]">
+              </div>
+              <div><label>截止后自动锁</label>
+                <label style="display:flex;align-items:center;gap:6px;font-weight:normal;">
+                  <input name="is_self_lockout" type="checkbox" value="1"> 截止后按钮变灰, 不能再点
+                </label>
+              </div>
+            </div>
             <div class="pm-row" style="background:transparent;padding:0;margin-top:4px;">
               <div class="pm-row-actions" style="margin-left:auto;">
                 <button type="button" id="new-task-cancel" class="pm-btn ghost">取消</button>
