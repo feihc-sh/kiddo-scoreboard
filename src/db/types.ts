@@ -62,6 +62,12 @@ export interface Task {
   category: TaskCategory;
   is_active: 0 | 1;
   sort_order: number;
+  // §3.12 sleep task (准时上床): self-lockout button after cutoff_time.
+  // cutoff_time is 'HH:MM' (Asia/Shanghai). is_self_lockout=1 means the
+  // server rejects /complete after the cutoff. NULL cutoff or 0 lockout
+  // means no time check (regular task).
+  cutoff_time: string | null;
+  is_self_lockout: 0 | 1;
   created_at: number;
   updated_at: number;
 }

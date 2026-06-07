@@ -80,6 +80,29 @@ export function shanghaiDateToUnix(dateStr: string): number {
   return Math.floor((utc - SHANGHAI_OFFSET_SECONDS * 1000) / 1000);
 }
 
+/**
+ * Current time in Asia/Shanghai as 'HH:MM' string (e.g. '21:30').
+ * Used by sleep-task cutoff checks (§3.12 准时上床) — server side mirror
+ * of the iPad's local clock (China is UTC+8, no DST).
+ */
+export function nowShanghaiHHMM(input: number | Date = Date.now()): string {
+  // input is millis-since-epoch when number, Date when object. new Date(ms) directly.
+  const d = input instanceof Date ? input : new Date(input);
+  const shifted = new Date(d.getTime() + SHANGHAI_OFFSET_SECONDS * 1000);
+  const h = String(shifted.getUTCHours()).padStart(2, '0');
+  const m = String(shifted.getUTCMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+/**
+ * Compare 'HH:MM' string `a` against `b` in Asia/Shanghai clock order.
+ * Returns true if a is strictly later than b. Equal returns false.
+ */
+export function hhmmAfter(a: string, b: string): boolean {
+  // 'HH:MM' lexicographic order matches numeric order for zero-padded strings.
+  return a > b;
+}
+
 /** Get range [start, end) of Unix SECONDS for the week containing `input`. */
 export function shanghaiWeekRange(input: number | Date = Date.now()): [number, number] {
   const date = typeof input === 'number' ? new Date(input) : new Date(input);

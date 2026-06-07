@@ -15,7 +15,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../../worker.ts';
 import type { Task } from '../../db/types.ts';
-import { todayShanghai } from '../../utils/week.ts';
+import { todayShanghai, nowShanghaiHHMM, hhmmAfter } from '../../utils/week.ts';
 import { computeBalance } from '../../utils/balance.ts';
 
 const tasks = new Hono<{ Bindings: Env }>();
@@ -28,7 +28,7 @@ const CHILD_USER_ID = 2;
 
 const TASK_COLUMNS =
   'id, name, token_reward, target_account, icon, category, ' +
-  'is_active, sort_order, created_at, updated_at';
+  'is_active, sort_order, cutoff_time, is_self_lockout, created_at, updated_at';
 
 tasks.post('/:id/complete', async (c) => {
   // 1. Validate task_id is a positive integer.
@@ -59,6 +59,18 @@ tasks.post('/:id/complete', async (c) => {
       { error: { code: 'TASK_INACTIVE', message: 'task is no longer active' } },
       400,
     );
+  }
+
+  // 2.5 §3.12 sleep task self-lockout: refuse if past cutoff_time.
+  //     Server uses Asia/Shanghai (matches iPad local clock; China is UTC+8, no DST).
+  if (task.is_self_lockout === 1 && task.cutoff_time) {
+    const nowHHMM = nowShanghaiHHMM();
+    if (hhmmAfter(nowHHMM, task.cutoff_time)) {
+      return c.json(
+        { error: { code: 'CUTOFF_PASSED', message: `已过打卡时间 ${task.cutoff_time}` } },
+        400,
+      );
+    }
   }
 
   // 3. Refuse if an 'active' completion already exists for (task, child, today).

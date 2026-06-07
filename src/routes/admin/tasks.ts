@@ -21,7 +21,8 @@ const tasksRoute = new Hono<{ Bindings: Env }>();
 
 const TASK_COLUMNS =
   'id, name, token_reward, target_account, icon, category, ' +
-  'is_active, sort_order, created_at, updated_at';
+  'is_active, sort_order, cutoff_time, is_self_lockout, ' +
+  'created_at, updated_at';
 
 const ALLOWED_ACCOUNTS: AccountType[] = ['game_time', 'pocket_money'];
 const ALLOWED_CATEGORIES: TaskCategory[] = ['habit', 'study', 'chore', 'custom'];
@@ -85,6 +86,8 @@ interface CreateBody {
   icon: string | null;
   category: TaskCategory;
   sort_order: number;
+  cutoff_time: string | null;
+  is_self_lockout: 0 | 1;
 }
 
 function parseCreateBody(raw: unknown):
@@ -140,6 +143,26 @@ function parseCreateBody(raw: unknown):
     }
     icon = body.icon;
   }
+  // §3.12 sleep task: cutoff_time optional ('HH:MM' or null). is_self_lockout
+  // opt-in 0/1 flag. When is_self_lockout=1 with a cutoff_time, the server
+  // refuses /complete after the cutoff in Asia/Shanghai.
+  let cutoffTime: string | null = null;
+  if (body.cutoff_time !== undefined && body.cutoff_time !== null) {
+    if (typeof body.cutoff_time !== 'string') {
+      return { ok: false, code: 'BAD_REQUEST', message: 'cutoff_time must be a string (HH:MM) or null' };
+    }
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(body.cutoff_time)) {
+      return { ok: false, code: 'BAD_REQUEST', message: 'cutoff_time must match HH:MM (00:00–23:59)' };
+    }
+    cutoffTime = body.cutoff_time;
+  }
+  let isSelfLockout: 0 | 1 = 0;
+  if (body.is_self_lockout !== undefined) {
+    if (body.is_self_lockout !== 0 && body.is_self_lockout !== 1) {
+      return { ok: false, code: 'BAD_REQUEST', message: 'is_self_lockout must be 0 or 1' };
+    }
+    isSelfLockout = body.is_self_lockout;
+  }
 
   return {
     ok: true,
@@ -150,6 +173,8 @@ function parseCreateBody(raw: unknown):
       icon,
       category: body.category,
       sort_order: sortOrder,
+      cutoff_time: cutoffTime,
+      is_self_lockout: isSelfLockout,
     },
   };
 }
@@ -181,8 +206,9 @@ tasksRoute.post('/', async (c) => {
       .prepare(
         `INSERT INTO tasks
            (name, token_reward, target_account, icon, category,
-            is_active, sort_order, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+            is_active, sort_order, cutoff_time, is_self_lockout,
+            created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
       )
       .bind(
         body.name,
@@ -191,6 +217,8 @@ tasksRoute.post('/', async (c) => {
         body.icon,
         body.category,
         body.sort_order,
+        body.cutoff_time,
+        body.is_self_lockout,
         now,
         now,
       ),
@@ -223,6 +251,8 @@ tasksRoute.post('/', async (c) => {
       category: body.category,
       is_active: 1 as const,
       sort_order: body.sort_order,
+      cutoff_time: body.cutoff_time,
+      is_self_lockout: body.is_self_lockout,
       created_at: now,
       updated_at: now,
     },
@@ -242,6 +272,8 @@ interface UpdateBody {
   category?: TaskCategory;
   sort_order?: number;
   is_active?: 0 | 1;
+  cutoff_time?: string | null;
+  is_self_lockout?: 0 | 1;
 }
 
 function parseUpdateBody(raw: unknown):
@@ -310,6 +342,22 @@ function parseUpdateBody(raw: unknown):
       return { ok: false, code: 'BAD_REQUEST', message: 'is_active must be 0 or 1' };
     }
     out.is_active = body.is_active;
+  }
+  // §3.12 sleep task: allow updating cutoff_time and is_self_lockout too.
+  if ('cutoff_time' in body) {
+    if (body.cutoff_time === null) {
+      out.cutoff_time = null;
+    } else if (typeof body.cutoff_time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.cutoff_time)) {
+      return { ok: false, code: 'BAD_REQUEST', message: 'cutoff_time must match HH:MM or be null' };
+    } else {
+      out.cutoff_time = body.cutoff_time;
+    }
+  }
+  if ('is_self_lockout' in body) {
+    if (body.is_self_lockout !== 0 && body.is_self_lockout !== 1) {
+      return { ok: false, code: 'BAD_REQUEST', message: 'is_self_lockout must be 0 or 1' };
+    }
+    out.is_self_lockout = body.is_self_lockout;
   }
 
   const provided: UpdateField[] = (
@@ -392,6 +440,14 @@ tasksRoute.put('/:id', async (c) => {
     sets.push('is_active = ?');
     params.push(patch.is_active);
   }
+  if (patch.cutoff_time !== undefined) {
+    sets.push('cutoff_time = ?');
+    params.push(patch.cutoff_time);
+  }
+  if (patch.is_self_lockout !== undefined) {
+    sets.push('is_self_lockout = ?');
+    params.push(patch.is_self_lockout);
+  }
   sets.push('updated_at = unixepoch()');
   params.push(id);
   const setClause = sets.join(', ');
@@ -401,6 +457,7 @@ tasksRoute.put('/:id', async (c) => {
   const newValues: Record<string, unknown> = {};
   const fields: UpdateField[] = [
     'name', 'token_reward', 'target_account', 'icon', 'category', 'sort_order', 'is_active',
+    'cutoff_time', 'is_self_lockout',
   ];
   for (const f of fields) {
     if (patch[f] !== undefined && patch[f] !== existing[f]) {
