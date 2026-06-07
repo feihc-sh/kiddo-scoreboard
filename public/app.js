@@ -269,7 +269,9 @@ async function uncompleteTask(taskId) {
     renderBalance();
     renderTasks();
     toast(`-${r.token_revoked} ${r.target_account === 'game_time' ? '🎮' : '💰'} 已撤销`, 'success');
+    // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
+    loadProgress().then(renderProgress).catch(() => {});  // §5.2 fix: revoke must refresh progress
   } catch (e) {
     if (e.message === 'ALREADY_UNCOMPLETED_TODAY') {
       // sync state (server says already revoked, but UI didn't know)
