@@ -52,7 +52,7 @@ test.describe('UI: PM Dashboard Shell (§3.2)', () => {
     // task_completions is a separate table from score_events; insert directly.
     d1Exec(
       "INSERT INTO task_completions (task_id, user_id, status, completed_date) " +
-      "VALUES (1, 2, 'active', date('now'))",
+      "VALUES (1, 2, 'active', date('now', '+8 hours'))",
     );
 
     await page.goto('/admin/');
