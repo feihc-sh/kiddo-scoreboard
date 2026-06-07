@@ -139,7 +139,7 @@ test.describe('UI: PM Task Config (Section C, §3.5)', () => {
     // Seed an active task_completion.
     d1Exec(
       "INSERT INTO task_completions (task_id, user_id, status, completed_date) " +
-      `VALUES (${t}, 2, 'active', date('now', '+8 hours'))`,
+      `VALUES (${t}, 2, 'active', date('now'))`,
     );
 
     await page.goto('/admin/');
