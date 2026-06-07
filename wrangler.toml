@@ -1,25 +1,10 @@
-name = "kiddo-scoreboard"
-main = "src/worker.ts"
-compatibility_date = "2025-01-01"
-
-# D1 database (local dev uses --local flag; production ID set via `wrangler d1 create`)
+# D1 database binding (Pages reads this from wrangler.toml)
 [[d1_databases]]
 binding = "DB"
 database_name = "kiddo-scoreboard-db"
-database_id = "b584ebbf-bcb3-45d2-85e8-3ca2d5cb297c"  # created 2026-06-06 via wrangler d1 create
+database_id = "b584ebbf-bcb3-45d2-85e8-3ca2d5cb297c"
 migrations_dir = "migrations"
 
-# Static assets (M8 child UI + future M9 PM UI)
-# cache_control: no-store prevents iPad Safari from caching old HTML/JS during dev,
-# so users see HTML/JS changes immediately after wrangler dev restarts.
-[assets]
-directory = "./public"
-binding = "ASSETS"
-
-[assets.cache_control]
-"**/*.html" = "no-store, no-cache, must-revalidate"
-"**/*.js" = "no-store, no-cache, must-revalidate"
-"**/*.css" = "no-store, no-cache, must-revalidate"
-
+# Local dev port (for wrangler pages dev)
 [dev]
 port = 8787
