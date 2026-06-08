@@ -86,21 +86,42 @@
   - 现要物理删, 违反"软删"原则
   - 建议折中: **物理删 event/completion 记录, 但 audit_log 写一条 "event_hard_deleted" + 原始数据 JSON** (审计可追溯, 数据不可恢复)
 - **风险**: 🔴 高 (物理删, 不可恢复, 只能靠 audit_log 找回)
-- **实施范围** (3 选 1):
-  - **A. 只 score_event**: 仅打卡申请/扣分/奖励 记录
-  - **B. 只 task_completion**: 仅任务完成 记录
-  - **C. 两个都要**: PM 在 admin 列表能选哪种删
-- **前端**: admin 列表 "撤销" 按钮旁加 "🗑 永久删除" 按钮 + 二次确认弹窗 (写死: "此操作不可恢复, 确认删除?")
-- **审计**: 自动写 audit_log `action='event_hard_deleted'` (含原 record 的 JSON snapshot)
+- **实施范围**: C (两个都要, score_event + task_completion)
+- **谁能用**: A (PM only, 二次确认弹窗, audit log 强制写)
+- **删除后列表显示**: B (灰色"已删除"标记, 含删除时间 + 谁删)
+- **新表设计** (避免再删 audit_log): 物理删的记录移到 `deleted_records` 表 (含 `record_type`, `original_id`, `original_data JSON`, `deleted_at`, `deleted_by`, `original_table`)
 
-**❓ 待你拍板** (3 Q):
-1. **范围**: A (只 event) / B (只 task_completion) / C (两个都要)?
-2. **谁能用**: PM only / PM + 二次密码确认 / 加个 "真删" 滑块?
-3. **删除后列表显示**: 完全消失 (列表看不见) / 灰色"已删除"标记 (含删除时间 + 谁删)?
+**❓ 已拍板** (用户 2026-06-08):
+1. ✅ **范围**: C (两个都要)
+2. ✅ **谁能用**: A (PM only, 二次确认)
+3. ✅ **删除后列表显示**: B (灰色"已删除"标记)
 
-**风险**: 🔴 (数据物理消失, 不可逆, 只能靠 audit_log JSON 找回)
-**Status**: ⏳ pending
+**Action Plan** (TDD 走起):
+- [ ] 写 unit test: `admin-events-hard-delete.test.ts` (2 case: 删 score_event / 删 task_completion, 验证 audit log 写 + balance 重算 + 孩子可再打卡)
+- [ ] 写 unit test: `admin-task-completions-hard-delete.test.ts` (类似)
+- [ ] 写 unit test: `deleted-records.test.ts` (迁移到 deleted_records 表, 不污染 audit_log)
+- [ ] 加 migration: `0006_deleted_records.sql` (deleted_records 表)
+- [ ] 写后端 endpoint: `POST /api/admin/events/:id/hard-delete` (Hono + requirePm 守卫)
+- [ ] 写后端 endpoint: `POST /api/admin/task-completions/:id/hard-delete`
+- [ ] utils/audit.ts: 加 `logHardDelete()` helper (写 audit_log `action='event_hard_deleted'`)
+- [ ] utils/deleted-records.ts: 加 `moveToDeletedRecords()` helper
+- [ ] utils/balance.ts: 加 `recalcAfterHardDelete(child_id)` (删后重算)
+- [ ] 前端: admin UI "撤销" 按钮旁加 "🗑 永久删除" 按钮 + 二次确认弹窗 (含不可恢复警告)
+- [ ] 前端: 列表渲染时, 查 deleted_records 表, 已删的灰显 + 标记 (含删除时间 + 谁删)
+- [ ] 写 e2e: 删 score_event → 列表灰显 → 孩子可再打卡 (e2e 跑 1 次)
+- [ ] 写 e2e: 删 task_completion → 列表灰显 → 孩子可再完成
+- [ ] 写 e2e: 删后 audit log 有 `event_hard_deleted` 记录 + deleted_records 有 snapshot
+- [ ] 跑 `npm test` 全过
+- [ ] `git commit -m "feat(admin): hard-delete event/completion with audit + deleted_records snapshot"`
+- [ ] 走 PR 流程 (issue → branch → fix → PR → merge)
+- [ ] merge → GH Action 自动 backup + deploy + smoke test
+- [ ] PRD §3.5 + TEST_PLAN 加新章节 (3.15 Admin Hard Delete)
+- [ ] PROGRESS.md 加 v2.2 条目
+
+**风险**: 🔴 (数据物理消失, 不可逆, deleted_records 找回; 走 issue→PR 流程多一道审查)
+**Status**: ✅ ready (用户已拍板 2026-06-08)
 **Commit**: —
+**Started**: 2026-06-08
 
 ---
 
