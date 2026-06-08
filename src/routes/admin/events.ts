@@ -6,7 +6,9 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { getPmUserId } from '../../middleware/requirePm.ts';
-import { computeBalance } from '../../utils/balance.ts';
+import { computeBalance, recalcAfterHardDelete } from '../../utils/balance.ts';
+import { moveToDeletedRecords } from '../../utils/deleted-records.ts';
+import { logHardDelete } from '../../utils/audit.ts';
 import type {
   AccountType,
   Balance,
@@ -384,6 +386,78 @@ events.put('/:id', async (c) => {
     event: updated,
     new_balance: newBalance,
   });
+});
+
+// ---------------- POST /:id/hard-delete ----------------
+
+events.post('/:id/hard-delete', async (c) => {
+  const pmUserId = await getPmUserId(c);
+  if (pmUserId == null) return unauthorized(c);
+
+  const id = badId(c.req.param('id'));
+  if (id == null) {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'id must be a positive integer' } },
+      400,
+    );
+  }
+
+  const db = c.env.DB;
+  const ev = await loadEvent(c, id);
+  if (!ev) {
+    return c.json(
+      { error: { code: 'NOT_FOUND', message: 'event not found' } },
+      404,
+    );
+  }
+
+  try {
+    // 1. Snapshot + delete (atomic via db.batch)
+    await moveToDeletedRecords(
+      db,
+      'score_event',
+      'score_events',
+      id,
+      ev,
+      pmUserId,
+    );
+
+    // 2. Audit the *act* of deletion
+    await logHardDelete(db, 'score_event', id, ev, pmUserId);
+
+    // 3. Recompute balance (the source row is gone, so this reflects
+    //    the world without the deleted event)
+    const newBalance = await recalcAfterHardDelete(db, ev.user_id);
+
+    return c.json({
+      success: true,
+      deleted_id: id,
+      balance: newBalance,
+    });
+  } catch (err) {
+    // 500: don't lose the trail. Write an audit row (best-effort) and
+    // return a generic error.
+    const message = err instanceof Error ? err.message : String(err);
+    try {
+      // Stage 2 (NIGHTLY-TODO #009): log the failure with whatever
+      // context we still have (the event is still in score_events
+      // because the batch was rolled back).
+      const { logAudit } = await import('../../utils/audit.ts');
+      await logAudit(db, {
+        actor: 'pm',
+        action: 'event_hard_deleted',
+        target_event_id: id,
+        target_user_id: ev.user_id,
+        details: { error: message, failed: true },
+      });
+    } catch {
+      // Audit log itself failed — nothing more we can do.
+    }
+    return c.json(
+      { error: { code: 'INTERNAL', message: 'hard-delete failed' } },
+      500,
+    );
+  }
 });
 
 export default events;

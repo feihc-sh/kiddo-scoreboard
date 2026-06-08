@@ -23,7 +23,8 @@ export type AuditAction =
   | 'exchange'
   | 'set_name'            // v2 首次填名字
   | 'task_complete' | 'task_revoke'
-  | 'task_create' | 'task_update' | 'task_delete';
+  | 'task_create' | 'task_update' | 'task_delete'
+  | 'event_hard_deleted' | 'completion_hard_deleted';
 
 // =============================================================
 // Row types (mirror SQL columns exactly)
