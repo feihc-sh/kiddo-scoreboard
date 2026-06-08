@@ -121,6 +121,21 @@
 
     .pm-mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--text-soft); }
 
+    /* Stage 4 (NIGHTLY-TODO #009): hard-delete button + grey-row marker. */
+    .pm-btn.hard-delete {
+      background: #e74c3c; color: #fff; padding: 6px 10px; font-size: 12px;
+      min-height: 32px;
+    }
+    .pm-btn.hard-delete:hover { background: #c0392b; }
+    .pm-btn.hard-delete:disabled { background: #e74c3c; opacity: 0.5; }
+    .pm-row.row-deleted {
+      background: #ECECEC;
+      opacity: 0.75;
+    }
+    .pm-row.row-deleted .pm-row-title { text-decoration: line-through; color: #999; }
+    .pm-row.row-deleted .pm-row-meta  { text-decoration: line-through; color: #999; }
+    .pm-row-deleted-marker { color: #c0392b; font-size: 11px; font-weight: 700; }
+
     @media (min-width: 768px) {
       .pm-app { padding: 24px 24px 80px; }
       .pm-topbar h1 { font-size: 26px; }
