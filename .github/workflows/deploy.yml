@@ -1,0 +1,99 @@
+name: Deploy to Cloudflare Pages + Auto-Backup
+
+on:
+  push:
+    branches: [main]
+    # INCIDENTS.md 是失败记录, push 它不能又触发一次 action (否则循环)
+    paths-ignore:
+      - 'docs/INCIDENTS.md'
+  workflow_dispatch:
+    inputs:
+      skip_backup:
+        description: 'Skip pre-deploy backup (manual override only)'
+        type: boolean
+        default: false
+
+# 防止并发 deploy 撞车
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+# 允许 GH bot commit + push (写 INCIDENTS.md 用)
+permissions:
+  contents: write
+
+jobs:
+  pre-deploy-backup:
+    name: "🛡 Pre-deploy D1 backup"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@latest
+
+      - name: D1 Database Backup
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          mkdir -p remote-backup
+          DATE=$(date -u +%Y-%m-%d)
+          BACKUP_FILE="remote-backup/${DATE}.sql"
+          echo "📦 Backing up D1 to ${BACKUP_FILE}..."
+          wrangler d1 export kiddo-scoreboard-db --remote --output="${BACKUP_FILE}"
+          echo "✅ Backup created: $(wc -c < ${BACKUP_FILE}) bytes"
+
+      - name: Upload backup as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backup-${{ github.sha }}
+          path: remote-backup/
+          retention-days: 30
+
+      - name: ❌ Record backup failure to docs/INCIDENTS.md
+        if: failure()
+        run: python3 .github/scripts/record_incident.py backup
+
+  deploy:
+    name: "🚀 Deploy to Cloudflare Pages"
+    needs: pre-deploy-backup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@latest
+
+      - name: Deploy to Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "🚀 Deploying to Cloudflare Pages..."
+          wrangler pages deploy ./public \
+            --branch main \
+            --project-name kiddo-scoreboard \
+            --commit-dirty=true
+          echo "✅ Deploy complete"
+
+      - name: Smoke test endpoints
+        env:
+          DEPLOY_URL: https://kiddo-scoreboard.pages.dev
+        run: |
+          echo "🔍 Smoke testing endpoints..."
+          for path in "/" "/health" "/api/public/events" "/api/public/balance" "/api/public/tasks/progress"; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "${DEPLOY_URL}${path}")
+            echo "  ${path} -> ${code}"
+            if [ "$code" != "200" ]; then
+              echo "❌ Smoke test failed: ${path} returned ${code}"
+              exit 1
+            fi
+          done
+          echo "✅ All 5 endpoints returned 200"
+
+      - name: ❌ Record deploy failure to docs/INCIDENTS.md
+        if: failure()
+        run: python3 .github/scripts/record_incident.py deploy
