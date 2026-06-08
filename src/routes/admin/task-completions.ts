@@ -16,8 +16,11 @@
 //     atomic at the D1 level.
 
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { getPmUserId } from '../../middleware/requirePm.ts';
-import { computeBalance } from '../../utils/balance.ts';
+import { computeBalance, recalcAfterHardDelete } from '../../utils/balance.ts';
+import { moveToDeletedRecords } from '../../utils/deleted-records.ts';
+import { logAudit } from '../../utils/audit.ts';
 import { todayShanghai } from '../../utils/week.ts';
 import type { Env } from '../../worker.ts';
 import type { Balance, CompletionStatus, TaskCompletion } from '../../db/types.ts';
@@ -187,6 +190,119 @@ taskCompletions.post('/:id/revoke', async (c) => {
     revoked_at: now,
     new_balance: newBalance,
   });
+});
+
+// ---------------- POST /:id/hard-delete ----------------
+//
+// Stage 3 (NIGHTLY-TODO #009): parallel to events POST /:id/hard-delete.
+// 1. Snapshot the row + delete it atomically (deleted_records).
+// 2. Audit the *act* of deletion (completion_hard_deleted).
+// 3. Recompute balance.
+//
+// Note: the underlying score_event (awarded_event_id) is NOT touched —
+// only the completion row goes away. So the balance, which is derived
+// from approved score_events, is unchanged after this call.
+
+function unauthorized(c: Context<{ Bindings: Env }>) {
+  return c.json(
+    { error: { code: 'UNAUTHORIZED', message: 'PM session required' } },
+    401,
+  );
+}
+
+function badId(idRaw: string | undefined): number | null {
+  if (!idRaw) return null;
+  const n = Number(idRaw);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n;
+}
+
+taskCompletions.post('/:id/hard-delete', async (c) => {
+  const pmUserId = await getPmUserId(c);
+  if (pmUserId == null) return unauthorized(c);
+
+  const id = badId(c.req.param('id'));
+  if (id == null) {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'id must be a positive integer' } },
+      400,
+    );
+  }
+
+  const db = c.env.DB;
+  const completion = await db
+    .prepare(
+      `SELECT id, task_id, user_id, status, completed_date, completed_at,
+              awarded_event_id, revoked_at, revoked_by
+       FROM task_completions WHERE id = ?`,
+    )
+    .bind(id)
+    .first<TaskCompletion>();
+  if (!completion) {
+    return c.json(
+      { error: { code: 'NOT_FOUND', message: 'task_completion not found' } },
+      404,
+    );
+  }
+
+  try {
+    // 1. Snapshot + delete (atomic via db.batch)
+    await moveToDeletedRecords(
+      db,
+      'task_completion',
+      'task_completions',
+      id,
+      completion,
+      pmUserId,
+    );
+
+    // 2. Audit the *act* of deletion. We use logAudit directly (rather
+    //    than the stage 2 logHardDelete helper) because that helper
+    //    hardcodes action='event_hard_deleted'; completions need a
+    //    distinct action so audit-log filters can split them.
+    await logAudit(db, {
+      actor: 'pm',
+      action: 'completion_hard_deleted',
+      target_event_id: id,
+      target_user_id: pmUserId,
+      details: {
+        record_type: 'task_completion',
+        original_table: 'task_completions',
+        original_data: completion,
+      },
+    });
+
+    // 3. Recompute balance. The score_event is still in the table
+    //    (we only removed the completion), so the balance is the same
+    //    as before — but we still go through the same code path the
+    //    events hard-delete uses, so the API shape is consistent.
+    const newBalance = await recalcAfterHardDelete(db, completion.user_id);
+
+    return c.json({
+      success: true,
+      deleted_id: id,
+      balance: newBalance,
+    });
+  } catch (err) {
+    // 500: best-effort audit row (the batch was rolled back, so the
+    //    completion is still in task_completions), then generic error.
+    const message = err instanceof Error ? err.message : String(err);
+    try {
+      await logAudit(db, {
+        actor: 'pm',
+        action: 'completion_hard_deleted',
+        target_event_id: id,
+        target_user_id: completion.user_id,
+        details: { error: message, failed: true },
+      });
+    } catch {
+      // Audit log itself failed — nothing more we can do.
+    }
+    return c.json(
+      { error: { code: 'INTERNAL', message: 'hard-delete failed' } },
+      500,
+    );
+  }
 });
 
 export default taskCompletions;
