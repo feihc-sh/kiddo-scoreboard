@@ -96,30 +96,53 @@
 2. ✅ **谁能用**: A (PM only, 二次确认)
 3. ✅ **删除后列表显示**: B (灰色"已删除"标记)
 
-**Action Plan** (TDD 走起):
-- [ ] 写 unit test: `admin-events-hard-delete.test.ts` (2 case: 删 score_event / 删 task_completion, 验证 audit log 写 + balance 重算 + 孩子可再打卡)
-- [ ] 写 unit test: `admin-task-completions-hard-delete.test.ts` (类似)
-- [ ] 写 unit test: `deleted-records.test.ts` (迁移到 deleted_records 表, 不污染 audit_log)
-- [ ] 加 migration: `0006_deleted_records.sql` (deleted_records 表)
-- [ ] 写后端 endpoint: `POST /api/admin/events/:id/hard-delete` (Hono + requirePm 守卫)
-- [ ] 写后端 endpoint: `POST /api/admin/task-completions/:id/hard-delete`
-- [ ] utils/audit.ts: 加 `logHardDelete()` helper (写 audit_log `action='event_hard_deleted'`)
-- [ ] utils/deleted-records.ts: 加 `moveToDeletedRecords()` helper
-- [ ] utils/balance.ts: 加 `recalcAfterHardDelete(child_id)` (删后重算)
-- [ ] 前端: admin UI "撤销" 按钮旁加 "🗑 永久删除" 按钮 + 二次确认弹窗 (含不可恢复警告)
-- [ ] 前端: 列表渲染时, 查 deleted_records 表, 已删的灰显 + 标记 (含删除时间 + 谁删)
-- [ ] 写 e2e: 删 score_event → 列表灰显 → 孩子可再打卡 (e2e 跑 1 次)
-- [ ] 写 e2e: 删 task_completion → 列表灰显 → 孩子可再完成
-- [ ] 写 e2e: 删后 audit log 有 `event_hard_deleted` 记录 + deleted_records 有 snapshot
-- [ ] 跑 `npm test` 全过
-- [ ] `git commit -m "feat(admin): hard-delete event/completion with audit + deleted_records snapshot"`
-- [ ] 走 PR 流程 (issue → branch → fix → PR → merge)
-- [ ] merge → GH Action 自动 backup + deploy + smoke test
-- [ ] PRD §3.5 + TEST_PLAN 加新章节 (3.15 Admin Hard Delete)
-- [ ] PROGRESS.md 加 v2.2 条目
+**Action Plan** (TDD 走起, **切 5 段每段 10 min 防 CC Timeout**):
+
+### 第 1 段 (≤10 min): migration + 第 1 个 unit test 基线
+- [ ] 加 migration: `migrations/0006_deleted_records.sql` (建表: id / record_type / original_id / original_data JSON / deleted_at / deleted_by / original_table)
+- [ ] 写 unit test 基线: `tests/unit/deleted-records.test.ts` (验证 deleted_records 表 schema + INSERT/SELECT 基础)
+- [ ] 跑 `npx vitest run tests/unit/deleted-records.test.ts` 必须过
+- [ ] `git add` + commit: `feat(db): add deleted_records table for hard-delete snapshot`
+- [ ] **汇报**: PM 等结果, 决定是否跑第 2 段
+
+### 第 2 段 (≤10 min): 3 helper + score_event 删 endpoint
+- [ ] utils/audit.ts: 加 `logHardDelete(record)` (写 audit_log `action='event_hard_deleted'`)
+- [ ] utils/deleted-records.ts: 加 `moveToDeletedRecords(record)` (从原表删 + INSERT deleted_records)
+- [ ] utils/balance.ts: 加 `recalcAfterHardDelete(child_id)` (重算余额)
+- [ ] 后端: `src/routes/admin/events.ts` 加 `POST /:id/hard-delete` (Hono + requirePm 守卫)
+- [ ] 写 unit test: `tests/unit/admin-events-hard-delete.test.ts` (2 case: 删成功/PM 未登录返 401)
+- [ ] 跑 vitest 全过
+- [ ] `git add` + commit: `feat(admin): score_event hard-delete with audit + deleted_records`
+- [ ] **汇报**: PM 等结果, 决定是否跑第 3 段
+
+### 第 3 段 (≤10 min): task_completion 删 endpoint
+- [ ] 后端: `src/routes/admin/task-completions.ts` 加 `POST /:id/hard-delete`
+- [ ] 写 unit test: `tests/unit/admin-task-completions-hard-delete.test.ts` (类似 events)
+- [ ] 跑 vitest 全过
+- [ ] `git add` + commit: `feat(admin): task_completion hard-delete with audit`
+- [ ] **汇报**: PM 等结果, 决定是否跑第 4 段
+
+### 第 4 段 (≤10 min): 前端 (按钮 + 弹窗 + 灰显)
+- [ ] public/admin/admin.js: 列表 "撤销" 按钮旁加 "🗑 永久删除" 按钮
+- [ ] 二次确认弹窗 (confirm() + 写死: "此操作不可恢复, 确认删除?")
+- [ ] 后端 GET endpoint 加 deleted_records 关联: 列表渲染时查 `deleted_records` 表, 已删的灰显 + 标记 (含删除时间 + 谁删)
+- [ ] 写 e2e: `tests/e2e/ui-admin-hard-delete.spec.ts` (3 case: events 删/灰显/再打卡; task_completions 删/灰显/再完成; audit log + deleted_records 双记录)
+- [ ] 跑 vitest + e2e 全过
+- [ ] `git add` + commit: `feat(admin-ui): hard-delete button + grey marker + confirm dialog`
+- [ ] **汇报**: PM 等结果, 决定是否跑第 5 段
+
+### 第 5 段 (≤10 min): 文档 + PR
+- [ ] docs/PRD.md §3.5 加新规则 (硬删 + audit log + deleted_records)
+- [ ] docs/TEST_PLAN.md 加 §3.15 Admin Hard Delete (含 Smoke/Happy/Edge)
+- [ ] docs/FEATURE_MATRIX.md 表 A 更新 #009 业务规则 + 表 C 加 §3.15
+- [ ] docs/PROGRESS.md 加 v2.2 条目
+- [ ] 跑 `npm test` 全过 (182+ → ~200)
+- [ ] `git add` + commit: `docs: PRD + TEST_PLAN + FEATURE_MATRIX + PROGRESS for hard-delete`
+- [ ] 走 PR 流程 (push 分支 + gh pr create)
+- [ ] **汇报**: PR 链接, 等用户 merge → GH Action 自动 backup + deploy
 
 **风险**: 🔴 (数据物理消失, 不可逆, deleted_records 找回; 走 issue→PR 流程多一道审查)
-**Status**: ✅ ready (用户已拍板 2026-06-08)
+**Status**: 🔄 in progress (第 1 段执行中)
 **Commit**: —
 **Started**: 2026-06-08
 
