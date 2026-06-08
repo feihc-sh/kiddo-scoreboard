@@ -71,6 +71,15 @@ jobs:
         # wrangler needs node_modules to resolve imports like 'hono' in src/
         run: npm ci
 
+      - name: Apply D1 migrations to remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "🚣 Applying D1 migrations to remote..."
+          wrangler d1 migrations apply kiddo-scoreboard-db --remote
+          echo "✅ Migrations applied"
+
       - name: Deploy to Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
