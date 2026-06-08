@@ -1005,6 +1005,67 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 
 ---
 
+### 3.15 Admin Hard Delete (v2.2 新增, Item #009)
+
+**Spec file:** `tests/e2e/ui-admin-hard-delete.spec.ts`
+**Page:** `/admin/` → Sections A (events) and G (task completions)
+**Element IDs:** `[data-action="hard-delete"][data-id="N"]`, `[data-record-id="N"][data-deleted="1"]` (灰显 marker), `#hard-delete-confirm` (confirm dialog).
+**Backend hooks:** `POST /api/admin/events/:id/hard-delete`, `POST /api/admin/task-completions/:id/hard-delete`, `GET /api/admin/deleted-records` (含 type filter).
+
+#### Smoke
+- **Scenario: PM sees "🗑 永久删除" 按钮 next to "撤销" on approved/revoked rows**
+  - Steps: `loginAsPm('123654')`; seed 1 approved event + 1 active task completion; open section A and section G.
+  - Assert: 2 buttons visible per row (撤销 + 🗑 永久删除), 灰底色区别于普通 approve/reject 按钮; no console errors.
+
+#### Happy path
+- **Scenario: PM hard-deletes a `score_event` — 物理消失 + `deleted_records` 有 + `audit_log` 有**
+  - Steps: Seed 1 approved `score_event` (id=42, `change_value=+5 game_time`). PM clicks 🗑 on the row, confirm dialog → OK.
+  - Assert: Toast `已永久删除`; row disappears from `#all-events-list`; `score_events` table has 0 rows for id=42; `deleted_records` table has 1 row with `record_type='score_event', original_id=42, original_data={...}, original_table='score_events', deleted_by='pm'`; `audit_log` has new entry `action='event_hard_deleted'` with `target_event_id=42` and `details={deleted_record_id, original_data}`; child `game_time` balance 重算后减 5.
+
+- **Scenario: PM hard-deletes a `task_completion` — 物理消失 + `deleted_records` 有 + `audit_log` 有**
+  - Steps: Seed 1 active `task_completion` (id=7, task_id=1, today). PM clicks 🗑 in section G, confirm → OK.
+  - Assert: Toast `已永久删除`; row disappears from `#completions-list`; `task_completions` table has 0 rows for id=7; `deleted_records` has 1 row with `record_type='task_completion'`, `original_data` 含 `task_id` + `awarded_event_id`; `audit_log` has `action='completion_hard_deleted'`; 关联的 `score_event` 仍存在 (硬删 task_completion 不动 score_event).
+
+- **Scenario: 删后孩子能再次打卡 (再完成同一任务 / 再提交新申请)**
+  - Steps: Seed 1 active task completion for today's "按时上床" task. PM 软删 (撤销) → 硬删 (`task_completion` 物理消失). Child refreshes; clicks "按时上床" again.
+  - Assert: `POST /api/me/tasks/:id/complete` returns 201 (UNIQUE 约束通过, 因为 `task_completions` 表已无记录); balance +1 again; 新的 task_completion + score_event 写入.
+
+- **Scenario: 删后余额重算正确 (reflect new approved-event set)**
+  - Steps: Seed balance `game_time=20, pocket_money=5` (5 events: 3 game_time approved, 2 pocket_money approved). PM 硬删 1 个 `+10 game_time` event.
+  - Assert: Child refreshes → `game_time=10, pocket_money=5`; no "negative delta" 或 "drift".
+
+#### Edge cases
+- **Scenario: 未登录访问硬删 endpoint 返 401**
+  - Steps: Clear session cookie. `page.request.post('/api/admin/events/42/hard-delete')` via API directly.
+  - Assert: Response 401 `UNAUTHORIZED`; `score_events` 行未删; `audit_log` 未写; `deleted_records` 无新行.
+
+- **Scenario: 删不存在的 id 返 404**
+  - Steps: `loginAsPm`; API call `POST /api/admin/events/99999/hard-delete` (id 不存在).
+  - Assert: Response 404 `NOT_FOUND`; no DB writes; UI 若触发则 toast "记录不存在".
+
+- **Scenario: confirm 取消时不删**
+  - Steps: Click 🗑; confirm dialog → 取消.
+  - Assert: No API call fires; row stays in list; no DB changes; no audit_log entry.
+
+- **Scenario: 已硬删的记录在列表里灰显 + 显示删除时间 + 谁删**
+  - Steps: After hard-delete event 42; refresh "All Events" page.
+  - Assert: 1 row with `data-deleted="1"` attribute (or `.deleted-row` class) showing "🚫 已删除 2026-06-08 23:00 by pm" subtitle; opacity 0.5; no 撤销/删除 button on it.
+
+- **Scenario: 重复点击 🗑 (双击) — only one delete**
+  - Steps: Click 🗑 twice in 200ms; confirm OK on first.
+  - Assert: Second click either no-ops (button disabled after first) or returns 404 (id already gone); 1 `deleted_records` row total; 1 `audit_log` entry total.
+
+#### Specs 覆盖映射
+- E2E: `tests/e2e/ui-admin-hard-delete.spec.ts` (3 cases: smoke + happy events + happy completions)
+- Unit: `tests/unit/admin-events-hard-delete.test.ts` (2: 删成功 + PM 401)
+- Unit: `tests/unit/admin-task-completions-hard-delete.test.ts` (2: 删成功 + 删后允许再完成)
+- Unit: `tests/unit/deleted-records.test.ts` (snapshot 写入 + JSON 序列化)
+
+#### Cross-cutting
+- Hard-delete flow §4 Flow G walks: events 删 → 灰显 → 孩子再打卡 (one full scenario per direction).
+
+---
+
 ## 4. Cross-Cutting E2E Flows
 
 These flows span multiple features and are higher value than per-feature tests. Each flow is a single spec file with a single `test()` that walks the full scenario step by step, asserting along the way.

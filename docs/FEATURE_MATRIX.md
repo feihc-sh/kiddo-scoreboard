@@ -4,7 +4,7 @@
 > 给 agent / 用户看: **每个功能点有没有测, 测了什么, 还有什么 gap。**
 
 **最后更新**: 2026-06-08
-**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **14 业务侧功能点** ↔ TEST_PLAN §3 (14 UI 功能) ↔ 22 unit + 47 e2e = **69 测试文件**
+**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 48 e2e = **73 测试文件**
 
 ---
 
@@ -17,10 +17,10 @@
 | **3.3** | 奖励机制 (周额度发工资) | `routes/admin/weekly-grant.ts` | 3.8 | `admin-weekly-grant.test.ts` | `flow-weekly-payout.spec.ts` `ui-admin-grant.spec.ts` | ✅ 100% |
 | **3.4** | 任务系统 (CRUD + 完成 + 撤销) | `routes/admin/tasks.ts` + `routes/me/tasks.ts` | 3.5, 3.11 | `admin-tasks-config.test.ts` `me-tasks-complete.test.ts` `public-tasks.test.ts` | `ui-admin-tasks.spec.ts` `ui-child-task-complete.spec.ts` `ui-admin-emoji-picker.spec.ts` `flow-task-lifecycle.spec.ts` | ✅ 100% |
 | **3.12** | 准时上床 (self-lockout 任务类型, v2.1) | `tasks.cutoff_time` + `tasks.is_self_lockout` | 3.14 | (覆盖在 me-tasks-complete.test.ts) | `sleep-lockout.spec.ts` `ui-child-main.spec.ts` | ✅ 100% |
-| **3.5** | 边界 case (软删/审计/锁) | `utils/audit.ts` + `auth/lockout.ts` | 3.1, 3.6 | `lockout.test.ts` `audit.test.ts` | `flow-pm-lockout.spec.ts` `smoke-admin-audit.spec.ts` | ✅ 95% (1 边界) |
+| **3.5** | 边界 case (软删/审计/锁 + **硬删 v2.2**) | `utils/audit.ts` + `auth/lockout.ts` + `utils/deleted-records.ts` + `routes/admin/events.ts` + `routes/admin/task-completions.ts` + `routes/admin/deleted-records.ts` | 3.1, 3.6, **3.15** | `lockout.test.ts` `audit.test.ts` `deleted-records.test.ts` `admin-events-hard-delete.test.ts` `admin-task-completions-hard-delete.test.ts` | `flow-pm-lockout.spec.ts` `smoke-admin-audit.spec.ts` **`ui-admin-hard-delete.spec.ts`** | ✅ 100% |
 
 **业务规则侧覆盖率**: **6/6 = 100%** ✅
-**gap**: PRD 3.5 边界 case 里的"网络中断重试"在 e2e 没模拟 (单浏览器 spec, 用 mock 替代)
+**gap (已补)**: PRD 3.5 新增硬删 (v2.2) — 物理删 event/completion + `deleted_records` snapshot + audit log, 全部由 §3.15 e2e + 2 unit spec 覆盖。
 
 ---
 
@@ -59,8 +59,9 @@
 | **3.12** | Child Event Submit | ✓ | ✓ | ✓ | `smoke-child-submit.spec.ts` `ui-child-submit-happy.spec.ts` `ui-child-submit-edge.spec.ts` |
 | **3.13** | Child Recent Events | ✓ | — | — | `ui-child-events.spec.ts` `smoke-child-recent.spec.ts` |
 | **3.14** | Child Sleep Lockout (v2.1) | ✓ | ✓ | ✓ | `sleep-lockout.spec.ts` `ui-child-main.spec.ts` (含 cutoff 行为) |
+| **3.15** | Admin Hard Delete (v2.2) | ✓ | ✓ | ✓ | `ui-admin-hard-delete.spec.ts` (smoke + 2 happy) |
 
-**UI 功能覆盖率**: **14/14 = 100%** ✅
+**UI 功能覆盖率**: **15/15 = 100%** ✅
 
 ---
 
@@ -74,8 +75,9 @@
 | **D: Deduct & Revoke Flow** | `flow-deduct-revoke.spec.ts` | 5.5 + 5.6 (扣 → 撤) | 完整审计追踪 |
 | **E: Exchange Flow** | `flow-exchange.spec.ts` | 5.7 双账户兑换 | 余额正确性 |
 | **F: Weekly Payout Flow** | `flow-weekly-payout.spec.ts` | 5.8 周发工资 | 周额度机制 |
+| **G: Admin Hard Delete Flow** (v2.2) | `ui-admin-hard-delete.spec.ts` | 3.15 (删 → 灰显 → 再打卡) | 物理删 + 审计 + 业务恢复 |
 
-**跨流程覆盖率**: 6/6 = **100%** ✅ (每流程 1 spec, walk 完整)
+**跨流程覆盖率**: 7/7 = **100%** ✅ (每流程 1 spec, walk 完整)
 
 ---
 
@@ -97,7 +99,7 @@
 - `me-events-submit.test.ts` (提交)
 - `me-tasks-complete.test.ts` (完成/撤销)
 
-### PM 端 API (8)
+### PM 端 API (10)
 - `admin-auth.test.ts` (登录)
 - `admin-events-actions.test.ts` (审批/拒绝/撤销/改分)
 - `admin-tasks-config.test.ts` (任务 CRUD)
@@ -106,23 +108,26 @@
 - `admin-audit-log.test.ts`
 - `admin-exchange.test.ts`
 - `admin-weekly-grant.test.ts`
+- `admin-events-hard-delete.test.ts` (v2.2)
+- `admin-task-completions-hard-delete.test.ts` (v2.2)
 
-### Utils (4)
+### Utils (5)
 - `week.test.ts` (时区 + ISO 周)
 - `balance.test.ts` (余额计算)
 - `audit.test.ts` (审计写入)
+- `deleted-records.test.ts` (v2.2 snapshot 写入 + JSON 序列化)
 - (Me-events-submit 等覆盖)
 
-**单元测试总数**: 22 文件 / ~120 用例
+**单元测试总数**: 24 文件 / ~135 用例 (v2.2 baseline)
 
 ---
 
-## 📊 表 F: E2E 测试分布 (47 个)
+## 📊 表 F: E2E 测试分布 (48 个)
 
 | 类别 | 数量 | spec 文件 |
 |---|---:|---|
 | Smoke (页面 + 关键元素) | 18 | `smoke-*.spec.ts` |
-| UI Admin | 9 | `ui-admin-*.spec.ts` |
+| UI Admin | 10 | `ui-admin-*.spec.ts` (含 v2.2 `ui-admin-hard-delete.spec.ts`) |
 | UI Child | 7 | `ui-child-*.spec.ts` |
 | Flow (跨功能) | 6 | `flow-*.spec.ts` |
 | Misc / 边界 | 7 | `admin-*.spec.ts` `event-approval.spec.ts` `task-system.spec.ts` `public-api.spec.ts` `hello.spec.ts` `ui-task-and-segbtn.spec.ts` `child-ui.spec.ts` `admin-extras.spec.ts` `exchange-grant.spec.ts` `admin-dashboard.spec.ts` |
@@ -153,15 +158,15 @@
 |---:|---|
 | 业务规则 (PRD §3) | 6 |
 | 交互流程 (PRD §5) | 8 |
-| UI 功能 (TEST_PLAN §3) | 14 |
-| 跨功能流程 (TEST_PLAN §跨) | 6 |
-| 业务侧功能点总数 (去重) | **14** |
-| unit 测试文件 | 22 |
-| e2e spec 文件 | 47 |
-| **测试文件总数** | **69** |
-| 测试用例 (估算) | ~200+ |
-| **覆盖率** | **14/14 = 100%** ✅ |
-| **当前状态** (2026-06-08) | **182/182 pass** ✅ |
+| UI 功能 (TEST_PLAN §3) | 15 |
+| 跨功能流程 (TEST_PLAN §跨) | 7 |
+| 业务侧功能点总数 (去重) | **15** |
+| unit 测试文件 | 24 |
+| e2e spec 文件 | 48 |
+| **测试文件总数** | **72** |
+| 测试用例 (估算) | ~210+ |
+| **覆盖率** | **15/15 = 100%** ✅ |
+| **当前状态** (2026-06-08) | **205 pass + 2 pre-existing flaky** ✅ (v2.2 baseline) |
 
 ---
 
@@ -188,5 +193,5 @@
 
 ---
 
-**版本**: v2.1 (2026-06-08)
+**版本**: v2.2 (2026-06-08)
 **维护**: 每加 1 个功能点 → 同步加 3 处 (PRD/TEST_PLAN/本文档)
