@@ -55,6 +55,40 @@ interface D1PreparedStatementLike {
 }
 
 /**
+ * Stage 2 (NIGHTLY-TODO #009): write the audit row for a hard-delete.
+ * The snapshot is already in `deleted_records`; this row records the
+ * *act* of deletion (who did it, when, on which id) so we can show
+ * "PM X deleted event Y at Z" in audit views without joining the
+ * snapshot table.
+ *
+ * `recordType` is recorded in `details` (audit_log has no `target_type`
+ * column — it uses `target_event_id` / `target_user_id`). We also stuff
+ * the full original row into `details.original_data` so an auditor can
+ * see the snapshot even if the `deleted_records` row is later purged.
+ */
+export async function logHardDelete(
+  db: D1Database,
+  recordType: 'score_event' | 'task_completion',
+  originalId: number,
+  originalData: object,
+  deletedBy: number,
+): Promise<void> {
+  const originalTable =
+    recordType === 'score_event' ? 'score_events' : 'task_completions';
+  await logAudit(db, {
+    actor: 'pm',
+    action: 'event_hard_deleted',
+    target_event_id: originalId,
+    target_user_id: deletedBy,
+    details: {
+      record_type: recordType,
+      original_table: originalTable,
+      original_data: originalData,
+    },
+  });
+}
+
+/**
  * Read recent audit log entries. Newest first. Optional filters.
  */
 export interface AuditFilter {

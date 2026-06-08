@@ -62,3 +62,20 @@ export async function countPendingEvents(db: D1Database, userId: number): Promis
     .first<{ n: number }>();
   return Number(row?.n) || 0;
 }
+
+/**
+ * Stage 2 (NIGHTLY-TODO #009): recompute a child's balance after a
+ * hard-delete. Today this is just a thin wrapper around
+ * `computeBalance` because we don't cache balances (the canonical
+ * store is `score_events`, aggregated on read). Returns the new
+ * balance so the caller can put it in the HTTP response.
+ *
+ * If a balance cache is added later, the upsert call should live
+ * here — the endpoint shouldn't need to know.
+ */
+export async function recalcAfterHardDelete(
+  db: D1Database,
+  childId: number,
+): Promise<Balance> {
+  return computeBalance(db, childId);
+}

@@ -735,3 +735,61 @@ git log --oneline -5  # 看最新进度
 **Push 计划**: 用户拍板后 push 到 production (🔴 不可逆), URL `https://kiddo-scoreboard.cenfeihao.workers.dev`。
 
 ---
+
+## ✅ v2.2 — Admin Hard Delete (Item #009) — 2026-06-08
+
+**触发场景**: PM 软删 (撤销) 打卡后, 记录仍在 `task_completions` UNIQUE 约束里, 孩子当天**不能**再打卡。需要把记录**完全抹掉**让孩子能重新打卡 (用户原话: "删掉记录意味着允许再次打卡")。
+
+**新增能力**:
+- **物理删** `score_event` / `task_completion` 行 + INSERT `deleted_records` snapshot (含原数据 JSON, 不可恢复但可追溯)
+- **强制 audit_log**: 每次硬删写一条 `action='event_hard_deleted' | 'completion_hard_deleted'`, `details` 含 `deleted_record_id` + 原数据
+- **PM only + 二次确认弹窗**: 撤销按钮旁加 "🗑 永久删除" 按钮, 点击后 `confirm()` 弹窗
+- **灰显标记**: 列表里已硬删的记录以 `data-deleted="1"` 灰底 + "🚫 已删除 YYYY-MM-DD HH:MM by pm" 副标
+- **业务恢复**: 删后**允许**孩子再打卡 (源表无记录, UNIQUE / "今日已完成" 校验通过)
+
+**5 个 commit** (分支 `feat/hard-delete-event-and-completion`):
+- `5e4d5fa` feat(db): add deleted_records table for hard-delete snapshot
+- `b96a8be` feat(admin): score_event hard-delete with audit + deleted_records
+- `e03c474` feat(admin): task_completion hard-delete with audit
+- `7375a7d` feat(admin-ui): hard-delete button + grey marker + confirm dialog
+- (docs) `docs: PRD + TEST_PLAN + FEATURE_MATRIX + PROGRESS for admin hard-delete v2.2` (本 commit)
+
+**改的 15 个文件** (4 src + 1 migration + 1 html + 1 js + 3 utils + 1 types + 4 tests):
+- `migrations/0006_deleted_records.sql` (新表)
+- `src/db/types.ts` (类型 +1 行)
+- `src/utils/audit.ts` (`logHardDelete` helper)
+- `src/utils/balance.ts` (`recalcAfterHardDelete` helper)
+- `src/utils/deleted-records.ts` (`moveToDeletedRecords` helper, 新文件)
+- `src/routes/admin/events.ts` (`POST /:id/hard-delete`)
+- `src/routes/admin/task-completions.ts` (`POST /:id/hard-delete`)
+- `src/routes/admin/deleted-records.ts` (`GET /`, 新文件)
+- `src/routes/admin/index.ts` (新 route mount)
+- `public/admin/admin.js` (按钮 + confirm + 灰显渲染)
+- `public/admin/index.html` (删除按钮 DOM)
+- `tests/unit/deleted-records.test.ts` (snapshot 基础)
+- `tests/unit/admin-events-hard-delete.test.ts` (删成功 + PM 401)
+- `tests/unit/admin-task-completions-hard-delete.test.ts` (删成功 + 删后再打卡)
+- `tests/e2e/ui-admin-hard-delete.spec.ts` (3 cases: smoke + events + completions)
+
+**3 个新 endpoint**:
+- `POST /api/admin/events/:id/hard-delete` — PM 物理删 score_event
+- `POST /api/admin/task-completions/:id/hard-delete` — PM 物理删 task_completion
+- `GET /api/admin/deleted-records` — 列硬删 snapshot 列表 (审计追溯用)
+
+**1 个 migration**:
+- `migrations/0006_deleted_records.sql` — 新表 `deleted_records` (id, record_type, original_id, original_data JSON, original_table, deleted_at, deleted_by)
+
+**业务影响**:
+- PM 能**物理删**打卡记录, 绕过 UNIQUE / 每日 1 次约束, 让孩子能再次完成同一任务
+- 审计**有**记录 (`audit_log.action = 'event_hard_deleted' | 'completion_hard_deleted'`)
+- 数据**有**snapshot (`deleted_records.original_data` JSON, 含原始 change_value / reason / 时间戳)
+- 风险 🔴 高: 物理删不可逆, 但 PM 可通过 `GET /api/admin/deleted-records` + audit_log 找回所有硬删历史
+
+**测试状态** (v2.2 baseline):
+- ✅ **24 个 unit 文件 / 205 pass** (含 4 个新 hard-delete unit: `deleted-records` + `admin-events-hard-delete` + `admin-task-completions-hard-delete` 全部 green; **2 个 pre-existing flaky** 在 `me-tasks-complete.test.ts`, 跟 v2.2 无关, 单独 issue)
+- ✅ **48 个 e2e** (含 v2.2 新 `ui-admin-hard-delete.spec.ts` 3 cases: smoke + events happy + completions happy)
+- ✅ `npm run typecheck` 0 错
+
+**Push 计划**: docs commit 完 → push 分支 (SSH) → 用户用 GitHub 仓库网页 1-click "Compare & pull request" 打开 PR (无 GitHub token 自动化) → merge → GH Action 自动 backup + deploy 到生产。
+
+---

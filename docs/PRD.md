@@ -205,6 +205,26 @@ PM 发放周额度时选择"60 元 → 零花钱账户"或"30+30"或"全发游�
 - **双账户透支**: 兑换时允许负数（如 30 元 → 60 分钟游戏，零花钱变 -30 元），由 PM 自行判断合理性
 - **任务重复完成**: 儿子尝试完成已今天的任务 → API 返回 409 冲突
 
+#### 硬删 (Hard Delete)（v2.2 新增, Item #009）
+- **触发场景**: PM 软删（`status='revoked'`）某条打卡后, 记录仍在 `task_completions` UNIQUE 约束里, 孩子当天**不能**再打卡。需要把记录**完全抹掉**, 让孩子能重新打卡。
+- **范围**: 两条数据源都要支持硬删
+  - `score_events` (申请审批 + 任务完成产生的事件)
+  - `task_completions` (任务完成记录, 撤销后 `status='revoked'`)
+- **端点** (PM only, 二次确认弹窗):
+  - `POST /api/admin/events/:id/hard-delete`
+  - `POST /api/admin/task-completions/:id/hard-delete`
+  - `GET /api/admin/deleted-records` (列出已被硬删的快照, 灰显标记)
+- **服务端行为**:
+  1. 物理删原表行 (`DELETE FROM ... WHERE id = ?`)
+  2. INSERT 到 `deleted_records` 表 (`record_type`, `original_id`, `original_data JSON`, `original_table`, `deleted_at`, `deleted_by`)
+  3. 写 `audit_log`: `action='event_hard_deleted'` 或 `'completion_hard_deleted'`, `details` 含原数据 + deleted_records id
+  4. 余额自动重算 (下一次 `computeBalance` 排除已删行)
+- **客户端行为**:
+  - "撤销" 按钮旁加 "🗑 永久删除" 按钮, 点击后 `confirm()` 弹窗
+  - 已硬删的记录在列表里**灰显** + 标记 `(已删除 YYYY-MM-DD HH:MM by PM)`
+- **参考**: 删后**允许**孩子再打卡 (因为 `source` 表已无记录, UNIQUE / "今日已完成" 校验通过)
+- **风险**: 🔴 高 (物理删, 不可逆; 只能靠 `deleted_records` + `audit_log` 找回)
+
 ---
 
 ## 4. 计分维度

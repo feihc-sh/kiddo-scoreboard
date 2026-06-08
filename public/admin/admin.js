@@ -22,6 +22,10 @@ const state = {
   completions: [],       // TaskCompletionListItem[]
   completionDate: '',    // '' = today (server default)
   completionStatus: 'active',
+  // Stage 4 (NIGHTLY-TODO #009): hard-delete snapshot markers. Key is
+  // `${record_type}:${original_id}` so the same id space can carry both
+  // score_event and task_completion entries without collision.
+  deletedRecords: {},    // { 'score_event:42': { deleted_at, deleted_by, ... } }
 };
 
 // ---------- Toast ----------
@@ -126,6 +130,27 @@ async function loadCompletions() {
   const r = await api('GET', '/api/admin/task-completions?' + qs.toString());
   state.completions = r.completions;
 }
+async function loadDeletedRecords() {
+  // Best-effort: if the endpoint is missing or the call fails, we just
+  // render with no markers. The grey-out is a UX nicety, not a contract.
+  try {
+    const r = await api('GET', '/api/admin/deleted-records');
+    const map = {};
+    (r.records || []).forEach((d) => {
+      map[`${d.record_type}:${d.original_id}`] = d;
+    });
+    state.deletedRecords = map;
+  } catch (_) {
+    // swallow — keep whatever we had
+  }
+}
+function deletedMarker(recordType, originalId) {
+  const d = state.deletedRecords[`${recordType}:${originalId}`];
+  if (!d) return '';
+  // Use the PM user's name when available; fall back to a generic label.
+  const byName = state.user?.name || 'PM';
+  return ` <span class="pm-row-deleted-marker">🗑 删于 ${fmtTime(d.deleted_at)} by ${escapeHtml(byName)}</span>`;
+}
 
 async function refreshAll() {
   try {
@@ -136,6 +161,7 @@ async function refreshAll() {
       loadTasks(),
       loadAudit(),
       loadCompletions(),
+      loadDeletedRecords(),
     ]);
     renderAll();
   } catch (e) {
@@ -203,6 +229,7 @@ function renderAllEvents() {
   list.forEach((ev) => {
     const sign = ev.change_value > 0 ? '+' : '';
     const canRevoke = ev.status === 'approved' || ev.status === 'rejected';
+    const isDeleted = !!state.deletedRecords[`score_event:${ev.id}`];
     root.appendChild(rowEl(`
       <div class="pm-row-main">
         <div class="pm-row-title">
@@ -211,15 +238,16 @@ function renderAllEvents() {
         </div>
         <div class="pm-row-meta">
           ${escapeHtml(ev.reason)} · <span class="pm-mono">#${ev.id}</span>
-          · ${ev.source} · ${fmtTime(ev.created_at)}
+          · ${ev.source} · ${fmtTime(ev.created_at)}${deletedMarker('score_event', ev.id)}
         </div>
       </div>
       <div class="pm-row-actions">
         ${canRevoke
           ? `<button class="pm-btn warn" data-act="revoke" data-id="${ev.id}">撤销</button>`
           : ''}
+        <button class="pm-btn hard-delete" data-act="hard-delete-event" data-id="${ev.id}">🗑 永久删除</button>
       </div>
-    `));
+    `, isDeleted ? 'row-deleted' : ''));
   });
 }
 
@@ -321,6 +349,7 @@ function renderCompletions() {
     const tName = task ? task.name : `task #${c.task_id}`;
     const tIcon = task?.icon || '⭐';
     const isRevoked = c.status === 'revoked';
+    const isDeleted = !!state.deletedRecords[`task_completion:${c.id}`];
     root.appendChild(rowEl(`
       <div class="pm-row-main">
         <div class="pm-row-title">
@@ -331,22 +360,23 @@ function renderCompletions() {
         </div>
         <div class="pm-row-meta">
           ${c.completed_date} · ${fmtTime(c.completed_at)} ·
-          <span class="pm-mono">#${c.id}</span>
+          <span class="pm-mono">#${c.id}</span>${deletedMarker('task_completion', c.id)}
         </div>
       </div>
       <div class="pm-row-actions">
         ${!isRevoked
           ? `<button class="pm-btn warn" data-act="revoke-completion" data-id="${c.id}">撤销</button>`
           : ''}
+        <button class="pm-btn hard-delete" data-act="hard-delete-completion" data-id="${c.id}">🗑 永久删除</button>
       </div>
-    `));
+    `, isDeleted ? 'row-deleted' : ''));
   });
 }
 
 // ---------- DOM helper ----------
-function rowEl(html) {
+function rowEl(html, extraClass) {
   const div = document.createElement('div');
-  div.className = 'pm-row';
+  div.className = extraClass ? `pm-row ${extraClass}` : 'pm-row';
   div.innerHTML = html;
   return div;
 }
@@ -516,6 +546,58 @@ async function revokeCompletion(id) {
   }
 }
 
+// Stage 4 (NIGHTLY-TODO #009): hard-delete a score_event. The endpoint
+// moves the row to deleted_records and recomputes the user's balance.
+// On success we optimistically mark the event as deleted in local state
+// (so the row greys out for the current render) before re-loading.
+async function hardDeleteEvent(id) {
+  if (inFlight.has(id)) return;
+  if (!confirm(`此操作不可恢复, 确认删除? 事件 id=${id}`)) return;
+  inFlight.add(id);
+  try {
+    await api('POST', `/api/admin/events/${id}/hard-delete`);
+    // Optimistic: mark as deleted so the row shows 🗑 + grey this frame.
+    state.deletedRecords[`score_event:${id}`] = {
+      record_type: 'score_event',
+      original_id: id,
+      deleted_at: Math.floor(Date.now() / 1000),
+      deleted_by: state.user?.id ?? 0,
+    };
+    toast('已删除', 'success');
+    await Promise.all([loadAllEvents(), loadBalance(), loadAudit(), loadDeletedRecords()]);
+    renderAll();
+  } catch (e) {
+    if (e.message !== 'UNAUTHORIZED') toast('删除失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete(id);
+  }
+}
+
+// Stage 4 (NIGHTLY-TODO #009): hard-delete a task_completion. Same
+// pattern as the event variant; balance is unchanged because the
+// underlying score_event is left in place.
+async function hardDeleteCompletion(id) {
+  if (inFlight.has(id)) return;
+  if (!confirm(`此操作不可恢复, 确认删除? 完成记录 id=${id}`)) return;
+  inFlight.add(id);
+  try {
+    await api('POST', `/api/admin/task-completions/${id}/hard-delete`);
+    state.deletedRecords[`task_completion:${id}`] = {
+      record_type: 'task_completion',
+      original_id: id,
+      deleted_at: Math.floor(Date.now() / 1000),
+      deleted_by: state.user?.id ?? 0,
+    };
+    toast('已删除', 'success');
+    await Promise.all([loadCompletions(), loadAudit(), loadDeletedRecords()]);
+    renderAll();
+  } catch (e) {
+    if (e.message !== 'UNAUTHORIZED') toast('删除失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete(id);
+  }
+}
+
 async function doLogout() {
   try { await api('POST', '/api/admin/auth/logout'); } catch (_) {}
   window.location.href = '/admin/login';
@@ -534,6 +616,8 @@ function bindDelegatedActions() {
     if (act === 'edit-task')    return startEditTask(id);
     if (act === 'delete-task')  return deleteTask(id);
     if (act === 'revoke-completion') return revokeCompletion(id);
+    if (act === 'hard-delete-event') return hardDeleteEvent(id);
+    if (act === 'hard-delete-completion') return hardDeleteCompletion(id);
   });
 }
 
