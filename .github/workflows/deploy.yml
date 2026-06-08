@@ -86,9 +86,18 @@ jobs:
       - name: Smoke test endpoints
         env:
           DEPLOY_URL: https://kiddo-scoreboard.pages.dev
+          # /api/public/* endpoints require user_id (or child_id) query param.
+          # PM user_id=1, child user_id=2 (set by init-prod SQL).
+          PM_USER_ID: 1
+          CHILD_USER_ID: 2
         run: |
           echo "🔍 Smoke testing endpoints..."
-          for path in "/" "/health" "/api/public/events" "/api/public/balance" "/api/public/tasks/progress"; do
+          for path in \
+            "/" \
+            "/health" \
+            "/api/public/events?user_id=${PM_USER_ID}" \
+            "/api/public/balance?user_id=${PM_USER_ID}" \
+            "/api/public/tasks/progress?user_id=${CHILD_USER_ID}"; do
             code=$(curl -s -o /dev/null -w "%{http_code}" "${DEPLOY_URL}${path}")
             echo "  ${path} -> ${code}"
             if [ "$code" != "200" ]; then
