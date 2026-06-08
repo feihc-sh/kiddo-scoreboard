@@ -3,16 +3,24 @@ name: Deploy to Cloudflare Pages + Auto-Backup
 on:
   push:
     branches: [main]
+    # INCIDENTS.md 是失败记录, push 它不能又触发一次 action (否则循环)
+    paths-ignore:
+      - 'docs/INCIDENTS.md'
   workflow_dispatch:
     inputs:
       skip_backup:
-        description: 'Skip pre-deploy backup'
+        description: 'Skip pre-deploy backup (manual override only)'
         type: boolean
         default: false
 
+# 防止并发 deploy 撞车
 concurrency:
   group: pages-deploy
   cancel-in-progress: false
+
+# 允许 GH bot commit + push (写 INCIDENTS.md 用)
+permissions:
+  contents: write
 
 jobs:
   pre-deploy-backup:
@@ -44,26 +52,9 @@ jobs:
           path: remote-backup/
           retention-days: 30
 
-      - name: Notify PM on backup failure (Feishu)
+      - name: ❌ Record backup failure to docs/INCIDENTS.md
         if: failure()
-        env:
-          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
-        run: |
-          echo "❌ PRE-DEPLOY BACKUP FAILED - DEPLOY MUST NOT PROCEED"
-          if [ -z "$FEISHU_WEBHOOK_URL" ]; then
-            echo "⚠️ FEISHU_WEBHOOK_URL secret not set, skipping Feishu notify"
-            echo "::error::D1 backup failed. Deploy aborted."
-            exit 1
-          fi
-          cat > /tmp/notify_feishu.py << 'PYEOF'
-          import json, urllib.request, os
-          msg = "🚨 kiddo-scoreboard pre-deploy backup 失败!\n\nCommit: " + os.environ["GITHUB_SHA"] + "\nActor: " + os.environ["GITHUB_ACTOR"] + "\nRun: " + os.environ["GITHUB_RUN_ID"] + "\n\nDeploy 已阻断, 请检查 wrangler auth + D1 binding."
-          payload = json.dumps({"msg_type": "text", "content": {"text": msg}}).encode("utf-8")
-          req = urllib.request.Request(os.environ["FEISHU_WEBHOOK_URL"], data=payload, headers={"Content-Type": "application/json"})
-          urllib.request.urlopen(req).read()
-          print("✅ Feishu notification sent")
-          PYEOF
-          python3 /tmp/notify_feishu.py
+        run: python3 .github/scripts/record_incident.py backup
 
   deploy:
     name: "🚀 Deploy to Cloudflare Pages"
@@ -103,7 +94,6 @@ jobs:
           done
           echo "✅ All 5 endpoints returned 200"
 
-      - name: Notify PM on deploy failure
+      - name: ❌ Record deploy failure to docs/INCIDENTS.md
         if: failure()
-        run: |
-          echo "::error::Deploy or smoke test failed. Roll back to last known good deploy via Cloudflare dashboard."
+        run: python3 .github/scripts/record_incident.py deploy
