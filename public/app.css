@@ -261,7 +261,7 @@ body {
  * ========================================================================== */
 .balance-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 16px;
   margin: 20px 0 0;
 }
@@ -300,6 +300,33 @@ body {
     var(--seam) 41px
   );
   pointer-events: none;
+}
+
+/* Placeholder card (积分系统 — coming soon) */
+.balance-card.placeholder {
+  border: 1px dashed var(--metal-mid);
+  background: var(--bg-plate);
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.balance-card.placeholder::before { display: none; }
+.balance-card.placeholder::after { display: none; }
+.balance-card.placeholder .balance-icon { color: var(--text-muted); }
+.balance-card.placeholder .balance-label { color: var(--text-muted); }
+.balance-card.placeholder .balance-value.placeholder-text {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 400;
+  text-shadow: none;
+}
+.balance-card.placeholder:hover {
+  transform: none;
+  border-color: var(--metal-mid);
+  box-shadow: var(--shadow-panel);
 }
 
 /* Game Time card — cyan system */
@@ -703,10 +730,10 @@ body {
   background: var(--bg-plate);
   border: 1px solid var(--metal-dark);
   border-radius: var(--radius-sm);
-  padding: 14px 16px;
+  padding: 8px 12px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   box-shadow: var(--shadow-panel);
   position: relative;
   overflow: hidden;
@@ -756,14 +783,14 @@ body {
 .event-body { flex: 1; min-width: 0; }
 .event-reason {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 13px;
   margin-bottom: 3px;
   word-break: break-word;
   color: var(--text-primary);
 }
 .event-meta {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
   display: flex;
   gap: 6px;
@@ -773,7 +800,7 @@ body {
 }
 .event-value {
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
   flex-shrink: 0;
   letter-spacing: -0.01em;
