@@ -4,7 +4,7 @@
 > 给 agent / 用户看: **每个功能点有没有测, 测了什么, 还有什么 gap。**
 
 **最后更新**: 2026-06-09
-**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 49 e2e = **73 测试文件** (+ 1 regression spec 2026-06-09, see QUAL_REPORT_2026-06-09)
+**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 50 e2e = **74 测试文件** (+ 2 regression spec 2026-06-09, see QUAL_REPORT_2026-06-09 / QUAL_REPORT_2026-06-09-child-submit)
 
 ---
 
@@ -56,7 +56,7 @@
 | **3.9** | Child First-time Flow | ✓ | ✓ | — | `smoke-child-firsttime.spec.ts` `ui-child-firsttime.spec.ts` |
 | **3.10** | Child Main Page | ✓ | ✓ | — | `smoke-child-main.spec.ts` `ui-child-main.spec.ts` `child-ui.spec.ts` `ui-child-progress-bars.spec.ts` |
 | **3.11** | Child Task Complete | ✓ | ✓ | — | `smoke-child-task-complete.spec.ts` `ui-child-task-complete.spec.ts` |
-| **3.12** | Child Event Submit | ✓ | ✓ | ✓ | `smoke-child-submit.spec.ts` `ui-child-submit-happy.spec.ts` `ui-child-submit-edge.spec.ts` |
+| **3.12** | Child Event Submit | ✓ | ✓ | ✓ | `smoke-child-submit.spec.ts` `ui-child-submit-happy.spec.ts` `ui-child-submit-edge.spec.ts` `ui-child-submit-random.spec.ts` (regression: random fill + double-click race, see QUAL_REPORT_2026-06-09-child-submit) |
 | **3.13** | Child Recent Events | ✓ | — | — | `ui-child-events.spec.ts` `smoke-child-recent.spec.ts` |
 | **3.14** | Child Sleep Lockout (v2.1) | ✓ | ✓ | ✓ | `sleep-lockout.spec.ts` `ui-child-main.spec.ts` (含 cutoff 行为) |
 | **3.15** | Admin Hard Delete (v2.2) | ✓ | ✓ | ✓ | `ui-admin-hard-delete.spec.ts` (smoke + 2 happy) |
@@ -77,6 +77,7 @@
 | **F: Weekly Payout Flow** | `flow-weekly-payout.spec.ts` | 5.8 周发工资 | 周额度机制 |
 | **G: Admin Hard Delete Flow** (v2.2) | `ui-admin-hard-delete.spec.ts` | 3.15 (删 → 灰显 → 再打卡) | 物理删 + 审计 + 业务恢复 |
 | **H: PM Task Edit Prefill** (v2.3, 2026-06-09 regression) | `ui-admin-tasks-edit-prefill.spec.ts` | 3.5 (编辑 → 8 字段回填) | 防止 v2.1 cutoff/self_lockout 字段在编辑时被清空 (QUAL_REPORT_2026-06-09) |
+| **I: Child Submit Log Integrity** (v2.3, 2026-06-09 regression) | `ui-child-submit-random.spec.ts` | 3.12 (随机填表 + double-click race) | 防止子端 submit 无 inFlight 防抖导致双击/快速点击产生"幽灵 event" (QUAL_REPORT_2026-06-09-child-submit) |
 
 **跨流程覆盖率**: 7/7 = **100%** ✅ (每流程 1 spec, walk 完整)
 
@@ -129,7 +130,7 @@
 |---|---:|---|
 | Smoke (页面 + 关键元素) | 18 | `smoke-*.spec.ts` |
 | UI Admin | 11 | `ui-admin-*.spec.ts` (含 v2.2 `ui-admin-hard-delete.spec.ts` + v2.3 `ui-admin-tasks-edit-prefill.spec.ts`) |
-| UI Child | 7 | `ui-child-*.spec.ts` |
+| UI Child | 8 | `ui-child-*.spec.ts` (含 v2.3 `ui-child-submit-random.spec.ts`) |
 | Flow (跨功能) | 6 | `flow-*.spec.ts` |
 | Misc / 边界 | 7 | `admin-*.spec.ts` `event-approval.spec.ts` `task-system.spec.ts` `public-api.spec.ts` `hello.spec.ts` `ui-task-and-segbtn.spec.ts` `child-ui.spec.ts` `admin-extras.spec.ts` `exchange-grant.spec.ts` `admin-dashboard.spec.ts` |
 | v2.1 专测 | 1 | `sleep-lockout.spec.ts` |
@@ -148,9 +149,10 @@
 | emoji 选择器 20 类的全分类覆盖 | 低 (只测了核心 5 个) | 加 1 个 e2e, 遍历 4 类 |
 | **.env 路径/Home 重定向 cron bug** | 中 (已发现, PM 修复) | 加 1 个 shell 集成测试 |
 | **PM Task Edit 不回填 v2.1 字段** (2026-06-09) | **中 (P1)** — PM 编辑 sleep task 时丢 cutoff/lockout 设置 | ✅ **已加 regression spec `ui-admin-tasks-edit-prefill.spec.ts`** (RED, 待 PM 修) |
+| **Child Submit 无 inFlight 防双击** (2026-06-09) | **中 (P1)** — 小朋友双击/快速点击产生 2 条"幽灵 event", 污染 log + PM 待审 | ✅ **已加 regression spec `ui-child-submit-random.spec.ts`** (RED, 待 PM 修) |
 | **数据导入/导出** | 无 (v2 不做) | PRD §9.5 标注 skip |
 
-| **总 gap** | 8 项, 5 项可 skip, 2 项已加 (PM Task Edit Prefill regression 2026-06-09), 1 项建议加 (并发 emoji) |
+| **总 gap** | 8 项, 5 项可 skip, 3 项已加 (PM Task Edit Prefill + Child Submit Race regression 2026-06-09), 0 项建议加 (并发 emoji 已转 regression) |
 
 ---
 
@@ -164,11 +166,11 @@
 | 跨功能流程 (TEST_PLAN §跨) | 7 |
 | 业务侧功能点总数 (去重) | **15** |
 | unit 测试文件 | 24 |
-| e2e spec 文件 | 49 |
-| **测试文件总数** | **73** |
-| 测试用例 (估算) | ~212+ |
+| e2e spec 文件 | 50 |
+| **测试文件总数** | **74** |
+| 测试用例 (估算) | ~215+ |
 | **覆盖率** | **15/15 = 100%** ✅ |
-| **当前状态** (2026-06-09) | **205 pass + 2 pre-existing flaky + 1 NEW regression fail (待 PM 修 startEditTask)** ⚠️ |
+| **当前状态** (2026-06-09) | **205 pass + 2 pre-existing flaky + 2 NEW regression RED (admin edit prefill + child submit race, 待 PM 修)** ⚠️ |
 
 ---
 
