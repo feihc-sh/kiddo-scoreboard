@@ -3,8 +3,9 @@
 > 一张大表看清"业务规则 / UI 功能 / 测试覆盖"三件套。
 > 给 agent / 用户看: **每个功能点有没有测, 测了什么, 还有什么 gap。**
 
-**最后更新**: 2026-06-08
-**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 48 e2e = **73 测试文件**
+**最后更新**: 2026-06-09
+**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 49 e2e = **73 测试文件** (v2.2 baseline + 1 new P0 regression)
+**最新 Qual 报告**: `QUAL_REPORT_2026-06-09-p0-admin-hard-delete-fk.md` (P0 永久删除 FK 约束)
 
 ---
 
@@ -17,10 +18,11 @@
 | **3.3** | 奖励机制 (周额度发工资) | `routes/admin/weekly-grant.ts` | 3.8 | `admin-weekly-grant.test.ts` | `flow-weekly-payout.spec.ts` `ui-admin-grant.spec.ts` | ✅ 100% |
 | **3.4** | 任务系统 (CRUD + 完成 + 撤销) | `routes/admin/tasks.ts` + `routes/me/tasks.ts` | 3.5, 3.11 | `admin-tasks-config.test.ts` `me-tasks-complete.test.ts` `public-tasks.test.ts` | `ui-admin-tasks.spec.ts` `ui-child-task-complete.spec.ts` `ui-admin-emoji-picker.spec.ts` `flow-task-lifecycle.spec.ts` | ✅ 100% |
 | **3.12** | 准时上床 (self-lockout 任务类型, v2.1) | `tasks.cutoff_time` + `tasks.is_self_lockout` | 3.14 | (覆盖在 me-tasks-complete.test.ts) | `sleep-lockout.spec.ts` `ui-child-main.spec.ts` | ✅ 100% |
-| **3.5** | 边界 case (软删/审计/锁 + **硬删 v2.2**) | `utils/audit.ts` + `auth/lockout.ts` + `utils/deleted-records.ts` + `routes/admin/events.ts` + `routes/admin/task-completions.ts` + `routes/admin/deleted-records.ts` | 3.1, 3.6, **3.15** | `lockout.test.ts` `audit.test.ts` `deleted-records.test.ts` `admin-events-hard-delete.test.ts` `admin-task-completions-hard-delete.test.ts` | `flow-pm-lockout.spec.ts` `smoke-admin-audit.spec.ts` **`ui-admin-hard-delete.spec.ts`** | ✅ 100% |
+| **3.5** | 边界 case (软删/审计/锁 + **硬删 v2.2**) | `utils/audit.ts` + `auth/lockout.ts` + `utils/deleted-records.ts` + `routes/admin/events.ts` + `routes/admin/task-completions.ts` + `routes/admin/deleted-records.ts` | 3.1, 3.6, **3.15** | `lockout.test.ts` `audit.test.ts` `deleted-records.test.ts` `admin-events-hard-delete.test.ts` `admin-task-completions-hard-delete.test.ts` | `flow-pm-lockout.spec.ts` `smoke-admin-audit.spec.ts` **`ui-admin-hard-delete.spec.ts`** **`ui-admin-hard-delete-fk.spec.ts`** ⚠️ NEW (P0, FK 约束, 2026-06-09) | ⚠️ 95% — FK 路径未覆盖 (新 spec RED 待 PM 修) |
 
-**业务规则侧覆盖率**: **6/6 = 100%** ✅
+| **业务规则侧覆盖率**: **6/6 = 100%** ✅ (业务侧 OK; 已知 1 P0 bug: 硬删 FK 路径, 新 spec RED)
 **gap (已补)**: PRD 3.5 新增硬删 (v2.2) — 物理删 event/completion + `deleted_records` snapshot + audit log, 全部由 §3.15 e2e + 2 unit spec 覆盖。
+**gap (待补)**: PRD 3.5 硬删 FK 路径 — `task_completions.awarded_event_id → score_events.id` 的 FK 约束导致硬删 event 失败 (500)。新增 `ui-admin-hard-delete-fk.spec.ts` (3 case, 1 通过/2 RED) 等 PM 修。
 
 ---
 
