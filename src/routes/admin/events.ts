@@ -203,6 +203,16 @@ events.post('/:id/revoke', async (c) => {
   const now = Math.floor(Date.now() / 1000);
 
   await db.batch([
+    // §5 mirror inverse: revoke of a task-sourced event must also revoke
+    // the referencing task_completion, otherwise child UI's today-status
+    // query (which keys on task_completions.status) stays stale.
+    db
+      .prepare(
+        `UPDATE task_completions
+         SET status = 'revoked', revoked_at = ?, revoked_by = ?
+         WHERE awarded_event_id = ?`,
+      )
+      .bind(now, pmUserId, id),
     db
       .prepare(
         `UPDATE score_events
