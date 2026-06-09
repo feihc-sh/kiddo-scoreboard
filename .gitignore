@@ -27,6 +27,9 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# Local D1 backups (PII risk + binary noise — never commit)
+remote-backup/
+
 # Claude Code agent settings (local-only, not part of repo)
 .claude/
 
