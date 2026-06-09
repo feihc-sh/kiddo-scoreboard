@@ -29,7 +29,20 @@ export async function moveToDeletedRecords(
   deletedBy: number,
 ): Promise<void> {
   const deletedAt = Math.floor(Date.now() / 1000);
-  await db.batch([
+  const stmts: ReturnType<D1Database['prepare']>[] = [];
+  // P0 bug #24: hard-delete of a score_event fails with FK violation when
+  // task_completions.awarded_event_id points at it. NULL out the FK first
+  // so the DELETE can succeed (completion row preserved for audit).
+  if (originalTable === 'score_events') {
+    stmts.push(
+      db
+        .prepare(
+          `UPDATE task_completions SET awarded_event_id = NULL WHERE awarded_event_id = ?`,
+        )
+        .bind(originalId),
+    );
+  }
+  stmts.push(
     db
       .prepare(
         `INSERT INTO deleted_records
@@ -47,5 +60,6 @@ export async function moveToDeletedRecords(
     db
       .prepare(`DELETE FROM ${originalTable} WHERE id = ?`)
       .bind(originalId),
-  ]);
+  );
+  await db.batch(stmts);
 }
