@@ -3,8 +3,8 @@
 > 一张大表看清"业务规则 / UI 功能 / 测试覆盖"三件套。
 > 给 agent / 用户看: **每个功能点有没有测, 测了什么, 还有什么 gap。**
 
-**最后更新**: 2026-06-08
-**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 48 e2e = **73 测试文件**
+**最后更新**: 2026-06-09
+**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 49 e2e = **73 测试文件** (+ 1 regression spec 2026-06-09, see QUAL_REPORT_2026-06-09)
 
 ---
 
@@ -49,7 +49,7 @@
 | **3.2** | PM Dashboard Shell | ✓ | — | — | `smoke-admin-shell.spec.ts` `smoke-admin-dashboard.spec.ts` `ui-admin-dashboard-shell.spec.ts` `admin-dashboard.spec.ts` |
 | **3.3** | PM Pending Events | ✓ | ✓ | ✓ | `smoke-admin-pending.spec.ts` `ui-admin-pending.spec.ts` `event-approval.spec.ts` |
 | **3.4** | PM All Events | ✓ | ✓ | — | `smoke-admin-all-events.spec.ts` `ui-admin-all-events.spec.ts` `admin-extras.spec.ts` |
-| **3.5** | PM Task Config (CRUD) | ✓ | ✓ | ✓ | `smoke-admin-tasks.spec.ts` `ui-admin-tasks.spec.ts` `ui-admin-emoji-picker.spec.ts` `task-system.spec.ts` |
+| **3.5** | PM Task Config (CRUD) | ✓ | ✓ | ✓ | `smoke-admin-tasks.spec.ts` `ui-admin-tasks.spec.ts` `ui-admin-emoji-picker.spec.ts` `ui-admin-tasks-edit-prefill.spec.ts` (regression: v2.1 fields prefill, see QUAL_REPORT_2026-06-09) `task-system.spec.ts` |
 | **3.6** | PM Audit Log | ✓ | ✓ | — | `smoke-admin-audit.spec.ts` `ui-admin-audit.spec.ts` |
 | **3.7** | PM Exchange | ✓ | ✓ | ✓ | `smoke-admin-exchange-grant.spec.ts` `ui-admin-exchange.spec.ts` `exchange-grant.spec.ts` |
 | **3.8** | PM Weekly Grant | ✓ | ✓ | — | `ui-admin-grant.spec.ts` `flow-weekly-payout.spec.ts` |
@@ -76,6 +76,7 @@
 | **E: Exchange Flow** | `flow-exchange.spec.ts` | 5.7 双账户兑换 | 余额正确性 |
 | **F: Weekly Payout Flow** | `flow-weekly-payout.spec.ts` | 5.8 周发工资 | 周额度机制 |
 | **G: Admin Hard Delete Flow** (v2.2) | `ui-admin-hard-delete.spec.ts` | 3.15 (删 → 灰显 → 再打卡) | 物理删 + 审计 + 业务恢复 |
+| **H: PM Task Edit Prefill** (v2.3, 2026-06-09 regression) | `ui-admin-tasks-edit-prefill.spec.ts` | 3.5 (编辑 → 8 字段回填) | 防止 v2.1 cutoff/self_lockout 字段在编辑时被清空 (QUAL_REPORT_2026-06-09) |
 
 **跨流程覆盖率**: 7/7 = **100%** ✅ (每流程 1 spec, walk 完整)
 
@@ -127,7 +128,7 @@
 | 类别 | 数量 | spec 文件 |
 |---|---:|---|
 | Smoke (页面 + 关键元素) | 18 | `smoke-*.spec.ts` |
-| UI Admin | 10 | `ui-admin-*.spec.ts` (含 v2.2 `ui-admin-hard-delete.spec.ts`) |
+| UI Admin | 11 | `ui-admin-*.spec.ts` (含 v2.2 `ui-admin-hard-delete.spec.ts` + v2.3 `ui-admin-tasks-edit-prefill.spec.ts`) |
 | UI Child | 7 | `ui-child-*.spec.ts` |
 | Flow (跨功能) | 6 | `flow-*.spec.ts` |
 | Misc / 边界 | 7 | `admin-*.spec.ts` `event-approval.spec.ts` `task-system.spec.ts` `public-api.spec.ts` `hello.spec.ts` `ui-task-and-segbtn.spec.ts` `child-ui.spec.ts` `admin-extras.spec.ts` `exchange-grant.spec.ts` `admin-dashboard.spec.ts` |
@@ -144,11 +145,12 @@
 | **DST/夏令时边界** (PRD 3.5) | 中 (中国无 DST, 实际不会触发) | 跳过 (无业务影响) |
 | **同一 task 2 个儿子同时完成** (并发) | 中 (家庭用户, 实际不会) | 加 1 个 unit (锁) |
 | **D1 写入失败回滚** | 低 (CF 99.9% SLA) | 跳过 (D1 内部已处理) |
-| **emoji 选择器 20 类的全分类覆盖** | 低 (只测了核心 5 个) | 加 1 个 e2e, 遍历 4 类 |
+| emoji 选择器 20 类的全分类覆盖 | 低 (只测了核心 5 个) | 加 1 个 e2e, 遍历 4 类 |
 | **.env 路径/Home 重定向 cron bug** | 中 (已发现, PM 修复) | 加 1 个 shell 集成测试 |
+| **PM Task Edit 不回填 v2.1 字段** (2026-06-09) | **中 (P1)** — PM 编辑 sleep task 时丢 cutoff/lockout 设置 | ✅ **已加 regression spec `ui-admin-tasks-edit-prefill.spec.ts`** (RED, 待 PM 修) |
 | **数据导入/导出** | 无 (v2 不做) | PRD §9.5 标注 skip |
 
-**总 gap**: 7 项, 5 项可 skip, 2 项建议加 (并发 emoji)
+| **总 gap** | 8 项, 5 项可 skip, 2 项已加 (PM Task Edit Prefill regression 2026-06-09), 1 项建议加 (并发 emoji) |
 
 ---
 
@@ -162,11 +164,11 @@
 | 跨功能流程 (TEST_PLAN §跨) | 7 |
 | 业务侧功能点总数 (去重) | **15** |
 | unit 测试文件 | 24 |
-| e2e spec 文件 | 48 |
-| **测试文件总数** | **72** |
-| 测试用例 (估算) | ~210+ |
+| e2e spec 文件 | 49 |
+| **测试文件总数** | **73** |
+| 测试用例 (估算) | ~212+ |
 | **覆盖率** | **15/15 = 100%** ✅ |
-| **当前状态** (2026-06-08) | **205 pass + 2 pre-existing flaky** ✅ (v2.2 baseline) |
+| **当前状态** (2026-06-09) | **205 pass + 2 pre-existing flaky + 1 NEW regression fail (待 PM 修 startEditTask)** ⚠️ |
 
 ---
 
