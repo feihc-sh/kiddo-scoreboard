@@ -53,7 +53,7 @@ test.describe('P0 REGRESSION: admin revoke event must sync to child UI (2026-06-
   // CASE 1: UI click — exact user flow that surfaced the bug
   // ─────────────────────────────────────────────────────────────────────────
 
-  test('CASE 1: PM clicks 撤销 on a task-sourced event → child UI must show it as undone', async ({ page }) => {
+  test('CASE 1: PM clicks 撤销 on a task-sourced event → child UI must show it as undone', async ({ page, context }) => {
     // Seed: child has a completed task whose completion references this event.
     const evId = seedEvent({
       type: 'pocket_money',
@@ -68,7 +68,9 @@ test.describe('P0 REGRESSION: admin revoke event must sync to child UI (2026-06-
               VALUES (1, 'Brush teeth', 5, 'pocket_money', '🪥', 'habit', 0, 1, unixepoch(), unixepoch());`);
     }
     const now = Math.floor(Date.now() / 1000);
-    const today = new Date(now * 1000).toISOString().slice(0, 10);
+    // §X SH date: match todayShanghai() in src/utils/week.ts (UTC + 8h offset)
+    // Without this, +08 tz machines get date mismatch vs production endpoint.
+    const today = new Date(now * 1000 + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
     d1Exec(
       `INSERT INTO task_completions (task_id, user_id, status, completed_date, completed_at, awarded_event_id)
        VALUES (1, 2, 'active', '${today}', ${now}, ${evId});`,
@@ -117,7 +119,9 @@ test.describe('P0 REGRESSION: admin revoke event must sync to child UI (2026-06-
   test('CASE 2: POST /api/admin/events/:id/revoke must propagate to child today-status', async ({ page }) => {
     const evId = seedEvent({ type: 'pocket_money', change_value: 5, status: 'approved', reason: 'task reward' });
     const now = Math.floor(Date.now() / 1000);
-    const today = new Date(now * 1000).toISOString().slice(0, 10);
+    // §X SH date: match todayShanghai() in src/utils/week.ts (UTC + 8h offset)
+    // Without this, +08 tz machines get date mismatch vs production endpoint.
+    const today = new Date(now * 1000 + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
     d1Exec(
       `INSERT INTO task_completions (task_id, user_id, status, completed_date, completed_at, awarded_event_id)
        VALUES (1, 2, 'active', '${today}', ${now}, ${evId});`,
@@ -145,7 +149,9 @@ test.describe('P0 REGRESSION: admin revoke event must sync to child UI (2026-06-
   test('CASE 3: completion-level revoke still propagates (regression guard)', async ({ page }) => {
     const evId = seedEvent({ type: 'pocket_money', change_value: 5, status: 'approved', reason: 'task reward' });
     const now = Math.floor(Date.now() / 1000);
-    const today = new Date(now * 1000).toISOString().slice(0, 10);
+    // §X SH date: match todayShanghai() in src/utils/week.ts (UTC + 8h offset)
+    // Without this, +08 tz machines get date mismatch vs production endpoint.
+    const today = new Date(now * 1000 + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
     d1Exec(
       `INSERT INTO task_completions (task_id, user_id, status, completed_date, completed_at, awarded_event_id)
        VALUES (1, 2, 'active', '${today}', ${now}, ${evId});`,
