@@ -92,7 +92,7 @@ async function refreshAll() {
     await Promise.all([loadBalance(), loadTasks(), loadEvents(), loadProgress()]);
     renderAll();
   } catch (e) {
-    showError('加载失败：' + e.message, refreshAll);
+    showError('系统错误：' + e.message, refreshAll);
   }
 }
 
@@ -106,7 +106,7 @@ function renderAll() {
 }
 function renderGreeting() {
   const u = state.user;
-  const greet = u && u.name ? `你好，${u.name}！👋` : '你好！👋';
+  const greet = u && u.name ? `驾驶员 ${u.name}，系统就绪` : '驾驶员，系统启动中';
   $('#hero-greeting').textContent = greet;
 }
 function renderBalance() {
@@ -144,7 +144,7 @@ function renderTasks() {
   const root = $('#task-shortcuts');
   root.innerHTML = '';
   if (state.tasks.length === 0) {
-    root.innerHTML = '<div class="empty"><div class="empty-icon">🎯</div><div>家长还没设置任务～</div></div>';
+    root.innerHTML = '<div class="empty"><div class="empty-icon">📡</div><div>等待任务指令…</div></div>';
     return;
   }
   state.tasks.forEach((t) => {
@@ -164,14 +164,14 @@ function renderTasks() {
       btn.innerHTML = `
         <span class="task-icon">${t.icon || '⭐'}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
-        <span class="task-done-badge">明天再来 🌙</span>
+        <span class="task-done-badge">系统休眠中</span>
       `;
     } else if (done) {
       btn.innerHTML = `
         <span class="task-icon">${t.icon || '⭐'}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
-        <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '🎮' : '💰'}</span>
-        <span class="task-done-badge">✅ 今日已完成 (点击撤销)</span>
+        <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '⚡' : '⚙️'}</span>
+        <span class="task-done-badge">✓ 任务完成</span>
       `;
     } else if (isSleepLocked) {
       // Initial render: compute diff once. setInterval(updateCountdowns) keeps it fresh.
@@ -188,7 +188,7 @@ function renderTasks() {
         btn.innerHTML = `
           <span class="task-icon">${t.icon || '⭐'}</span>
           <span class="task-name">${escapeHtml(t.name)}</span>
-          <span class="task-cutoff-label">·  距离 ${t.cutoff_time} 还剩</span>
+          <span class="task-cutoff-label">· 距离时限还剩</span>
           <span class="task-countdown-text" data-cutoff="${t.cutoff_time}">${formatHHMMSS(diff)}</span>
         `;
       }
@@ -196,7 +196,7 @@ function renderTasks() {
       btn.innerHTML = `
         <span class="task-icon">${t.icon || '⭐'}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
-        <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '🎮' : '💰'}</span>
+        <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '⚡' : '⚙️'}</span>
       `;
     }
     if (revoked) {
@@ -254,7 +254,7 @@ function updateCountdowns() {
       fresh.innerHTML = `
         <span class="task-icon">${btn.querySelector('.task-icon')?.textContent || '⭐'}</span>
         <span class="task-name">${btn.querySelector('.task-name')?.textContent || ''}</span>
-        <span class="task-done-badge">已过打卡时间 ${cutoff} (明天再来)</span>
+          <span class="task-done-badge">超出时限 · 明日再来</span>
       `;
       btn.replaceWith(fresh);
     } else {
@@ -276,7 +276,7 @@ function renderEvents() {
     const el = document.createElement('div');
     el.className = 'event-item event-status-' + ev.status;
     const sign = ev.change_value > 0 ? '+' : '';
-    const icon = ev.type === 'game_time' ? '🎮' : '💰';
+    const icon = ev.type === 'game_time' ? '⚡' : '⚙️';
     const unit = ev.type === 'game_time' ? '分钟' : '元';
     el.innerHTML = `
       <span class="event-icon">${icon}</span>
@@ -290,7 +290,7 @@ function renderEvents() {
   });
 }
 function statusLabel(s) {
-  return ({ pending: '⏳ 待审', approved: '✅ 已通过', rejected: '❌ 已拒', revoked: '↩️ 已撤销' })[s] || s;
+  return ({ pending: '◷ 待确认', approved: '✓ 已通过', rejected: '✕ 已拒绝', revoked: '↩ 已回收' })[s] || s;
 }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -304,7 +304,7 @@ async function completeTask(taskId) {
     state.balance = r.new_balance;
     renderBalance();
     renderTasks();
-    toast(`+${r.token_awarded} ${r.target_account === 'game_time' ? '🎮' : '💰'}`, 'success');
+    toast(`+${r.token_awarded} ${r.target_account === 'game_time' ? '⚡' : '⚙️'} 能量到账`, 'success');
     // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
     loadProgress().then(() => {
@@ -315,7 +315,7 @@ async function completeTask(taskId) {
           && !hasFiredConfettiToday()) {
         fireConfetti();
         markConfettiFiredToday();
-        toast('🎉 Combo! 今日全完成!', 'success');
+        toast('⚡ 今日任务全部完成！', 'success');
       }
     }).catch(() => {});
   } catch (e) {
@@ -323,14 +323,14 @@ async function completeTask(taskId) {
       state.completedTaskIds.add(taskId);
       renderTasks();
     }
-    toast('操作失败：' + e.message, 'error');
+    toast('系统报错：' + e.message, 'error');
   }
 }
 
 // §3.11 toggle: confirm dialog before revoke.
 function tryUncompleteTask(task) {
   const ok = window.confirm(
-    `确定要取消今天的「${task.name}」吗？\n你今天不能再点完成了。`,
+    `确认取消「${task.name}」？\n本日无法再次执行该任务。`,
   );
   if (!ok) return;
   uncompleteTask(task.id);
@@ -344,7 +344,7 @@ async function uncompleteTask(taskId) {
     state.balance = r.new_balance;
     renderBalance();
     renderTasks();
-    toast(`-${r.token_revoked} ${r.target_account === 'game_time' ? '🎮' : '💰'} 已撤销`, 'success');
+    toast(`-${r.token_revoked} ${r.target_account === 'game_time' ? '⚡' : '⚙️'} 已回收`, 'success');
     // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
     loadProgress().then(renderProgress).catch(() => {});  // §5.2 fix: revoke must refresh progress
@@ -359,7 +359,7 @@ async function uncompleteTask(taskId) {
       state.completedTaskIds.delete(taskId);
       renderTasks();
     }
-    toast('操作失败：' + e.message, 'error');
+    toast('系统报错：' + e.message, 'error');
   }
 }
 
@@ -372,11 +372,11 @@ async function submitEvent(form) {
   try {
     await api('POST', '/api/me/events', { type, change_value, reason });
     closeSubmitModal();
-    toast('已提交，等家长审核～', 'success');
+    toast('申请已发送，等待指令确认…', 'success');
     // refresh events
     loadEvents().then(renderEvents).catch(() => {});
   } catch (e) {
-    toast('提交失败：' + e.message, 'error');
+    toast('申请失败：' + e.message, 'error');
   }
 }
 
@@ -387,7 +387,7 @@ async function setName(name) {
     hideWelcome();
     renderGreeting();
     fireConfetti();
-    toast(`欢迎，${r.name}！🎉`, 'success');
+    toast(`系统就绪，${r.name} 驾驶员`, 'success');
   } catch (e) {
     if (e.message === 'ALREADY_SET') {
       // User reloaded after name was set; just hide the modal
@@ -395,7 +395,7 @@ async function setName(name) {
       renderGreeting();
       return;
     }
-    showWelcomeError('设置失败：' + e.message);
+    showWelcomeError('初始化失败：' + e.message);
   }
 }
 
@@ -428,7 +428,7 @@ function fireConfetti() {
   const ctx = canvas.getContext('2d');
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  const colors = ['#FF8A4C', '#10B981', '#F59E0B', '#3B82F6', '#EC4899'];
+  const colors = ['#00F5FF', '#FF6B35', '#00FF88', '#00D4E4', '#FF9500', '#00A8B5'];
   const N = 80;
   const parts = Array.from({ length: N }, () => ({
     x: Math.random() * canvas.width,
@@ -464,8 +464,8 @@ function bindEvents() {
   // Welcome
   $('#welcome-submit').addEventListener('click', () => {
     const name = $('#welcome-name').value.trim();
-    if (!name) return showWelcomeError('名字不能为空');
-    if (name.length > 20) return showWelcomeError('名字不能超过 20 字');
+    if (!name) return showWelcomeError('代号不能为空');
+    if (name.length > 20) return showWelcomeError('代号过长（最多20字符）');
     setName(name);
   });
   $('#welcome-name').addEventListener('keydown', (e) => {
@@ -508,7 +508,7 @@ async function boot() {
     }
     await refreshAll();
   } catch (e) {
-    showError('启动失败：' + e.message, boot);
+    showError('启动异常：' + e.message, boot);
   }
 }
 
