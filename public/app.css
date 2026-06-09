@@ -665,16 +665,16 @@ body {
 .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--orange) 0%, #CC4A1A 100%);
-  color: #fff;
-  border: 1px solid var(--orange);
-  box-shadow: 0 4px 16px var(--orange-glow);
+  background: linear-gradient(135deg, var(--cyan) 0%, var(--cyan-dim) 100%);
+  color: #07090D; /* deep void for cyan contrast (was #fff on orange) */
+  border: 1px solid var(--cyan);
+  box-shadow: 0 4px 16px var(--cyan-glow);
   font-family: var(--font-display);
 }
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px var(--orange-glow), 0 0 0 1px var(--orange);
-  background: linear-gradient(135deg, #FF7A47 0%, var(--orange) 100%);
+  box-shadow: 0 8px 24px var(--cyan-glow), 0 0 0 1px var(--cyan);
+  background: linear-gradient(135deg, var(--cyan) 0%, #00D4E4 100%);
 }
 .btn-secondary {
   background: var(--bg-plate);
