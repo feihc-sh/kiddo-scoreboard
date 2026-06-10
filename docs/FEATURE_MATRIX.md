@@ -4,9 +4,10 @@
 > 给 agent / 用户看: **每个功能点有没有测, 测了什么, 还有什么 gap。**
 
 **最后更新**: 2026-06-09
-**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 49 e2e = **73 测试文件** (v2.2 baseline + 1 new P0 regression)
-**最新 Qual 报告**: `QUAL_REPORT_2026-06-09-p0-admin-hard-delete-fk.md` (P0 永久删除 FK 约束)
-
+**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 51 e2e = **75 测试文件** (v2.2 baseline + 2 new P0 regression, post-#28+#29 merge)
+**最新 Qual 报告**:
+- `QUAL_REPORT_2026-06-09-p0-admin-hard-delete-fk.md` (P0 永久删除 FK 约束, #28)
+- `QUAL_REPORT_2026-06-09-p0-revoke-event-sync.md` (P0 撤销 event 不同步 child UI, #29)
 ---
 
 ## 📊 表 A: PRD 业务规则 × 测试覆盖 (6 业务规则)
@@ -14,9 +15,9 @@
 | PRD § | 业务规则 | 关键实现 | TEST_PLAN § | unit spec | e2e spec | 覆盖率 |
 |---|---|---|---|---|---|---|
 | **3.1** | 双账户模型 (game_minutes / pocket_money) | `utils/balance.ts` + `score_events.target_account` | 3.10, 3.11 | `balance.test.ts` `public-balance.test.ts` | `flow-exchange.spec.ts` `flow-new-user-day.spec.ts` | ✅ 100% |
-| **3.2** | 扣分规则 (双账户维度) | `routes/admin/events.ts :: POST /:id/approve` | 3.3, 3.4 | `admin-events-actions.test.ts` | `ui-admin-pending.spec.ts` `flow-deduct-revoke.spec.ts` | ✅ 100% |
+| **3.2** | 扣分规则 (双账户维度) | `routes/admin/events.ts :: POST /:id/approve` | 3.3, 3.4 | `admin-events-actions.test.ts` | `ui-admin-pending.spec.ts` `flow-deduct-revoke.spec.ts` | ⚠️ 95% — event 撤销不同步 child UI (新 spec RED, 2026-06-09) |
 | **3.3** | 奖励机制 (周额度发工资) | `routes/admin/weekly-grant.ts` | 3.8 | `admin-weekly-grant.test.ts` | `flow-weekly-payout.spec.ts` `ui-admin-grant.spec.ts` | ✅ 100% |
-| **3.4** | 任务系统 (CRUD + 完成 + 撤销) | `routes/admin/tasks.ts` + `routes/me/tasks.ts` | 3.5, 3.11 | `admin-tasks-config.test.ts` `me-tasks-complete.test.ts` `public-tasks.test.ts` | `ui-admin-tasks.spec.ts` `ui-child-task-complete.spec.ts` `ui-admin-emoji-picker.spec.ts` `flow-task-lifecycle.spec.ts` | ✅ 100% |
+| **3.4** | 任务系统 (CRUD + 完成 + 撤销) | `routes/admin/tasks.ts` + `routes/me/tasks.ts` | 3.5, 3.11 | `admin-tasks-config.test.ts` `me-tasks-complete.test.ts` `public-tasks.test.ts` | `ui-admin-tasks.spec.ts` `ui-child-task-complete.spec.ts` `ui-admin-emoji-picker.spec.ts` `flow-task-lifecycle.spec.ts` **`ui-admin-revoke-event-sync.spec.ts`** ⚠️ NEW (P0, event 撤销 → child UI, 2026-06-09) | ⚠️ 95% — event 撤销 child UI 路径未覆盖 |
 | **3.12** | 准时上床 (self-lockout 任务类型, v2.1) | `tasks.cutoff_time` + `tasks.is_self_lockout` | 3.14 | (覆盖在 me-tasks-complete.test.ts) | `sleep-lockout.spec.ts` `ui-child-main.spec.ts` | ✅ 100% |
 | **3.5** | 边界 case (软删/审计/锁 + **硬删 v2.2**) | `utils/audit.ts` + `auth/lockout.ts` + `utils/deleted-records.ts` + `routes/admin/events.ts` + `routes/admin/task-completions.ts` + `routes/admin/deleted-records.ts` | 3.1, 3.6, **3.15** | `lockout.test.ts` `audit.test.ts` `deleted-records.test.ts` `admin-events-hard-delete.test.ts` `admin-task-completions-hard-delete.test.ts` | `flow-pm-lockout.spec.ts` `smoke-admin-audit.spec.ts` **`ui-admin-hard-delete.spec.ts`** **`ui-admin-hard-delete-fk.spec.ts`** ⚠️ NEW (P0, FK 约束, 2026-06-09) | ⚠️ 95% — FK 路径未覆盖 (新 spec RED 待 PM 修) |
 
