@@ -422,8 +422,10 @@ events.post('/:id/hard-delete', async (c) => {
   }
 
   try {
-    // 1. Snapshot + delete (atomic via db.batch)
-    await moveToDeletedRecords(
+    // 1. Snapshot + delete (atomic via db.batch). Returns ids of any
+    //    task_completions whose awarded_event_id we NULL'd to clear the
+    //    FK — recorded in audit_log details for traceability.
+    const { orphanedCompletionIds } = await moveToDeletedRecords(
       db,
       'score_event',
       'score_events',
@@ -433,7 +435,7 @@ events.post('/:id/hard-delete', async (c) => {
     );
 
     // 2. Audit the *act* of deletion
-    await logHardDelete(db, 'score_event', id, ev, pmUserId);
+    await logHardDelete(db, 'score_event', id, ev, pmUserId, orphanedCompletionIds);
 
     // 3. Recompute balance (the source row is gone, so this reflects
     //    the world without the deleted event)
