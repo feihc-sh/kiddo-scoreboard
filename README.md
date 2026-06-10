@@ -4,6 +4,20 @@
 
 > 双账户（🎮 游戏时间 + 💰 零花钱）1:1 互通，PM（爸爸）可撤销任何操作，儿子只能提交申请。所有加减有完整审计 log。
 
+**生产**: https://kiddo-scoreboard.pages.dev (5/5 endpoint 200) | **状态**: 🟢 上线 (2026-06-08) | **D1**: 4/4 migration | **e2e**: 182/182 pass
+
+---
+
+## 📑 文档索引 (其他 agent 必看)
+
+**新来这个 repo? 先看 [`docs/INDEX.md`](./docs/INDEX.md)** — 5 秒跳到你需要的文档。
+
+按角色:
+- **新 Agent 上手** → [INDEX.md](./docs/INDEX.md) → [PRD.md](./docs/PRD.md) → [PROGRESS.md](./docs/PROGRESS.md) → [PLAN.md](./docs/PLAN.md)
+- **Code Agent 改代码** → [PRD.md](./docs/PRD.md) + [TEST_PLAN.md](./docs/TEST_PLAN.md) + [PLAN.md](./docs/PLAN.md) + [NIGHTLY-TODO.md](./docs/NIGHTLY-TODO.md)
+- **Qual Agent 跑测试** → [TEST_PLAN.md](./docs/TEST_PLAN.md) + [QUAL_CLEAN_RUN_CHECKLIST.md](./docs/QUAL_CLEAN_RUN_CHECKLIST.md)
+- **PM / 部署运维** → [DEPLOY.md](./DEPLOY.md) + [SECURITY-REMOTE-OPS.md](./docs/SECURITY-REMOTE-OPS.md) + [INCIDENTS.md](./docs/INCIDENTS.md) (如有)
+
 ---
 
 ## ✨ 核心特性
