@@ -3,8 +3,8 @@
 > 一张大表看清"业务规则 / UI 功能 / 测试覆盖"三件套。
 > 给 agent / 用户看: **每个功能点有没有测, 测了什么, 还有什么 gap。**
 
-**最后更新**: 2026-06-09
-**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 50 e2e = **74 测试文件** (+ 2 regression spec 2026-06-09, see QUAL_REPORT_2026-06-09 / QUAL_REPORT_2026-06-09-child-submit)
+**最后更新**: 2026-06-09 (child race audit)
+**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 51 e2e = **75 测试文件** (+ 3 regression spec 2026-06-09, see QUAL_REPORT_2026-06-09 / QUAL_REPORT_2026-06-09-child-submit / QUAL_REPORT_2026-06-09-child-race-audit)
 
 ---
 
@@ -53,9 +53,9 @@
 | **3.6** | PM Audit Log | ✓ | ✓ | — | `smoke-admin-audit.spec.ts` `ui-admin-audit.spec.ts` |
 | **3.7** | PM Exchange | ✓ | ✓ | ✓ | `smoke-admin-exchange-grant.spec.ts` `ui-admin-exchange.spec.ts` `exchange-grant.spec.ts` |
 | **3.8** | PM Weekly Grant | ✓ | ✓ | — | `ui-admin-grant.spec.ts` `flow-weekly-payout.spec.ts` |
-| **3.9** | Child First-time Flow | ✓ | ✓ | — | `smoke-child-firsttime.spec.ts` `ui-child-firsttime.spec.ts` |
-| **3.10** | Child Main Page | ✓ | ✓ | — | `smoke-child-main.spec.ts` `ui-child-main.spec.ts` `child-ui.spec.ts` `ui-child-progress-bars.spec.ts` |
-| **3.11** | Child Task Complete | ✓ | ✓ | — | `smoke-child-task-complete.spec.ts` `ui-child-task-complete.spec.ts` |
+|| **3.9** | Child First-time Flow | ✓ | ✓ | — | `smoke-child-firsttime.spec.ts` `ui-child-firsttime.spec.ts` `ui-child-race-audit.spec.ts` (regression: setName race, server idempotency check, see QUAL_REPORT_2026-06-09-child-race-audit) |
+|| **3.10** | Child Main Page | ✓ | ✓ | — | `smoke-child-main.spec.ts` `ui-child-main.spec.ts` `child-ui.spec.ts` `ui-child-progress-bars.spec.ts` |
+|| **3.11** | Child Task Complete | ✓ | ✓ | — | `smoke-child-task-complete.spec.ts` `ui-child-task-complete.spec.ts` `ui-child-race-audit.spec.ts` (regression: completeTask race, server idempotency check, see QUAL_REPORT_2026-06-09-child-race-audit) |
 | **3.12** | Child Event Submit | ✓ | ✓ | ✓ | `smoke-child-submit.spec.ts` `ui-child-submit-happy.spec.ts` `ui-child-submit-edge.spec.ts` `ui-child-submit-random.spec.ts` (regression: random fill + double-click race, see QUAL_REPORT_2026-06-09-child-submit) |
 | **3.13** | Child Recent Events | ✓ | — | — | `ui-child-events.spec.ts` `smoke-child-recent.spec.ts` |
 | **3.14** | Child Sleep Lockout (v2.1) | ✓ | ✓ | ✓ | `sleep-lockout.spec.ts` `ui-child-main.spec.ts` (含 cutoff 行为) |
@@ -77,9 +77,10 @@
 | **F: Weekly Payout Flow** | `flow-weekly-payout.spec.ts` | 5.8 周发工资 | 周额度机制 |
 | **G: Admin Hard Delete Flow** (v2.2) | `ui-admin-hard-delete.spec.ts` | 3.15 (删 → 灰显 → 再打卡) | 物理删 + 审计 + 业务恢复 |
 | **H: PM Task Edit Prefill** (v2.3, 2026-06-09 regression) | `ui-admin-tasks-edit-prefill.spec.ts` | 3.5 (编辑 → 8 字段回填) | 防止 v2.1 cutoff/self_lockout 字段在编辑时被清空 (QUAL_REPORT_2026-06-09) |
-| **I: Child Submit Log Integrity** (v2.3, 2026-06-09 regression) | `ui-child-submit-random.spec.ts` | 3.12 (随机填表 + double-click race) | 防止子端 submit 无 inFlight 防抖导致双击/快速点击产生"幽灵 event" (QUAL_REPORT_2026-06-09-child-submit) |
+|| **I: Child Submit Log Integrity** (v2.3, 2026-06-09 regression) | `ui-child-submit-random.spec.ts` | 3.12 (随机填表 + double-click race) | 防止子端 submit 无 inFlight 防抖导致双击/快速点击产生"幽灵 event" (QUAL_REPORT_2026-06-09-child-submit) |
+|| **J: Child Race Audit** (v2.3, 2026-06-09 regression) | `ui-child-race-audit.spec.ts` | 3.9 + 3.11 (completeTask + setName race idempotency) | 系统性 audit child 端所有 write actions: 3/4 被 server idempotency 保护 (数据安全), 唯一真污染 submitEvent 已在 PR #19 报告 (QUAL_REPORT_2026-06-09-child-race-audit) |
 
-**跨流程覆盖率**: 7/7 = **100%** ✅ (每流程 1 spec, walk 完整)
+**跨流程覆盖率**: 9/9 = **100%** ✅ (每流程 1 spec, walk 完整)
 
 ---
 
