@@ -246,7 +246,9 @@ taskCompletions.post('/:id/hard-delete', async (c) => {
   }
 
   try {
-    // 1. Snapshot + delete (atomic via db.batch)
+    // 1. Snapshot + delete (atomic via db.batch). For task_completion
+    //    deletes there are no orphanable rows (no FK references a
+    //    completion in the same way), so the return value is unused.
     await moveToDeletedRecords(
       db,
       'task_completion',
