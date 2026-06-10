@@ -89,7 +89,7 @@ test.describe('§4 Flow A: New user first day (end-to-end)', () => {
       await childPage.locator('[name="type"]').selectOption('pocket_money');
       await childPage.locator('[name="amount"]').fill('10');
       await childPage.locator('[name="reason"]').fill('帮忙洗碗');
-      await childPage.locator('button[type=submit]').filter({ hasText: /提交/ }).click();
+      await childPage.locator('button[type=submit]').filter({ hasText: /发送/ }).click();  // PR #27: submit button text "提交" → "发送"
       await childPage.waitForTimeout(500);
 
       // 10. PM sees pending event, approves it.

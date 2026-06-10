@@ -49,13 +49,13 @@ test.describe('UI: Child Submit (Happy Path)', () => {
     // Modal closes
     await expect(page.locator('#submit-modal')).toBeHidden();
     // Toast (real class is 'toast-show' per app.js, not 'show')
-    await expect(page.locator('#toast.toast-show').filter({ hasText: '已提交' })).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('#toast.toast-show').filter({ hasText: '申请已发送' })).toBeVisible({ timeout: 3000 });  // PR #27: toast "已提交，等家长审核～" → "申请已发送，等待指令确认…"
     // New pending event row in list
     const items = page.locator('#event-list .event-item');
     await expect(items).toHaveCount(2, { timeout: 5000 });
     const pendingRow = items.filter({ hasText: '今天主动整理书桌' });
     await expect(pendingRow).toBeVisible();
-    await expect(pendingRow).toContainText('待审');
+    await expect(pendingRow).toContainText('待确认');  // PR #27: "◷ 待确认"
     await expect(pendingRow).toContainText('+10');
     // Balance NOT yet changed (still 5, not 15)
     await expect(page.locator('#balance-game-time')).toHaveText('5');
@@ -79,7 +79,7 @@ test.describe('UI: Child Submit (Happy Path)', () => {
     await expect(items).toHaveCount(2, { timeout: 5000 });
     const pendingRow = items.filter({ hasText: '扣分：和弟弟抢玩具' });
     await expect(pendingRow).toBeVisible();
-    await expect(pendingRow).toContainText('待审');
+    await expect(pendingRow).toContainText('待确认');  // PR #27: "◷ 待确认"
     await expect(pendingRow).toContainText('-5');
     // Balance still 20 (pending deduction not yet applied)
     await expect(page.locator('#balance-pocket-money')).toHaveText('20');

@@ -7,9 +7,9 @@ test.describe('Module 8: Child UI (iPad PWA)', () => {
     const ct = r.headers()['content-type'] || '';
     expect(ct).toMatch(/text\/html/);
     const body = await r.text();
-    expect(body).toContain('kiddo');
-    expect(body).toContain('🎮');
-    expect(body).toContain('💰');
+    expect(body).toContain('JAGER');
+    expect(body).toContain('⚡');
+    expect(body).toContain('⚙️');
   });
 
   test('GET /app.css returns 200 with CSS', async ({ request }) => {
@@ -18,7 +18,7 @@ test.describe('Module 8: Child UI (iPad PWA)', () => {
     const ct = r.headers()['content-type'] || '';
     expect(ct).toMatch(/text\/css/);
     const body = await r.text();
-    expect(body).toContain('--bg-warm');  // design token from CSS
+    expect(body).toContain('--cyan');  // Mecha design token (replaces --bg-warm)
   });
 
   test('GET /app.js returns 200 with JS', async ({ request }) => {

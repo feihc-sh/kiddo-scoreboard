@@ -70,9 +70,9 @@ test('HAPPY-toggle: child completes + uncompletes a task — balance returns to 
   // 4. Balance should drop to 0.
   await expect(page.locator('#balance-pocket-money')).toHaveText('0', { timeout: 5000 });
 
-  // 5. Button should now be disabled with "明天再来" badge.
+  // 5. Button should now be disabled with "系统休眠中" badge.  // PR #27: "明天再来 🌙" → "系统休眠中"
   await expect(btn).toBeDisabled();
-  await expect(btn).toContainText('明天再来');
+  await expect(btn).toContainText('系统休眠中');
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ test('HAPPY-1: child completes a single task — balance + score_event appear', 
   // Balance +5, button green, event row appears.
   await expect(page.locator('#balance-pocket-money')).toHaveText('5', { timeout: 5000 });
   await expect(btn).toHaveClass(/task-btn-done/);
-  await expect(btn).toContainText('今日已完成');
+  await expect(btn).toContainText('任务完成');  // PR #27: badge "✅ 今日已完成 (点击撤销)" → "✓ 任务完成"
   await expect(page.locator('#event-list .event-item')).toContainText('+5 元');
 });
 
@@ -248,9 +248,9 @@ test('EDGE-7: clicking task button rapidly 5 times — only 1 complete + 1 uncom
   // Wait for state to settle.
   await page.waitForTimeout(1500);
 
-  // Final state: button disabled with "明天再来", balance 0 (complete then uncomplete).
+  // Final state: button disabled with "系统休眠中", balance 0 (complete then uncomplete).  // PR #27
   await expect(btn).toBeDisabled({ timeout: 5000 });
-  await expect(btn).toContainText('明天再来');
+  await expect(btn).toContainText('系统休眠中');
   await expect(page.locator('#balance-pocket-money')).toHaveText('0');
 
   // Verify DB: exactly 1 task_completion (status=revoked) + 1 score_event (status=revoked).

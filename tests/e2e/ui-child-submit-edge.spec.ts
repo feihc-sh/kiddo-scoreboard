@@ -180,9 +180,9 @@ test.describe('UI: Child Submit (Edge Cases)', () => {
     await page.locator('#submit-form button[type=submit]').click();
     await page.waitForTimeout(500);
     await expect(page.locator('#submit-modal')).toBeHidden();
-    // Event should be in list as pending (badge text is '⏳ 待审' per app.js:statusLabel)
+    // Event should be in list as pending (badge text is '◷ 待确认' per app.js:statusLabel, PR #27)
     const eventRow = page.locator('#event-list .event-item').first();
-    await expect(eventRow).toContainText('待审');
+    await expect(eventRow).toContainText('待确认');
 
     // Get the just-submitted event id from DB (cheaper than parsing response).
     const eventId = Number(String(d1Exec(
