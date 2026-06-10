@@ -421,7 +421,10 @@ async function revokeEvent(id) {
   try {
     await api('POST', `/api/admin/events/${id}/revoke`);
     toast('已撤销', 'success');
-    await Promise.all([loadAllEvents(), loadBalance(), loadAudit()]);
+    // §5 mirror inverse: revocation may flip the referencing task_completion's status
+    // (PR #29 fix). Reload completions so the admin "任务完成历史" panel doesn't
+    // show stale rows until manual refresh.
+    await Promise.all([loadAllEvents(), loadBalance(), loadAudit(), loadCompletions()]);
     renderAll();
   } catch (e) {
     if (e.message !== 'UNAUTHORIZED') toast('操作失败：' + e.message, 'error');
