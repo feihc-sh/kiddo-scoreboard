@@ -363,13 +363,21 @@ async function uncompleteTask(taskId) {
   }
 }
 
+// Submit form has no id (one modal at a time), so a module-level flag is
+// enough to block double-click. Mirrors admin.js::approveEvent's inFlight
+// pattern (line 387-401). Regression: see #20 — child submit double-click
+// was creating 2 events in the log.
+let inFlightSubmit = false;
+
 async function submitEvent(form) {
-  const type = form.type.value;
-  const amount = parseInt(form.amount.value, 10);
-  const dir = state.selectedDir;
-  const reason = form.reason.value.trim();
-  const change_value = dir * Math.abs(amount);
+  if (inFlightSubmit) return;
+  inFlightSubmit = true;
   try {
+    const type = form.type.value;
+    const amount = parseInt(form.amount.value, 10);
+    const dir = state.selectedDir;
+    const reason = form.reason.value.trim();
+    const change_value = dir * Math.abs(amount);
     await api('POST', '/api/me/events', { type, change_value, reason });
     closeSubmitModal();
     toast('已提交，等家长审核～', 'success');
@@ -377,6 +385,8 @@ async function submitEvent(form) {
     loadEvents().then(renderEvents).catch(() => {});
   } catch (e) {
     toast('提交失败：' + e.message, 'error');
+  } finally {
+    inFlightSubmit = false;
   }
 }
 
