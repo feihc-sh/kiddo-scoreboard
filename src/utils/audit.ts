@@ -72,6 +72,7 @@ export async function logHardDelete(
   originalId: number,
   originalData: object,
   deletedBy: number,
+  orphanedCompletionIds: number[] = [],
 ): Promise<void> {
   const originalTable =
     recordType === 'score_event' ? 'score_events' : 'task_completions';
@@ -84,6 +85,14 @@ export async function logHardDelete(
       record_type: recordType,
       original_table: originalTable,
       original_data: originalData,
+      // P1 follow-up (Qual 2026-06-10): if the hard-delete also NULL'd
+      // task_completions.awarded_event_id on referencing rows, record
+      // their ids so an auditor can trace which completions lost their
+      // event link (the completion rows themselves are still in
+      // task_completions, just with awarded_event_id=NULL).
+      ...(orphanedCompletionIds.length > 0
+        ? { orphaned_completion_ids: orphanedCompletionIds }
+        : {}),
     },
   });
 }

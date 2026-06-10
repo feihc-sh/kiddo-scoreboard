@@ -167,4 +167,53 @@ test.describe('P0 REGRESSION: hard-delete FK constraint (2026-06-09)', () => {
       expect(evExists, 'no snapshot and source row gone — lost data, never acceptable').toBe(true);
     }
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CASE 4: audit_log.details must record which task_completions lost their
+  //         event link (P1 follow-up, Qual 2026-06-10). Without this, an
+  //         auditor cannot trace which completion rows were "orphaned" by
+  //         the hard-delete — the completion rows are still in
+  //         task_completions, just with awarded_event_id=NULL.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  test('CASE 4: audit_log.details records orphaned_completion_ids (P1 follow-up)', async ({ page }) => {
+    const evId = seedEvent({ type: 'pocket_money', change_value: 5, status: 'approved', reason: 'p1-audit' });
+    const now = Math.floor(Date.now() / 1000);
+    const today = new Date(now * 1000).toISOString().slice(0, 10);
+    d1Exec(
+      `INSERT INTO task_completions (task_id, user_id, status, completed_date, completed_at, awarded_event_id) ` +
+      `VALUES (1, 2, 'active', '${today}', ${now}, ${evId});`,
+    );
+    // Capture the completion id we just inserted (it'll be the latest row
+    // for user_id=2 + today).
+    const completionId = Number(
+      String(
+        d1Exec(
+          `SELECT id FROM task_completions WHERE user_id = 2 AND completed_date = '${today}' AND awarded_event_id = ${evId} ORDER BY id DESC LIMIT 1;`,
+        ),
+      ).trim(),
+    );
+    expect(completionId).toBeGreaterThan(0);
+
+    // Trigger the hard-delete.
+    const r = await page.context().request.post(`${BASE}/api/admin/events/${evId}/hard-delete`);
+    expect(r.status(), `hard-delete returned ${r.status()}: ${await r.text()}`).not.toBe(500);
+
+    // Inspect the latest audit_log row for this event.
+    const auditRow = String(
+      d1Exec(
+        `SELECT details FROM audit_log WHERE action = 'event_hard_deleted' AND target_event_id = ${evId} ORDER BY id DESC LIMIT 1;`,
+      ),
+    ).trim();
+    expect(auditRow.length, `no audit_log row for event ${evId}`).toBeGreaterThan(0);
+
+    const details = JSON.parse(auditRow) as {
+      orphaned_completion_ids?: number[];
+      [k: string]: unknown;
+    };
+    expect(details.orphaned_completion_ids, 'audit_log.details missing orphaned_completion_ids').toBeDefined();
+    expect(details.orphaned_completion_ids, 'orphaned_completion_ids empty but completion existed').toContain(
+      completionId,
+    );
+  });
 });
