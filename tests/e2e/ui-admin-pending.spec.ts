@@ -162,7 +162,17 @@ test.describe('UI: PM Pending Events (Section A)', () => {
   });
 
   test('empty pending list shows "没有待审事件" empty state', async ({ page }) => {
-    await page.goto('/admin/');
+    // Fix PR #27 flaky: under accumulated wrangler+chromium load (after 80+ tests),
+    // wrangler dev's workerd can take >120s to respond to /admin/ at all — both
+    // 'load' and 'domcontentloaded' can hit the test timeout. Mitigation:
+    //   1) waitUntil:'domcontentloaded' fires as soon as the HTML response is parsed,
+    //      marginally faster than waiting for full 'load' (saves a few seconds).
+    //   2) Playwright's global retries:1 in playwright.config.ts catches the
+    //      remaining tail-latency by retrying once on the same test.
+    // Subsequent expect() calls have their own auto-wait (10s default), so they
+    // still verify the empty state actually renders. Reproduces 1/1 single-spec,
+    // fails 1/21 full-suite without retry, passes 84/84 with retry.
+    await page.goto('/admin/', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#pending-list .pm-row')).toHaveCount(0);
     await expect(page.locator('#pending-empty')).toBeVisible();
     await expect(page.locator('#pending-empty')).toContainText('没有待审事件');
