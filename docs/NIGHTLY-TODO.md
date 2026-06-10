@@ -39,7 +39,7 @@
 
 ---
 
-## 📋 当前清单 (4 个 Item: 3 hold + 1 紧急待拍板)
+## 📋 当前清单 (5 个 Item: 3 hold + 1 进行中 + 1 新增待跑)
 
 ## Item #006 — 打卡日历 (月历可视化) ⏸ hold (用户 2026-06-08 暂缓)
 
@@ -147,6 +147,102 @@
 **Started**: 2026-06-08
 
 ---
+
+## Item #010 — Child UI 任务冲刺弹窗 (游戏化专注感) ⏳ pending
+
+**用户原话** (feihao 2026-06-10 飞书 DM):
+> "帮我在 nightly todo 上再新加一个 item 内容是针对 user 的界面,目前的界面上,任务的部分就点击之后就只有一个完成。
+> 我希望他点击了那个任务之后,开启一个新的弹窗,弹窗上显示:
+> 1. 任务的详情和图片
+> 2. 显示这个任务正在冲刺中
+> 3. 如果是一个倒计时任务的话,在比较大的页面上弹出一个倒计时数字,显示还剩余多少分钟
+> 4. 下面有一个打卡按钮
+> 这样子的话,就会显得比较正式,更像游戏界面一些,也可以更专注在当前任务中。也允许关闭。"
+
+**Clarification** (PM 整理):
+- **作用对象**: child UI (`public/app.js`),不是 admin UI;当前 task 按钮 (`task-btn`) click **直接调 `completeTask(t.id)`**,一触即完成
+- **新交互流程**:
+  1. 点 task 按钮 → 弹冲刺模态框 `#sprint-modal`
+  2. 模态框显示任务详情(图标 + 名称)、状态 "冲刺中..." 标题
+  3. 若有 `cutoff_time` → 大字号倒计时数字 + 颜色随剩余时间变化
+  4. "✓ 打卡" 主按钮 → 调 `completeTask(t.id)` → 关闭弹窗 → 原有动画/撒花继续
+  5. 关闭: X 角 + 点空白 + `Esc` 键 (参照非 welcome modal 的通用做法)
+- **"详情和图片" 字段**:
+  - **默认方案 A** (本 Item 采用): 用现有 `t.icon` (emoji) 作"图片", `t.name` 作"详情"; **不**扩 schema
+  - **可选方案 B** (后续 Item, 如用户要): 加 `description TEXT` + `image_url TEXT` 字段 + migration + admin UI 上传 — 工程量大
+- **已有可复用** (Code Agent 实施时直接用):
+  - `computeCutoffDiffSec(hhmm)` + `formatHHMMSS(sec)` — §3.12 倒计时 helpers (app.js:222, 230)
+  - `.modal-back` + `.modal` CSS — 已有样式 (app.css:465-493)
+  - `showWelcome()` / `hideWelcome()` 关闭模式参照 — 但本弹窗允许 backdrop click + Esc (跟 welcome 不同)
+- **回归风险点**:
+  - 现有 task 按钮"一触即打卡" → 改为"点开弹窗"会**改变已有 UX**: 小孩不再能随手打卡
+  - 假设这是用户期望 ("更专注"), 但需用户拍板确认这是预期行为, 不是 bug
+- **风险**: 🟡 (UI-only, 不动 schema / 不动后端, 但改变既有 click 行为)
+
+**❓ 待拍板** (默认采用括号内方案, 不同意告诉 PM):
+1. **"详情 + 图片" 字段**: (A. 用现有 `icon` + `name`, 不动 schema — 默认)
+2. **关闭方式**: (C. X 角 + 点空白 + Esc 三种都允许 — 默认)
+3. **倒计时颜色变化**: (默认按剩余时间 灰 / 黄 / 橙 / 红, 后期可调)
+4. **已有 UX 改动**: (默认接受 "点任务不再直接打卡, 必须确认" — 这是用户原话语义)
+
+**Action Plan** (TDD 走起, **切 3 段每段 ≤15 min 防 CC Timeout**):
+
+### 第 1 段 (≤15 min): 冲刺弹窗 DOM + CSS + 数据绑定
+- [ ] `public/index.html` 加 `#sprint-modal` 骨架 (默认 `hidden`):
+  - `.sprint-modal-back.modal-back`
+  - `.sprint-modal.modal`
+    - 关闭 X 角 `.sprint-close`
+    - 标题 "冲刺中..." `.sprint-title`
+    - 详情区 `.sprint-detail` (大图标 `.sprint-icon` + 名称 `.sprint-name`)
+    - 倒计时区 `.sprint-countdown` (大字号, 默认 hidden, 有 `cutoff_time` 才显示)
+    - 底部打卡按钮 `.sprint-checkin.btn-primary` (调用原 `completeTask`)
+- [ ] `public/app.css` 加冲刺弹窗样式:
+  - `.sprint-modal` 比普通 modal 大 (max-width 480px, padding 32px)
+  - `.sprint-title` 字号 24px
+  - `.sprint-icon` 字号 72px (比卡片更显眼)
+  - `.sprint-countdown` 字号 96px + `font-variant-numeric: tabular-nums` + 居中
+  - `.sprint-countdown[data-urgency="warning"]` 黄 / `[data-urgency="danger"]` 橙 / `[data-urgency="critical"]` 红
+  - 关闭 X 角 `.sprint-close` 右上角
+- [ ] `public/app.js` 加 `showSprintModal(task)` / `hideSprintModal()`:
+  - 写入 `.sprint-icon` / `.sprint-name` 文案
+  - 若 task 有 `cutoff_time` → 显示 `.sprint-countdown`, 启动独立计时器 (走 `computeCutoffDiffSec` + `formatHHMMSS`), 颜色按 `urgency` 切换
+  - 若无 → `.sprint-countdown` hidden
+- [ ] 写 unit test (DOM-level): `tests/unit/sprint-modal.test.ts` 验证 show/hide + 文案注入 + urgency 切换
+- [ ] `git add` + commit: `feat(child-ui): sprint modal DOM/CSS scaffold + show/hide helpers`
+- [ ] **汇报**: PM 等结果, 决定是否跑第 2 段
+
+### 第 2 段 (≤15 min): 任务按钮 click 改造 + 关闭交互
+- [ ] `public/app.js` 任务按钮 click handler: 从 `completeTask(t.id)` 改为 `showSprintModal(t)`
+  - **排除条件**: `task-btn-locked-out` (已过 cutoff) 仍走原有逻辑 (不弹窗, 直接 disabled)
+- [ ] 关闭交互:
+  - X 角 click → `hideSprintModal()`
+  - backdrop click → `hideSprintModal()`
+  - `Escape` 键 → `hideSprintModal()` (一次性 `document.addEventListener('keydown', ...)`, 加 flag 防重复挂载)
+- [ ] 打卡按钮 click: `completeTask(t.id)` → `hideSprintModal()` → 原 success 动画/撒花继续触发
+- [ ] 写 e2e: `tests/e2e/ui-child-sprint-modal.spec.ts` (≥3 case: 点任务弹窗 / 点打卡关闭 + 列表更新 / X 角关闭列表不变 / Esc 关闭 / backdrop 关闭 / 倒计时任务显示大数字 / 非倒计时任务隐藏数字)
+- [ ] `git add` + commit: `feat(child-ui): task click opens sprint modal + close interactions`
+- [ ] **汇报**: PM 等结果, 决定是否跑第 3 段
+
+### 第 3 段 (≤10 min): 倒计时紧迫度 + 文档 + PR
+- [ ] `public/app.js` `updateSprintCountdown()` 加 urgency 分级:
+  - `diff > 3600` → `data-urgency="ok"` (默认灰)
+  - `diff ≤ 3600` → `"warning"` (黄)
+  - `diff ≤ 600` → `"danger"` (橙)
+  - `diff ≤ 60` → `"critical"` (红)
+- [ ] `public/app.css` 加对应颜色 (`color` + 轻量阴影), `critical` 可选加心跳 keyframes (`@keyframes pulse` 1s infinite)
+- [ ] 跑 `npx vitest run` + `npx playwright test tests/e2e/ui-child-sprint-modal.spec.ts` 全过
+- [ ] 文档:
+  - `docs/PRD.md` §3 加 "child UI 任务点击 → 冲刺模态框 (专注感)" 一段
+  - `docs/FEATURE_MATRIX.md` 表 B 加 #010 行
+  - `docs/TEST_PLAN.md` §3 加 #010 e2e 测试矩阵
+- [ ] `git add` + commit: `feat(child-ui): sprint countdown urgency colors + docs`
+- [ ] 走 PR 流程 (push 分支 + `gh pr create`)
+- [ ] **汇报**: PR 链接, 等用户 merge → GH Action 自动 backup + deploy
+
+**风险**: 🟡 (UI-only, 不动 schema / 后端; 改变既有 task 按钮 click 行为, 算小回归风险)
+**Status**: ⏳ pending
+**Commit**: —
+**Started**: 2026-06-10
 
 ---
 
