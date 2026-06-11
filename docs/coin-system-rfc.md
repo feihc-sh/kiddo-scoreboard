@@ -677,3 +677,364 @@ if (bonus) {
 所有 4xx 错误均带 `Cache-Control: no-store`，防止前端缓存失败响应。
 
 ---
+
+## 5. 业务流程
+
+### 5.1 流 A: 任务完成 → 金币 +1 → 检查 bonus
+
+**触发**: child 或 PM 点击任务"完成"按钮
+
+```
+[用户操作]
+    │
+    ▼
+POST /api/me/tasks/:id/complete
+    │
+    ├── (1) 写入 task_completions (status='active', awarded_event_id=?)
+    │
+    ├── (2) 写入 score_events:
+    │       type='coins', change_value=+1,
+    │       reason=`task:#${task_id}`,
+    │       source='task', source_ref=`${task_completion_id}`,
+    │       week_of=当前 ISO 周
+    │
+    ├── (3) 查询今天所有 active 任务完成情况
+    │       tasksCount  = SELECT COUNT(*) FROM tasks WHERE is_active=1
+    │       completionCt = SELECT COUNT(*) FROM task_completions 
+    │                       WHERE user_id=? AND completed_date=? 
+    │                       AND status='active'
+    │
+    ├── (4) IF tasksCount === completionCt (全完成)
+    │       THEN 检查今天是否已发过 bonus:
+    │         SELECT id FROM score_events
+    │           WHERE user_id=? AND type='coins' AND change_value=3
+    │             AND reason LIKE 'bonus:%' AND source_ref=`${today}:${user_id}`
+    │       IF 不存在 → 写入 score_events:
+    │         type='coins', change_value=+3,
+    │         reason=`bonus:${today}:${user_id}`,
+    │         source='task', source_ref=`${today}:${user_id}`,
+    │         submitted_by='system'
+    │
+    └── (5) 返回 { task_completion, coins_balance, bonus_awarded }
+            │
+            ▼
+        [前端刷新金币 card + 如有 bonus 弹出提示]
+```
+
+**关键约束**：
+
+- bonus 写入幂等：用 `source_ref = '<date>:<user_id>'` 唯一标识，重复检查防并发
+- bonus reason 格式：`bonus:YYYY-MM-DD:user_id`，便于撤销时反查
+- 撤销后重做：撤销时会同时撤销 bonus 的反向事件（流 C），所以 source_ref 可复用，不会冲突
+- 全完成判定**严格**：不区分"请假"，PM 临时禁用任务即可表达"今天不要求做"
+
+**前端反馈**：
+
+- 普通完成：coins card 数字 +1，无特殊提示
+- 触发 bonus：弹出短 toast "🎉 全任务完成！+3 金币 bonus！"，3 秒自动消失
+
+### 5.2 流 B: 兑换 → 校验 → 写 2 条 score_events
+
+**触发**: child 在商店页点击"兑换"按钮
+
+```
+[用户操作]
+    │
+    ▼
+POST /api/coins/exchange { item_id: 1 }
+    │
+    ├── (1) 校验 item
+    │       SELECT * FROM shop_items WHERE id=? AND is_active=1
+    │       IF 不存在 → return 400 invalid_item_id
+    │
+    ├── (2) 校验余额 (SUM coins events)
+    │       SELECT COALESCE(SUM(change_value), 0) FROM score_events
+    │         WHERE user_id=? AND type='coins' AND status='approved'
+    │       IF < item.cost_coins → return 400 insufficient_coins
+    │
+    ├── (3) 校验周限额
+    │       SELECT COUNT(*) FROM shop_redemptions
+    │         WHERE user_id=? AND week_of=? AND status='consumed'
+    │       IF >= item.weekly_limit → return 429 weekly_limit_reached
+    │
+    ├── (4) db.batch 事务 (3 条 SQL 原子)
+    │       a) INSERT INTO score_events (coins, -cost, 'exchange:item#1', 'child', 'exchange')
+    │       b) INSERT INTO score_events (game_time, +reward, 'exchange:item#1', 'system', 'exchange')
+    │       c) INSERT INTO shop_redemptions 
+    │          (user_id, item_id, week_of, cost_coins, reward_value, reward_type,
+    │           status, coin_event_id, reward_event_id)
+    │
+    └── (5) 返回 { redemption_id, item, new_balance, weekly_remaining }
+            │
+            ▼
+        [前端刷新 3 个 balance card + 兑换历史]
+```
+
+**关键约束**：
+
+- 3 条 SQL 在 `db.batch` 内原子执行，D1 单库串行保证
+- `coin_event_id` 和 `reward_event_id` 通过 `last_insert_rowid()` 获取（D1 支持）
+- 失败回滚：db.batch 任意一条失败 → 全部回滚，不会出现"扣了金币但没加游戏时间"的状态
+- `submitted_by` 区分：扣金币是 child 主动操作 → `child`；加游戏时间是系统联动 → `system`，便于审计
+
+**前端反馈**：
+
+- 成功：弹出 modal "✅ 兑换成功！🎮 游戏时间 +10 分钟 / 🪙 金币 -10 / 本周剩余 2/3 次"
+- 失败：inline error 提示，按钮恢复可点
+
+### 5.3 流 C: 撤销任务 → 反向金币 -1 → 反向 bonus -3
+
+**触发**: PM 在 admin 端点击"撤销任务完成"
+
+```
+[PM 操作]
+    │
+    ▼
+POST /api/admin/task-completions/:id/revoke
+    │
+    ├── (1) 更新 task_completions: status='revoked', revoked_at=now, revoked_by=pm_id
+    │
+    ├── (2) 反向金币 -1
+    │       INSERT INTO score_events
+    │         (user_id, type, change_value=-1, reason='revoke:task#${task_id}',
+    │          status='approved', submitted_by='pm', source='task',
+    │          source_ref=`${task_completion_id}`, week_of=当前周)
+    │
+    ├── (3) 检查今天是否发过 bonus
+    │       SELECT id FROM score_events
+    │         WHERE user_id=? AND type='coins' AND change_value=+3
+    │           AND source_ref=`${today}:${user_id}` AND status='approved'
+    │       IF 存在 → 反向 bonus -3
+    │         INSERT INTO score_events
+    │           (user_id, type, change_value=-3, 
+    │            reason='revoke:bonus:${today}:${user_id}',
+    │            status='approved', submitted_by='pm', source='task',
+    │            source_ref=`${original_bonus_id}`, week_of=当前周)
+    │
+    └── (4) 写 audit_log (action='revoke_task_completion', details 包含 coin_event_id + bonus_event_id)
+            │
+            ▼
+        [前端刷新 coins card + game_time card + task 状态]
+```
+
+**关键约束**：
+
+- **撤销 = 写反向事件，不修改原事件**（保留完整审计链）
+- bonus 检查的 `source_ref = '<date>:<user_id>'` 必须和发 bonus 时一致
+- 如果撤销时原 bonus 已存在但已被反向过 → 反向 score_events 会多写一条，Qual 验收脚本会检查 `SUM(change_value=+3 WHERE source_ref=X) === SUM(change_value=-3 WHERE source_ref=X)` 保证守恒
+- 跨周撤销：见 §8.1
+
+**撤销后重做**：
+
+- 用户撤销 T1 → 重新完成 T1 → 重新全完成 → 再发 bonus
+- bonus 的 `source_ref='<date>:<user_id>'` 不变（一天只 1 次 bonus），但 score_events 会多写 +3 / -3 / +3 的 3 条
+- 守恒验证：`SUM(±3 WHERE source_ref=X) = +3`（净 +3，因为最后一次 +3 是最新版）
+
+### 5.4 异常流：D1 写入失败
+
+任何一条 INSERT 失败 → 整个事务回滚 → 前端收到 500 → 显示通用错误"兑换失败，请重试"。
+
+**不补偿，不重试**：用户可手动重试，避免重复扣款。
+
+### 5.5 不在 v1 业务流程范围
+
+- ❌ 兑换审批（v1 直接兑换）
+- ❌ 兑换失败回滚通知（依赖前端手动重试）
+- ❌ 跨设备实时同步（依赖轮询，5 秒间隔）
+- ❌ 离线兑换队列（v1 要求在线）
+
+---
+
+## 6. UI 设计
+
+> 设计原则：沿用现有 child UI 风格（commit fc0604b 已确认 3-column balance row + 紧凑 log）。
+> 所有 UI 改动以"最小入侵"为原则，不破坏现有布局。
+
+### 6.1 第 3 个 Balance Card（替换 fc0604b placeholder）
+
+**改造点**：`public/index.html` 的 `.balance-card.placeholder` div → 改为活的金币 card。
+
+```
+改造前（fc0604b 占位符）:                    改造后（活的金币 card）:
+
+┌──────────────────────┐                    ┌──────────────────────┐
+│       🏆             │                    │       🪙             │
+│    积分系统           │                    │      金币             │
+│   待上线中            │                    │      15              │
+│  (opacity: 0.45)      │                    │  (点击进商店)         │
+│  pointer-events: none │                    │  cursor: pointer      │
+└──────────────────────┘                    └──────────────────────┘
+```
+
+**CSS 改动（参考 fc0604b 的 `.balance-card.placeholder` 26 行）**：
+
+```css
+.balance-card.coins {
+  /* 复用 .balance-card 基础样式 */
+  background: linear-gradient(135deg, #fef3c7, #fde68a);  /* 金币色: 浅黄 */
+  border: 1px solid #f59e0b;
+  cursor: pointer;                    /* 可点击 */
+  transition: transform 0.2s;         /* hover 反馈 */
+}
+.balance-card.coins:hover {
+  transform: translateY(-2px);        /* 上浮 2px */
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+.balance-card.coins:active {
+  transform: translateY(0);           /* 点击复位 */
+}
+```
+
+**HTML 改动**：
+
+```html
+<a href="/shop" class="balance-card coins" data-testid="coins-card">
+  <div class="balance-card-icon">🪙</div>
+  <div class="balance-card-label">金币</div>
+  <div class="balance-card-value" id="coins-balance">--</div>
+  <div class="balance-card-hint">点击进商店 →</div>
+</a>
+```
+
+**JS 改动（启动时拉 `/api/coins/balance`）**：
+
+```typescript
+// 在现有 loadBalance() 函数末尾追加
+const coinsRes = await fetch('/api/coins/balance');
+const { coins, weekly_remaining } = await coinsRes.json();
+document.getElementById('coins-balance').textContent = coins;
+// 更新 card hint: "本周剩余 X/3 次"
+```
+
+### 6.2 商店页（新增 `/shop` 路由）
+
+**入口**：child UI 第 3 个 balance card 点击 → 跳转 `/shop`
+
+**页面结构**：
+
+```
+┌──────────────────────────────────────────────────┐
+│  🪙 金币商店                            [返回首页] │
+├──────────────────────────────────────────────────┤
+│                                                  │
+│  当前金币: 15 🪙    本周剩余兑换: 3/3 次          │
+│                                                  │
+│  ┌────────────────────────────────────────────┐ │
+│  │ 🎮 游戏时间 10 分钟                         │ │
+│  │ 用 10 金币兑换 10 分钟游戏时间                │ │
+│  │                                            │ │
+│  │ [本周剩余: 3/3 次]                          │ │
+│  │                                            │ │
+│  │ [🎁 兑换 (+10 分钟游戏时间)]  (可点)         │ │
+│  └────────────────────────────────────────────┘ │
+│                                                  │
+│  --- 本周兑换历史 ---                              │
+│  • 2026-06-09 14:23  🎮 10分钟游戏时间  -10🪙    │
+│  • 2026-06-08 10:15  🎮 10分钟游戏时间  -10🪙    │
+│                                                  │
+│  --- 历史兑换 (最近 30 条) ---                     │
+│  • 2026-06-02 16:40  🎮 10分钟游戏时间  -10🪙    │
+│  • ...                                           │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
+
+**按钮置灰状态（UX 关键）**：
+
+| 状态 | 按钮文案 | CSS |
+|------|---------|-----|
+| 余额不足 | 🔒 还差 X 金币 | `disabled, opacity: 0.5, cursor: not-allowed` |
+| 周次数用完 | ⏰ 本周已用 X/3 次，下周一重置 | `disabled, opacity: 0.5, cursor: not-allowed` |
+| 商品下线 | (该商品不显示) | N/A |
+| 可兑换 | 🎁 兑换 (+10 分钟游戏时间) | `default` (金色渐变) |
+
+**余额不足计算**：
+
+```typescript
+const shortage = item.cost_coins - currentCoins;
+button.textContent = shortage > 0 
+  ? `🔒 还差 ${shortage} 金币` 
+  : `🎁 兑换 (+${item.reward_value} 分钟游戏时间)`;
+button.disabled = shortage > 0 || weeklyRemaining <= 0;
+```
+
+### 6.3 兑换成功 Modal
+
+```
+┌──────────────────────────────────┐
+│  ✅ 兑换成功！                     │
+│                                  │
+│  🎮 游戏时间 +10 分钟              │
+│  🪙 金币 -10                       │
+│  ⏰ 本周剩余 2/3 次                │
+│                                  │
+│  [查看兑换历史]  [继续逛商店]      │
+└──────────────────────────────────┘
+```
+
+**实现**：原生 `<dialog>` 元素，4 秒自动关闭（或点击外部关闭）。
+
+### 6.4 Bonus 反馈 Toast
+
+```
+🎉 全任务完成！+3 金币 bonus！
+   🪙 当前金币：18 金币
+```
+
+**实现**：右下角 toast，3 秒自动消失，可手动关闭。**不阻塞 UI**，用户可继续操作。
+
+### 6.5 兑换历史展示
+
+**两个区域**：
+
+1. **本周兑换历史**：默认折叠，点 "查看本周" 展开（最多 3 条）
+2. **历史兑换**：表格形式，最近 30 条，**分页加载**（v1 简化为滚动到底自动加载下一页，每页 10 条）
+
+**展示字段**：
+
+```
+时间 | 商品 | 消耗金币 | 状态
+2026-06-09 14:23 | 🎮 10分钟游戏时间 | -10🪙 | ✅ 已兑换
+2026-06-08 10:15 | 🎮 10分钟游戏时间 | -10🪙 | ✅ 已兑换
+2026-06-02 16:40 | 🎮 10分钟游戏时间 | -10🪙 | ✅ 已兑换
+```
+
+### 6.6 移动端适配
+
+**iPad Safari（target 设备）**：
+
+- 商店页单列布局，商品 card 占满宽度
+- 按钮高度 ≥ 44px（Apple HIG）
+- Toast 在屏幕底部，避开 iPad 底部 home indicator
+- 点击区域 ≥ 44×44px
+
+### 6.7 视觉一致性
+
+**复用现有样式**：
+
+- `.balance-card` 基础样式（game_time cyan / pocket_money orange）
+- `.btn` 主按钮样式
+- `.event-item` 紧凑 log 样式（fc0604b 已缩 40%）
+- font: system-ui, -apple-system（同现有）
+
+**新增颜色变量**（写入 `:root`）：
+
+```css
+:root {
+  --coins-bg: linear-gradient(135deg, #fef3c7, #fde68a);
+  --coins-border: #f59e0b;
+  --coins-shadow: rgba(245, 158, 11, 0.3);
+  --coins-disabled: #d1d5db;
+}
+```
+
+### 6.8 不在 v1 UI 范围
+
+- ❌ 金币动画（+1 时数字滚动效果）
+- ❌ 音效（兑换成功音）
+- ❌ 商品详情页（v1 商品信息直接在 card 上展示）
+- ❌ PM 后台商品管理 UI（v1 商品 hardcode 在 seed migration）
+- ❌ 金币排行榜 / 成就墙
+- ❌ 深色模式（沿用现有浅色主题）
+
+---
