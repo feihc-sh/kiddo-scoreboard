@@ -190,3 +190,455 @@
   - **item 禁用**: is_active=0 → 400 `invalid_item_id`, UI 不展示
   - **金币不足** (TC-F9 后端版本): 金币=5, item=10 → 400 `insufficient_coins`, 无写入
   - **db.batch 中途失败** (TC-X7): 模拟第 2 条 SQL 失败 → 全部回滚, score_events 不留脏数据
+
+### TC-F7 周限额 3 次
+
+- **类型**: integration
+- **位置**: tests/unit/shop-exchange-weekly-limit.test.ts (新建)
+- **步骤**:
+  - **Given**: child 金币 = 100 (够 3 次), shop_items.weekly_limit=3, 本周 (week_of='2026-W24') 已成功兑换 2 次 (shop_redemptions 有 2 条 status='consumed')
+  - **When**:
+    - **Step 1**: POST /api/coins/exchange { item_id: 1 } → 期望 200, weekly_remaining: 0
+    - **Step 2**: POST /api/coins/exchange { item_id: 1 } (第 4 次) → 期望 429 `weekly_limit_reached`
+  - **Then**:
+    - Step 1: shop_redemptions 本周累计 = 3, weekly_remaining = 0
+    - Step 2: API 返 429 + 错误码 `weekly_limit_reached` + 详细 `{ used: 3, limit: 3 }`, 数据库无任何写入（事务回滚）
+- **断言**:
+  - DB: `SELECT COUNT(*) FROM shop_redemptions WHERE user_id=2 AND week_of='2026-W24' AND status='consumed'` = 3 (Step 1 后)
+  - Step 2 失败后: shop_redemptions 仍是 3 条, score_events 没有新增 exchange 事件
+- **Edge case**:
+  - **前端绕过**: F10 UI 置灰 + TC-X2 race 同时测
+  - **跨周** (TC-X1): 第 4 次失败 → 跨周 → 第 4 次成功
+  - **item.weekly_limit=0**: 无限兑换 → Step 2 仍 200 (item 配置变种)
+  - **第 3 次刚好用完**: 边界值, 不允许第 4 次 (≥, 不是 >)
+
+### TC-F8 跨周自动重置
+
+- **类型**: integration
+- **位置**: tests/unit/shop-exchange-week-reset.test.ts (新建)
+- **步骤**:
+  - **Given**:
+    - child user_id=2, 当前 mock 时间 = 2026-W23 周日 23:59:00 (Asia/Shanghai)
+    - 本周 (week_of='2026-W23') 已兑换 3 次 (用完)
+    - 金币 = 5
+  - **When**:
+    - **Step 1**: 验证 GET /api/coins/balance → `{ coins: 5, weekly_remaining: 0, week_of: '2026-W23' }`
+    - **Step 2**: vi.setSystemTime(new Date('2026-06-08T16:00:01Z')) (Asia/Shanghai 2026-06-09 00:00:01)
+    - **Step 3**: GET /api/coins/balance → `{ coins: 5, weekly_remaining: 3, week_of: '2026-W24' }`
+    - **Step 4**: POST /api/coins/exchange { item_id: 1 } → 200 (金币够 + 周限额重置)
+- **断言**:
+  - Step 3: `week_of` = '2026-W24', `shop_redemptions WHERE week_of='2026-W24'` COUNT = 0
+  - Step 4: weekly_remaining = 2 (用掉 1 次), shop_redemptions 新增 1 条 week_of='2026-W24'
+- **Edge case**:
+  - **跨周撤销** (TC-X3): 周一发 bonus → 周二撤销 → bonus 仍能找到并回收 (source_ref 跟 week_of 解耦)
+  - **边界时间**: 周日 23:59:59 vs 周一 00:00:00 (差 1 秒) → week_of 翻转正确
+  - **时区差异**: 测试环境 TZ=UTC 时, ISO week 计算要用 Asia/Shanghai 转换（RFC §2.3 明确）
+
+### TC-F9 按钮置灰（余额不足）
+
+- **类型**: UI e2e (Playwright)
+- **位置**: tests/e2e/shop-ui-coin-balance.spec.ts (新建)
+- **步骤**:
+  - **Given**: child 金币 = 5, 商品 id=1 价格 10 金币, 已登录 child SPA, 打开 /shop
+  - **When**: 页面加载完成 (等待 #shop-item-1 渲染)
+  - **Then**:
+    - 商品 card 的兑换按钮文案 = "🔒 还差 5 金币"
+    - 按钮 `disabled` 属性存在
+    - 按钮 computed style: `opacity: 0.5`, `cursor: not-allowed`
+    - 点击按钮 → 不触发 POST /api/coins/exchange
+- **断言**:
+  - DOM: `[data-testid="exchange-btn-1"][disabled]` 存在, 文本匹配 `🔒 还差 5 金币`
+  - Network: 没有 `/api/coins/exchange` 请求被发出 (用 page.on('request') 监听)
+  - **API 校验**: 即使前端绕过, 用 `request.post('/api/coins/exchange', { item_id: 1 })` → 400 `insufficient_coins`
+- **Edge case**:
+  - **金币刚好够**: 金币 = 10, 按钮文案 = "🎁 兑换 (+10 分钟游戏时间)" (可点)
+  - **金币 0**: 金币 = 0, 文案 = "🔒 还差 10 金币"
+  - **金币 > 价格**: 金币 = 15, 文案正常, 兑换后金币 = 5
+
+### TC-F10 按钮置灰（周次数用完）
+
+- **类型**: UI e2e
+- **位置**: tests/e2e/shop-ui-weekly-limit.spec.ts (新建)
+- **步骤**:
+  - **Given**: child 金币 = 100 (够), 本周 (week_of='2026-W24') 已兑换 3 次 (直接 INSERT shop_redemptions 或先跑 3 次 exchange API)
+  - **When**: 打开 /shop
+  - **Then**:
+    - 兑换按钮文案 = "⏰ 本周已用 3/3 次，下周一重置"
+    - 按钮 `disabled`
+    - "本周剩余: 0/3 次" 显示
+- **断言**:
+  - DOM: `[data-testid="exchange-btn-1"][disabled]` 存在
+  - DOM: `[data-testid="weekly-remaining"]` 文本 = "0/3 次"
+  - **API 校验**: 用 API 直接 POST /api/coins/exchange → 429 `weekly_limit_reached`, response 含 `{ used: 3, limit: 3 }`
+- **Edge case**:
+  - **金币不足 + 周次数用完** (复合态): 显示哪个? 优先级 → "🔒 还差 X 金币" (金币问题优先, RFC §2.2 隐含)
+  - **刚跨周** (TC-F8 + TC-X1): 时间推进后按钮恢复可点, 文案变正常
+
+### TC-F11 兑换历史展示
+
+- **类型**: UI e2e
+- **位置**: tests/e2e/shop-ui-history.spec.ts (新建)
+- **步骤**:
+  - **Given**: child 本周 (week_of='2026-W24') 兑换过 2 次, 历史 (上周及更早) 共 5 次, 总共 7 条 shop_redemptions (status='consumed')
+  - **When**: 打开 /shop
+  - **Then**:
+    - "本周兑换历史" 区域显示 2 条 (最新在上)
+    - "历史兑换" 区域显示最近 30 条 (此处 5 条, 因为其他 2 条是本周)
+    - 每条记录字段: 时间 (YYYY-MM-DD HH:mm Asia/Shanghai), 商品图标+名称, 消耗金币, 状态
+- **断言**:
+  - DOM: `[data-testid="week-history"] [data-testid="history-item"]` count = 2
+  - DOM: `[data-testid="all-history"] [data-testid="history-item"]` count = 5
+  - 第一条 (最新): 时间格式匹配 `/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/`, 文本含 "🎮" + "游戏时间 10 分钟" + "-10🪙"
+  - 时间倒序: 第 1 条的 redeemed_at > 第 2 条的 redeemed_at
+- **Edge case**:
+  - **空状态**: child 从未兑换 → 两个区域都显示 "暂无兑换记录"
+  - **历史超 30 条**: seed 31 条 → 只显示 30 条 (LIMIT 30)
+  - **跨时区**: UTC 23:00 vs Asia/Shanghai 07:00 (次日) → 时间显示按 Asia/Shanghai 转换
+  - **状态过滤**: shop_redemptions.status='revoked' (如果有撤销功能) → UI 不展示 (只显示 consumed)
+
+### TC-F12 第 3 个 balance card 显示 + 跳转
+
+- **类型**: UI e2e
+- **位置**: tests/e2e/coin-balance-card.spec.ts (新建, 可合并到 smoke-child-main.spec.ts)
+- **步骤**:
+  - **Given**: child 已完成 F1 (金币 = 1), 打开 / (首页)
+  - **When**: 页面加载完成 (等待 3 个 .balance-card 渲染)
+  - **Then**:
+    - 第 3 个 `.balance-card` 是 `.coins` (不是 `.placeholder`)
+    - 第 3 个 card 图标 = "🪙", 标签 = "金币", 数字 = "1" (从 /api/coins/balance)
+    - 第 3 个 card 有 `cursor: pointer`, hover 时 transform: translateY(-2px)
+    - **不再是 fc0604b 灰色 placeholder** (无 `opacity: 0.45`, 无 `pointer-events: none`)
+- **断言**:
+  - DOM: `[data-testid="coins-card"]` 存在, 文本含 "金币" 和 "1"
+  - DOM: 元素无 `.placeholder` class
+  - CSS: getComputedStyle 第 3 个 card → cursor = 'pointer', backgroundImage 包含金色 gradient
+- **Then** (跳转):
+  - 点击第 3 个 card → URL 变为 /shop
+  - 商店页加载 (等待 #shop-root 元素)
+- **断言**:
+  - URL: `page.url()` 匹配 `/\/shop$/`
+  - Network: GET /api/shop/items 返回 200
+- **Edge case**:
+  - **金币为 0**: 第 3 个 card 仍显示 "🪙 0" (不隐藏)
+  - **API 失败**: /api/coins/balance 500 → 第 3 个 card 显示 "--" + 错误 toast
+  - **iPad Safari 真机**: 触摸点击 vs 桌面点击事件, 都应触发跳转 (参考 RFC §6.6 mobile 适配)
+
+---
+
+## 3. 额外测试用例（超过 F1-F12 范围）
+
+> 覆盖 RFC §8 风险与边界 + 用户要求的 8 条 edge case。每条独立 TC，可单独 fail/pass。
+
+### TC-X1 跨周重置：周日 23:59 兑换 → 周一 00:00 限额重置
+
+- **类型**: integration
+- **位置**: tests/unit/shop-exchange-week-reset-edge.test.ts (或合并到 TC-F8)
+- **步骤**:
+  - **Given**:
+    - child user_id=2, 当前时间 = 2026-06-08 (周日, ISO week 2026-W23) 23:59:30 Asia/Shanghai
+    - 本周 (W23) 已兑换 3 次 (用完 weekly_limit)
+    - 金币 = 50
+  - **When**:
+    - **Step 1**: 确认 GET /api/coins/balance → weekly_remaining: 0, week_of: '2026-W23'
+    - **Step 2**: 推进时间到 2026-06-09 (周一) 00:00:01 Asia/Shanghai (vi.setSystemTime)
+    - **Step 3**: GET /api/coins/balance → weekly_remaining: 3, week_of: '2026-W24'
+    - **Step 4**: POST /api/coins/exchange → 200, weekly_remaining: 2, week_of: '2026-W24'
+- **断言**:
+  - shop_redemptions 表 Step 4 新增 1 条 week_of='2026-W24'
+  - W23 那 3 条不变, 不被改写 (历史保留, RFC §8.4)
+  - 金币 = 50 - 10 = 40
+- **Edge case**:
+  - **差 1 秒**: 周日 23:59:59 vs 周一 00:00:00 → ISO week 翻转正确 (用 `Intl.DateTimeFormat` 验证)
+  - **跨年**: W52 → W01 (e.g., 2026-12-28 周一 → 2027-01-04 周一)
+  - **兑换时正好跨周**: 极端 case → 简化处理：用插入时的 week_of (RFC §4.4 spec)
+
+### TC-X2 周次数 race：同时 2 个 POST /api/coins/exchange，第 4 个返回 429
+
+- **类型**: integration
+- **位置**: tests/unit/shop-exchange-race.test.ts (新建)
+- **步骤**:
+  - **Given**: child 金币 = 100, 本周 (W24) 已兑换 2 次 (shop_redemptions count = 2)
+  - **When**:
+    - **Step 1**: 用 `Promise.all` 并发发起 2 个 POST /api/coins/exchange 请求
+    - **Step 2**: 验证结果: 1 个 200 OK (第 3 次成功), 1 个 429 weekly_limit_reached
+  - **Then**:
+    - shop_redemptions 本周累计 = 3 (D1 串行化保证)
+    - 没有第 4 次写入 (race 后查 COUNT 应是 3)
+- **断言**:
+  - 并发响应: 1×200 + 1×429
+  - DB: `SELECT COUNT(*) FROM shop_redemptions WHERE user_id=2 AND week_of='2026-W24' AND status='consumed'` = 3 (并发后)
+  - score_events 没有新增第 4 条 coins=-10 (失败回滚)
+- **Edge case**:
+  - **3 个并发**: 当前 2 次已用 → 并发 3 次 → 1×200 + 2×429 (第 4/5 次被拒)
+  - **D1 串行验证**: 用 miniflare 看 batch 执行顺序 (debug log 验证)
+  - **前端 disabled**: 即使按钮在 race 中 disabled, 用户点 2 次 → 至少 1 个 429 (RFC §8.2 防护)
+
+### TC-X3 跨周撤销：周一发 bonus → 周二撤销 → bonus 仍能找到并回收
+
+- **类型**: integration
+- **位置**: tests/unit/coin-bonus-cross-week-revoke.test.ts (新建)
+- **步骤**:
+  - **Given**:
+    - 时间 = 2026-06-08 (周日) 23:59:00 Asia/Shanghai (W23 即将结束)
+    - child 完成当天 3 个任务 → 发 +3 bonus (source_ref='2026-06-08:2', week_of='2026-W23')
+    - 金币 = 4 (3 + 1 task, 或 3 tasks + 1 bonus 视 task 数量)
+    - shop_items 表无商品
+  - **When**:
+    - **Step 1**: vi.setSystemTime 推进到 2026-06-09 (周一) 00:01:00 Asia/Shanghai (W24)
+    - **Step 2**: PM 撤销 2026-06-08 的 TC (POST /api/admin/task-completions/<id>/revoke)
+  - **Then**:
+    - 新增 2 条 score_events: -1 (任务) + -3 (bonus 反向)
+    - 反向 -3 bonus 的 source_ref = <原 bonus event_id>, reason='revoke:bonus:2026-06-08:2', week_of='2026-W24' (当前周)
+    - 金币: SUM = 0 (净 0, 守恒)
+- **断言**:
+  - INV-2 检查: 同 source_ref='<原 bonus id>' 的 SUM(change_value) = 0 (+3 + -3 = 0)
+  - 跨周查询: 即使原 bonus 在 W23, 撤销在 W24 → 仍能找到
+  - audit_log 写一条 action='revoke_task_completion', details 含 coin_event_id + bonus_event_id
+- **Edge case**:
+  - **撤销时 W23 已结束**: 验证 week_of = W24 (操作周), 但 reason/source_ref 保留 W23 信息
+  - **bonus 已多次反向**: 极端 case (撤销 + 重做 + 再撤销) → 每次 source_ref 不变, ±3 配对守恒
+  - **跨月**: W23 是 6 月初, W24 仍在 6 月 → 跨月不跨周也要测
+
+### TC-X4 bonus 重复触发：撤销后重新完成所有任务 → bonus 再发 +3
+
+- **类型**: integration
+- **位置**: tests/unit/coin-bonus-reissue-after-revoke.test.ts (新建) 或合并到 TC-F5
+- **步骤**:
+  - **Given**: TC-F4 状态 (金币 = 1, 已撤销 TC#1 + bonus, 当天已无 status='approved' 的 +3 bonus)
+  - **When**:
+    - **Step 1**: child 重新 POST /api/me/tasks/1/complete → +1 coins (金币 = 2)
+    - **Step 2**: child 重新 POST /api/me/tasks/2/complete → +1 coins (金币 = 3)
+    - **Step 3**: child 重新 POST /api/me/tasks/3/complete → +1 coins + +3 bonus (金币 = 7)
+  - **Then**: bonus 再发 1 次, 同 source_ref='<today>:2' 的 +3 coins status='approved' = 1 条 (最后那条)
+- **断言**:
+  - score_events 中今天关于 bonus 的累计: +3 → -3 → +3 = 净 +3 (守恒)
+  - 幂等检查通过: 反向 -3 后, 再发 +3 时 source_ref 没冲突 (因为前一条 +3 已被反向, 不存在 status='approved' 的同 source_ref +3)
+  - INV-2 检查: 同 source_ref 的 ±3 配对: (+3 + -3 + +3) = +3 净
+- **Edge case**:
+  - **同一天内多次撤销 + 重做**: 撤销 TC#1 → 重做 → 再撤销 TC#2 → 重做 → bonus 每次都重新判定
+  - **时间压缩**: 完成 → 撤销 → 完成 (秒级) → 不应有 deadlock 或 race
+  - **DB 锁**: miniflare 单库串行 → 无死锁, 但要确认 (RFC §4.4 "D1 单库串行")
+
+### TC-X5 历史 token_reward 保留：现有 type='game_time' 的 score_events 不被新逻辑影响
+
+- **类型**: integration
+- **位置**: tests/unit/coin-history-token-reward.test.ts (新建)
+- **步骤**:
+  - **Given**:
+    - 手工 INSERT 历史数据 (RFC §8.4 提到的历史 token_reward 场景):
+      ```sql
+      INSERT INTO score_events (user_id, type, change_value, reason, status, submitted_by, source, source_ref, week_of)
+        VALUES (2, 'game_time', 30, 'task:#1', 'approved', 'system', 'task', 'legacy-1', '2025-W30');
+      INSERT INTO score_events (user_id, type, change_value, reason, status, submitted_by, source, source_ref, week_of)
+        VALUES (2, 'game_time', 60, 'task:#2', 'approved', 'system', 'task', 'legacy-2', '2025-W31');
+      ```
+    - child user_id=2 当前金币 = 0 (新系统启用前的状态)
+  - **When**:
+    - **Step 1**: child 完成 1 个任务 (新系统启用后)
+    - **Step 2**: GET /api/public/balance (或现有 game_time balance API) → 应返回 90 (30+60)
+    - **Step 3**: GET /api/coins/balance → 应返回 1 (只算 type='coins')
+  - **Then**:
+    - 历史 game_time events 不变 (status='approved', week_of='2025-W30/31')
+    - 新写的 +1 coins event 独立 (type='coins', source='task')
+    - 两个账户互不干扰
+- **断言**:
+  - DB: `SELECT SUM(change_value) FROM score_events WHERE user_id=2 AND type='game_time' AND status='approved'` = 90 (历史 + 未来兑换 不混淆)
+  - DB: `SELECT SUM(change_value) FROM score_events WHERE user_id=2 AND type='coins' AND status='approved'` = 1 (新系统)
+  - tasks.token_reward 字段保留 (即使代码忽略)
+- **Edge case**:
+  - **migration 升级**: 跑 0007_coin_system.sql 后, 历史数据完整保留 (D1 表重建无数据丢失)
+  - **查询聚合**: 用 `WHERE type IN ('game_time', 'coins')` 应返回所有余额 (向后兼容)
+  - **撤销历史 task_completion**: 即使 task 是旧的, 撤销时只写反向 -1 coins (新逻辑), 不动历史 game_time event
+
+### TC-X6 多孩隔离（未来扩展）：不同 user_id 金币余额独立
+
+- **类型**: integration
+- **位置**: tests/unit/coin-multi-user-isolation.test.ts (新建, 但 v1 可能 skip, 仅作 schema 验证)
+- **步骤**:
+  - **Given**:
+    - 手工 seed 2 个 child user: user_id=2 (kid A) + user_id=3 (kid B)
+    - kid A 金币 = 5, kid B 金币 = 3 (独立 score_events)
+    - API 默认取当前 child (v1 是 id=2, RFC §8.5 提到)
+  - **When**:
+    - **Step 1**: kid A 完成 1 任务 → POST /api/me/tasks/1/complete (kid A 登录)
+    - **Step 2**: GET /api/coins/balance (kid A) → 6
+    - **Step 3**: GET /api/coins/balance (kid B 模拟登录) → 3 (没动)
+  - **Then**: 各自余额独立, shop_redemptions 按 user_id 隔离
+- **断言**:
+  - DB: `SELECT SUM(change_value) FROM score_events WHERE user_id=2 AND type='coins'` = 6
+  - DB: `SELECT SUM(change_value) FROM score_events WHERE user_id=3 AND type='coins'` = 3
+  - DB: `SELECT COUNT(*) FROM shop_redemptions WHERE user_id=2` = A 的次数
+  - 周限额也按 user_id: kid A 的 weekly_limit 不影响 kid B
+- **Edge case**:
+  - **bonus source_ref 隔离**: kid A 的 bonus source_ref='<date>:2', kid B 的 = '<date>:3' → 不会冲突
+  - **v1 范围**: 这个 TC 是 schema 验证 + 预留测试, v1 UI 只显示 kid A, 实际跑可能因缺少多孩登录而 skip
+  - **FK 完整性**: 删除 user → score_events 用 ON DELETE CASCADE? (看现有 schema, 应是 RESTRICT)
+
+### TC-X7 兑换失败回滚：余额不足时 db.batch() 原子回滚，score_events 不留脏数据
+
+- **类型**: integration
+- **位置**: tests/unit/shop-exchange-atomicity.test.ts (新建)
+- **步骤**:
+  - **Given**:
+    - child 金币 = 5, 商品价格 = 10
+    - 监控 score_events 当前 COUNT (前置基线 N)
+  - **When**: POST /api/coins/exchange { item_id: 1 } → 期望 400 `insufficient_coins`
+  - **Then**:
+    - score_events COUNT 仍是 N (无新写入)
+    - shop_redemptions COUNT 不变
+- **断言**:
+  - DB: `SELECT COUNT(*) FROM score_events WHERE user_id=2` = N
+  - DB: `SELECT COUNT(*) FROM shop_redemptions WHERE user_id=2` = 0
+  - 金币余额不变 (5)
+- **Edge case**:
+  - **item 不存在** (id=999): 400 invalid_item_id, 无写入
+  - **item 禁用** (is_active=0): 400 invalid_item_id, 无写入
+  - **周次数用完**: 429 weekly_limit_reached, 无写入 (与 TC-F7 互补)
+  - **db.batch 中途失败** (模拟第 2 条 SQL throw): 用 miniflare monkey-patch D1.prepare 模拟, 验证 batch 原子回滚
+  - **网络中断**: client abort 后 server 应清理 (D1 batch 已结束, 无副作用)
+
+### TC-X8 shop_redemptions 索引性能：大数据量（1000+ redemption）下周限额查询 < 50ms
+
+- **类型**: integration + perf
+- **位置**: tests/unit/shop-redemption-index-perf.test.ts (新建)
+- **步骤**:
+  - **Given**:
+    - child user_id=2
+    - seed 1000 条 shop_redemptions (跨多周, 但本周 = '2026-W24' 只有 3 条 consumed)
+  - **When**:
+    - **Step 1**: 执行周限额查询 SQL 100 次, 计时
+      ```sql
+      SELECT COUNT(*) FROM shop_redemptions
+        WHERE user_id = 2 AND week_of = '2026-W24' AND status = 'consumed';
+      ```
+    - **Step 2**: 执行历史查询 100 次, 计时
+      ```sql
+      SELECT * FROM shop_redemptions
+        WHERE user_id = 2 AND status = 'consumed'
+        ORDER BY redeemed_at DESC LIMIT 30;
+      ```
+  - **Then**:
+    - Step 1 平均耗时 < 50ms (命中 idx_redemptions_user_week)
+    - Step 2 平均耗时 < 100ms (命中 idx_redemptions_user_redeemed)
+- **断言**:
+  - 用 `performance.now()` 在每个 query 前后计时, 计算平均 + p95
+  - EXPLAIN QUERY PLAN 验证走索引:
+    - Step 1: `USING INDEX idx_redemptions_user_week`
+    - Step 2: `USING INDEX idx_redemptions_user_redeemed`
+  - 不做表扫描 (SCAN TABLE)
+- **Edge case**:
+  - **不命中索引**: 故意写一个不带 user_id 的查询 → 验证 fallback 慢路径 (仅做对照, 不在 perf 范围)
+  - **1000 条 vs 10000 条**: 跑 2 个量级, 看线性增长
+  - **冷启动**: 第一次查询可能慢 (page cache), 排除第一次
+
+---
+
+## 4. 数据准备 (Seed 脚本)
+
+> 用于 Integration + UI e2e 的快速 fixture 准备。脚本放在 `scripts/seed-coin-system-test.sh`，由 `tests/unit/*` / `tests/e2e/*` 在 `beforeAll` 调用。
+
+### 4.1 脚本接口设计
+
+```bash
+# 用法
+./scripts/seed-coin-system-test.sh [scenario]
+# scenario: minimal | standard | history-heavy | cross-week | multi-week
+# 默认: standard
+
+# 输出 (stdout JSON)
+{"pm_id":1,"child_id":2,"task_ids":[1,2,3],"item_id":1,"fixture":"standard"}
+```
+
+### 4.2 Standard 场景伪代码 (覆盖 F1-F5 + F6-F8 大部分)
+
+```bash
+#!/usr/bin/env bash
+set -e
+
+# 1. clean
+wrangler d1 execute DB --local --command "DELETE FROM score_events; DELETE FROM task_completions; DELETE FROM audit_log; DELETE FROM shop_redemptions; DELETE FROM shop_items; DELETE FROM tasks WHERE id > 0;"
+
+# 2. seed users (id=1 PM, id=2 child, 沿用 0001_initial)
+# 假设已有: PM (id=1, pin=123654), Child (id=2, name='test-kid')
+
+# 3. seed 3 active tasks (不同 category)
+wrangler d1 execute DB --local --command "
+  INSERT INTO tasks (id, name, category, is_active, sort_order, token_reward, created_at, updated_at)
+  VALUES 
+    (1, '刷牙', 'health', 1, 1, 0, unixepoch(), unixepoch()),
+    (2, '整理书包', 'study', 1, 2, 0, unixepoch(), unixepoch()),
+    (3, '阅读 20 分钟', 'study', 1, 3, 0, unixepoch(), unixepoch());
+"
+
+# 4. seed 1 shop_item (RFC §3.2 spec)
+wrangler d1 execute DB --local --command "
+  INSERT INTO shop_items (name, kind, cost_coins, reward_value, reward_type, description, icon, sort_order, weekly_limit)
+  VALUES ('游戏时间 10 分钟', 'game_time', 10, 10, 'game_time', '用 10 金币兑换 10 分钟游戏时间', '🎮', 1, 3);
+"
+
+# 5. seed 5 天历史 (RFC §8.4 提到的历史 token_reward)
+# 每天随机完成 0-3 个任务 + 1-2 次兑换
+# (实际用 SQL 静态 seed, 不用真随机, 保证可复现)
+wrangler d1 execute DB --local --file=./fixtures/coin-5day-history.sql
+
+# fixtures/coin-5day-history.sql 内容 (示例, 5 天):
+# - day1 (W22): 0 tasks, 0 exchange
+# - day2 (W22): 2 tasks, 1 exchange
+# - day3 (W22): 3 tasks + bonus, 0 exchange
+# - day4 (W23): 1 task, 0 exchange  
+# - day5 (W23): 3 tasks + bonus, 1 exchange
+
+# 6. 输出 fixture 元数据
+echo '{"pm_id":1,"child_id":2,"task_ids":[1,2,3],"item_id":1,"fixture":"standard","days_seeded":5}'
+```
+
+### 4.3 其他场景 (按需)
+
+| Scenario | 用例 | 触发条件 |
+|----------|------|---------|
+| `minimal` | 只 seed users + 3 tasks + 1 item, 无历史 | TC-F1, F2, F3, F4, F5 (干净状态) |
+| `standard` | minimal + 5 天历史 | 多数 TC 默认 |
+| `history-heavy` | standard + 1000+ shop_redemptions | TC-X8 性能测试 |
+| `cross-week` | minimal + 周日 23:59 兑换数据 | TC-X1, TC-F8 |
+| `multi-week` | minimal + 跨 3 周历史 | TC-F8 周限额隔离 |
+| `multi-user` | minimal + 2 个 child | TC-X6 (v1 预留) |
+| `legacy-token` | minimal + 旧 game_time events | TC-X5 |
+
+### 4.4 关键 fixture 文件
+
+```
+scripts/
+├── seed-coin-system-test.sh           # 主入口 (调用 wrangler d1 execute)
+├── fixtures/
+│   ├── coin-minimal.sql                # users + 3 tasks + 1 item
+│   ├── coin-5day-history.sql           # 5 天混合历史
+│   ├── coin-1000-redemptions.sql       # 性能测试用
+│   ├── coin-cross-week.sql             # W23/W24 边界
+│   └── coin-legacy-token-rewards.sql   # 历史 type='game_time' 数据
+└── clean-coin-test-db.sh               # 反向: 清理 (可独立跑)
+```
+
+### 4.5 与现有 scripts/clean-test-db.sh 集成
+
+```bash
+# 复用现有清理逻辑, 追加 coin 表
+# scripts/clean-test-db.sh
+DELETE FROM score_events;       -- 已有
+DELETE FROM task_completions;   -- 已有
+DELETE FROM audit_log;          -- 已有
+DELETE FROM tasks;              -- 已有
+DELETE FROM shop_redemptions;   -- NEW
+DELETE FROM shop_items;         -- NEW (会重新 seed)
+```
+
+### 4.6 ID 分配约定 (避免测试间冲突)
+
+| 表 | ID 范围 | 说明 |
+|----|---------|------|
+| users | 1=PM, 2=child, 3+=其他测试用户 | 已有约定 |
+| tasks | 1-10=标准, 11+=扩展场景 | 已有约定 |
+| shop_items | 1=默认商品, 2+=扩展 | NEW |
+| score_events | 自动递增 | 已有 |
+| shop_redemptions | 自动递增 | NEW |
+
+测试间 ID 复用通过 `clearAllData()` 保证 (沿用现有 pattern)。
