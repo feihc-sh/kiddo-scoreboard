@@ -206,11 +206,15 @@ function renderTasks() {
       btn.addEventListener('click', () => tryUncompleteTask(t));
     } else if (isSleepLocked) {
       // Only attach click if button not already past cutoff (disabled).
+      // §010: open sprint modal so the user sees the big countdown while
+      // deciding whether to check in before the deadline.
       if (!btn.disabled) {
-        btn.addEventListener('click', () => completeTask(t.id));
+        btn.addEventListener('click', () => showSprintModal(t));
       }
     } else {
-      btn.addEventListener('click', () => completeTask(t.id));
+      // §010: open sprint modal (game-like focus UX) instead of instant
+      // complete. User explicitly confirms via the modal's "✓ 打卡" button.
+      btn.addEventListener('click', () => showSprintModal(t));
     }
     root.appendChild(btn);
   });
@@ -232,6 +236,68 @@ function formatHHMMSS(totalSec) {
   const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
   const s = String(totalSec % 60).padStart(2, '0');
   return `${h}:${m}:${s}`;
+}
+
+/** Item #010: classify remaining-seconds into urgency buckets for sprint modal countdown color. */
+function sprintUrgency(diffSec) {
+  if (diffSec <= 60) return 'critical';
+  if (diffSec <= 600) return 'danger';
+  if (diffSec <= 3600) return 'warning';
+  return 'ok';
+}
+
+// ---------- Sprint modal (Item #010) ----------
+let _sprintCountdownTimer = null;
+let _sprintActiveTaskId = null;
+/** Open the sprint modal for a given task. Pure DOM + client-side timer, no API call. */
+function showSprintModal(task) {
+  if (!task) return;
+  _sprintActiveTaskId = task.id;
+  const modal = $('#sprint-modal');
+  if (!modal) return;
+  // Detail block: icon + name (use defaults if missing).
+  const iconEl = modal.querySelector('.sprint-icon');
+  const nameEl = modal.querySelector('.sprint-name');
+  if (iconEl) iconEl.textContent = task.icon || '⭐';
+  if (nameEl) nameEl.textContent = task.name || '任务';
+  // Countdown block: only if task has a cutoff_time.
+  const cd = modal.querySelector('.sprint-countdown');
+  if (task.cutoff_time && cd) {
+    cd.hidden = false;
+    updateSprintCountdown();
+    if (_sprintCountdownTimer) clearInterval(_sprintCountdownTimer);
+    _sprintCountdownTimer = setInterval(updateSprintCountdown, 1000);
+  } else if (cd) {
+    cd.hidden = true;
+  }
+  modal.hidden = false;
+}
+function hideSprintModal() {
+  const modal = $('#sprint-modal');
+  if (!modal) return;
+  modal.hidden = true;
+  _sprintActiveTaskId = null;
+  if (_sprintCountdownTimer) {
+    clearInterval(_sprintCountdownTimer);
+    _sprintCountdownTimer = null;
+  }
+}
+function updateSprintCountdown() {
+  const modal = $('#sprint-modal');
+  if (!modal || modal.hidden) return;
+  const task = state.tasks.find((t) => t.id === _sprintActiveTaskId);
+  if (!task || !task.cutoff_time) return;
+  const diff = computeCutoffDiffSec(task.cutoff_time);
+  const cd = modal.querySelector('.sprint-countdown');
+  const text = modal.querySelector('.sprint-countdown-text');
+  if (!cd || !text) return;
+  if (diff <= 0) {
+    text.textContent = '00:00:00';
+    cd.dataset.urgency = 'critical';
+    return;
+  }
+  text.textContent = formatHHMMSS(diff);
+  cd.dataset.urgency = sprintUrgency(diff);
 }
 let _countdownTimer = null;
 function startCountdownLoop() {
@@ -504,6 +570,40 @@ function bindEvents() {
   $('#submit-modal').addEventListener('click', (e) => {
     if (e.target.id === 'submit-modal') closeSubmitModal();
   });
+  // Sprint modal (Item #010) — X, backdrop, Esc all close.
+  bindSprintModalEvents();
+}
+
+// ---------- Sprint modal event wiring (Item #010) ----------
+let _sprintKeyHandlerBound = false;
+function bindSprintModalEvents() {
+  const modal = $('#sprint-modal');
+  if (!modal) return;
+  // Close X button.
+  const closeBtn = modal.querySelector('.sprint-close');
+  if (closeBtn) closeBtn.addEventListener('click', hideSprintModal);
+  // Click on backdrop (the modal-back element itself) closes.
+  modal.addEventListener('click', (e) => {
+    if (e.target.id === 'sprint-modal') hideSprintModal();
+  });
+  // Check-in button: trigger existing completeTask flow, then close modal.
+  const checkinBtn = modal.querySelector('.sprint-checkin');
+  if (checkinBtn) {
+    checkinBtn.addEventListener('click', () => {
+      const id = _sprintActiveTaskId;
+      hideSprintModal();
+      if (id != null) completeTask(id);
+    });
+  }
+  // Esc key — bind once to avoid stacking listeners on re-bind.
+  if (!_sprintKeyHandlerBound) {
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const m = $('#sprint-modal');
+      if (m && !m.hidden) hideSprintModal();
+    });
+    _sprintKeyHandlerBound = true;
+  }
 }
 
 async function boot() {

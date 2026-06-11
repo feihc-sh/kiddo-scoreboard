@@ -240,9 +240,9 @@
 - [ ] **汇报**: PR 链接, 等用户 merge → GH Action 自动 backup + deploy
 
 **风险**: 🟡 (UI-only, 不动 schema / 后端; 改变既有 task 按钮 click 行为, 算小回归风险)
-**Status**: ⏳ pending
+**Status**: 🔧 running
 **Commit**: —
-**Started**: 2026-06-10
+**Started**: 2026-06-11
 
 ---
 

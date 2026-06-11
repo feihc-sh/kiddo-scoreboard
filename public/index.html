@@ -69,6 +69,25 @@
     </div>
   </div>
 
+  <!-- ====== Sprint modal (Item #010: child UI task-sprint focus) ====== -->
+  <div id="sprint-modal" class="modal-back sprint-modal" hidden>
+    <div class="modal sprint-content">
+      <button type="button" class="sprint-close" aria-label="关闭">×</button>
+      <h2 class="sprint-title">冲刺中...</h2>
+      <div class="sprint-detail">
+        <span class="sprint-icon" aria-hidden="true">⭐</span>
+        <span class="sprint-name">任务</span>
+      </div>
+      <div class="sprint-countdown" data-urgency="ok" hidden>
+        <span class="sprint-countdown-text">00:00:00</span>
+        <span class="sprint-countdown-hint">距离截止</span>
+      </div>
+      <div class="sprint-actions">
+        <button type="button" class="sprint-checkin btn btn-primary">✓ 打卡</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ====== Error banner (network/load failures) ====== -->
   <div id="error-banner" class="error-banner" hidden>
     <span>⚠ SYSTEM ERROR:</span>
