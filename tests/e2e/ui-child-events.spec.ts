@@ -66,10 +66,10 @@ test('HAPPY-2: status badges render with correct colors (4 statuses)', async ({ 
   await expect(page.locator('.event-item.event-status-rejected')).toHaveCount(1);
   await expect(page.locator('.event-item.event-status-revoked')).toHaveCount(1);
   // Each row shows its status label.
-  await expect(page.locator('.event-status-pending .event-status')).toContainText('待审');
+  await expect(page.locator('.event-status-pending .event-status')).toContainText('待确认');  // PR #27: "◷ 待确认"
   await expect(page.locator('.event-status-approved .event-status')).toContainText('已通过');
-  await expect(page.locator('.event-status-rejected .event-status')).toContainText('已拒');
-  await expect(page.locator('.event-status-revoked .event-status')).toContainText('已撤销');
+  await expect(page.locator('.event-status-rejected .event-status')).toContainText('已拒绝');  // PR #27: "✕ 已拒绝"
+  await expect(page.locator('.event-status-revoked .event-status')).toContainText('已回收');  // PR #27: "↩ 已回收"
 });
 
 test('HAPPY-3: max 10 events in list (15 seeded → list shows 10)', async ({ page }) => {
@@ -97,7 +97,7 @@ test('HAPPY-4: each event shows type icon, amount with sign, account unit, reaso
   await page.waitForSelector('#event-list .event-item', { state: 'visible' });
 
   const row = page.locator('#event-list .event-item').first();
-  await expect(row.locator('.event-icon')).toContainText('💰');
+  await expect(row.locator('.event-icon')).toContainText('⚙️');  // PR #27: pocket_money icon changed from 💰 to ⚙️
   await expect(row.locator('.event-amount')).toContainText('+5 元');
   await expect(row.locator('.event-reason')).toContainText('测试事件');
 });
@@ -216,5 +216,5 @@ test('EDGE-5: PM revokes approved event — child sees status change after refre
   await page.locator('#btn-refresh').click();
   await page.waitForTimeout(500);
   await expect(page.locator('.event-status-revoked')).toHaveCount(1);
-  await expect(page.locator('.event-status-revoked .event-status')).toContainText('已撤销');
+  await expect(page.locator('.event-status-revoked .event-status')).toContainText('已回收');  // PR #27: "↩ 已回收"
 });

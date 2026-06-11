@@ -16,6 +16,7 @@ import {
   seedEvent,
   seedTask,
   d1Exec,
+  shanghaiToday,
 } from './helpers/db';
 import { loginAsPm } from './helpers/auth';
 
@@ -99,7 +100,13 @@ test.describe('UI: PM Hard-Delete (Stage 4, §3.4)', () => {
     // the child UI; we are staging the same data from PM-side).
     const taskId = seedTask({ token_reward: 5, target_account: 'pocket_money' });
     const now = Math.floor(Date.now() / 1000);
-    const today = new Date(now * 1000).toISOString().slice(0, 10);
+    // Use Shanghai date for `completed_date`, NOT UTC.
+    // `/api/admin/task-completions` defaults the `date` query param to
+    // `todayShanghai()` (src/utils/week.ts), and admin.js also uses
+    // todayShanghai() for its filter. After UTC 16:00 (= Shanghai 00:00
+    // next day), `new Date().toISOString().slice(0, 10)` is off-by-one
+    // and the seeded completion won't show in the list.
+    const today = shanghaiToday();
 
     // Score event (approved, +5) and matching completion row.
     const evId = seedEvent({ type: 'pocket_money', change_value: 5, status: 'approved', reason: 'task-completed' });

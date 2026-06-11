@@ -90,13 +90,12 @@ test.describe('UI: Child Main Page', () => {
     // §3.11 toggle: completed task is now clickable to revoke (not disabled).
     await expect(btn).toBeEnabled();
     await expect(btn).toHaveClass(/task-btn-done/);
-    await expect(btn).toContainText('今日已完成');
-    await expect(btn).toContainText('点击撤销');
+    await expect(btn).toContainText('任务完成');  // PR #27 Mecha redesign: badge simplified to "✓ 任务完成"
   });
 
   test('empty tasks list shows "家长还没设置任务" message', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#task-shortcuts')).toContainText('家长还没设置任务');
+    await expect(page.locator('#task-shortcuts')).toContainText('等待任务指令');  // PR #27: "等待任务指令…"
   });
 
   // ---------- Events list ----------
@@ -109,8 +108,8 @@ test.describe('UI: Child Main Page', () => {
     const items = page.locator('#event-list .event-item');
     await expect(items).toHaveCount(3);
     await expect(items.filter({ hasText: '按时上床' })).toContainText('已通过');
-    await expect(items.filter({ hasText: '想加游戏' })).toContainText('待审');
-    await expect(items.filter({ hasText: '不想吃菜' })).toContainText('已拒');
+    await expect(items.filter({ hasText: '想加游戏' })).toContainText('待确认');  // PR #27: "◷ 待确认"
+    await expect(items.filter({ hasText: '不想吃菜' })).toContainText('已拒绝');  // PR #27: "✕ 已拒绝"
   });
 
   test('event count badge reflects list length', async ({ page }) => {
@@ -123,7 +122,7 @@ test.describe('UI: Child Main Page', () => {
   test('empty events list shows "还没有事件" empty state', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#event-empty')).toBeVisible();
-    await expect(page.locator('#event-empty')).toContainText('还没有事件');
+    await expect(page.locator('#event-empty')).toContainText('暂无操作记录');  // PR #27: empty events state text
   });
 
   // ---------- Refresh ----------

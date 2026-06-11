@@ -181,3 +181,20 @@ function currentIsoWeek(): string {
   const week = 1 + Math.round(((target.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
   return `${target.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
+
+/**
+ * Today in Asia/Shanghai as 'YYYY-MM-DD'. Matches the server-side
+ * `todayShanghai()` in src/utils/week.ts (UTC+8, no DST).
+ *
+ * Why not just `new Date().toISOString().slice(0, 10)`? That's UTC date,
+ * which crosses midnight 8 hours before Shanghai — so when the test runs
+ * after UTC 16:00 (= Shanghai 00:00 next day), the seed's `completed_date`
+ * will be off-by-one relative to what `/api/admin/task-completions`
+ * filters on (the endpoint defaults `date` to `todayShanghai()`).
+ *
+ * Use this for any `completed_date` seed that is later read back through
+ * the admin completions list endpoint.
+ */
+export function shanghaiToday(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}

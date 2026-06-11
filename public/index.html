@@ -4,26 +4,30 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#FFF9F0">
+  <!-- Mecha theme: deep space void -->
+  <meta name="theme-color" content="#07090D">
   <!-- Dev mode: prevent iPad Safari from caching stale HTML/JS across wrangler dev restarts. -->
   <!-- In production (after wrangler deploy), remove these 3 lines for real CDN caching. -->
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>🎮 kiddo 计分板</title>
-  <link rel="stylesheet" href="/app.css?v=4">
+  <title>⚡ JAGER — 计分板</title>
+  <!-- Orbitron font for HUD display feel -->
+  <link rel="stylesheet" href="/app.css?v=6">
+  <!-- Favicon inline SVG: cyan hexagon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><polygon points='50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5' fill='%230D1117' stroke='%2300F5FF' stroke-width='6'/><text x='50' y='65' font-size='40' text-anchor='middle' fill='%2300F5FF' font-family='monospace'>J</text></svg>">
 </head>
 <body>
 
   <!-- ====== Name prompt modal (first-time only) ====== -->
   <div id="welcome-modal" class="modal-back welcome-modal" hidden>
     <div class="modal welcome-content">
-      <div class="welcome-emoji" aria-hidden="true">🎮</div>
-      <h2 class="welcome-title">欢迎来到你的计分板！</h2>
-      <p class="welcome-hint">请输入你的名字（之后就不能改啦）</p>
+      <div class="welcome-emoji" aria-hidden="true">⚡</div>
+      <h2 class="welcome-title">系统启动中</h2>
+      <p class="welcome-hint">输入代号以初始化驾驶舱</p>
       <input id="welcome-name" class="welcome-input" type="text"
-             placeholder="你的名字" maxlength="20" autocomplete="off">
-      <button id="welcome-submit" class="btn btn-primary welcome-btn">开始 🚀</button>
+             placeholder="你的代号" maxlength="20" autocomplete="off">
+      <button id="welcome-submit" class="btn btn-primary welcome-btn">启动 ⚡</button>
       <p id="welcome-error" class="welcome-error" role="alert" hidden></p>
     </div>
   </div>
@@ -31,21 +35,21 @@
   <!-- ====== Submit request modal ====== -->
   <div id="submit-modal" class="modal-back" hidden>
     <div class="modal">
-      <h2 class="modal-title">📝 提交申请</h2>
-      <p class="modal-hint">请描述原因，家长审核后会处理～</p>
+      <h2 class="modal-title">📡 提交申请</h2>
+      <p class="modal-hint">描述操作原因，等待指令确认</p>
       <form id="submit-form" class="form">
         <div class="field">
           <label for="submit-type">类型</label>
           <select id="submit-type" name="type" required>
-            <option value="game_time">🎮 游戏时间</option>
-            <option value="pocket_money">💰 零花钱</option>
+            <option value="game_time">⚡ 能量时间</option>
+            <option value="pocket_money">⚙️ 资源</option>
           </select>
         </div>
         <div class="field">
           <label>方向</label>
           <div class="seg">
-            <button type="button" class="seg-btn" data-dir="1">➕ 想要</button>
-            <button type="button" class="seg-btn" data-dir="-1">➖ 扣分</button>
+            <button type="button" class="seg-btn" data-dir="1">+ 请求</button>
+            <button type="button" class="seg-btn" data-dir="-1">− 扣除</button>
           </div>
         </div>
         <div class="field">
@@ -55,11 +59,11 @@
         <div class="field">
           <label for="submit-reason">原因</label>
           <textarea id="submit-reason" name="reason" rows="2" maxlength="200" required
-                    placeholder="比如：今天主动整理了书桌"></textarea>
+                    placeholder="比如：完成整备检查"></textarea>
         </div>
         <div class="modal-actions">
           <button type="button" id="submit-cancel" class="btn btn-secondary">取消</button>
-          <button type="submit" class="btn btn-primary">提交</button>
+          <button type="submit" class="btn btn-primary">发送</button>
         </div>
       </form>
     </div>
@@ -67,32 +71,45 @@
 
   <!-- ====== Error banner (network/load failures) ====== -->
   <div id="error-banner" class="error-banner" hidden>
-    <span id="error-banner-text">出错了</span>
+    <span>⚠ SYSTEM ERROR:</span>
+    <span id="error-banner-text">加载失败</span>
     <button id="error-banner-retry" class="error-banner-retry">重试</button>
   </div>
 
   <!-- ====== App shell ====== -->
   <main class="app">
     <header class="hero">
-      <h1 class="hero-greeting" id="hero-greeting">你好！👋</h1>
-      <p class="hero-sub" id="hero-sub">点击下面完成任务赚代币吧</p>
+      <!-- Corner bracket decorations -->
+      <div class="corner-tr" aria-hidden="true"></div>
+      <!-- HUD scan line -->
+      <div class="scan-line" aria-hidden="true"></div>
+
+      <div class="status-dot" aria-hidden="true"></div>
+      <h1 class="hero-greeting" id="hero-greeting">你好，驾驶员！👋</h1>
+      <p class="hero-sub" id="hero-sub">// 选择任务目标，执行整备检查</p>
     </header>
 
-    <section class="balance-row" aria-label="账户余额">
+    <section class="balance-row" aria-label="账户状态">
       <div class="balance-card game-time" id="card-game-time">
-        <span class="balance-icon" aria-hidden="true">🎮</span>
-        <div class="balance-label">游戏时间</div>
+        <span class="balance-icon" aria-hidden="true">⚡</span>
+        <div class="balance-label">能量时间</div>
         <div class="balance-value"><span id="balance-game-time">0</span><span class="balance-unit">分钟</span></div>
       </div>
       <div class="balance-card pocket-money" id="card-pocket-money">
-        <span class="balance-icon" aria-hidden="true">💰</span>
-        <div class="balance-label">零花钱</div>
+        <span class="balance-icon" aria-hidden="true">⚙️</span>
+        <div class="balance-label">资源储备</div>
         <div class="balance-value"><span id="balance-pocket-money">0</span><span class="balance-unit">元</span></div>
+      </div>
+      <!-- Placeholder for upcoming 积分系统 (Phase 2) -->
+      <div class="balance-card placeholder" id="card-points" aria-label="积分系统 占位">
+        <span class="balance-icon" aria-hidden="true">🏆</span>
+        <div class="balance-label">积分系统</div>
+        <div class="balance-value placeholder-text">待上线</div>
       </div>
     </section>
 
     <!-- 3 progress bars (daily / monthly / yearly) — Item #005 -->
-    <section class="progress-bars" aria-label="完成进度">
+    <section class="progress-bars" aria-label="任务完成率">
       <div class="progress-bar daily" id="pb-daily">
         <div class="progress-bar-track"><div class="progress-bar-fill" id="pb-daily-fill"></div></div>
         <div class="progress-bar-text" id="pb-daily-text">今日 0 / 0 (0%)</div>
@@ -107,22 +124,22 @@
       </div>
     </section>
 
-    <section class="section task-shortcuts-section" aria-label="今日任务">
-      <h2 class="section-title">⚡ 今日任务 <span class="section-hint">每天每项 1 次</span></h2>
+    <section class="section task-shortcuts-section" aria-label="任务列表">
+      <h2 class="section-title">⚡ 任务目标 <span class="section-hint">// 每日重置</span></h2>
       <div id="task-shortcuts" class="task-shortcuts"></div>
     </section>
 
     <section class="actions">
-      <button id="btn-submit" class="btn btn-primary action-btn">📝 提交申请</button>
+      <button id="btn-submit" class="btn btn-primary action-btn">📡 提交申请</button>
       <button id="btn-refresh" class="btn btn-secondary action-btn">🔄 刷新</button>
     </section>
 
-    <section class="section events-section" aria-label="最近事件">
-      <h2 class="section-title">最近事件 <span class="count" id="event-count">0</span></h2>
+    <section class="section events-section" aria-label="操作日志">
+      <h2 class="section-title">📋 操作日志 <span class="count" id="event-count">0</span></h2>
       <div id="event-list" class="event-list"></div>
       <div id="event-empty" class="empty" hidden>
         <div class="empty-icon">📭</div>
-        <div>还没有事件哦～</div>
+        <div>暂无操作记录</div>
       </div>
     </section>
   </main>
@@ -133,6 +150,6 @@
   <!-- ====== Confetti canvas ====== -->
   <canvas id="confetti" class="confetti-canvas" aria-hidden="true"></canvas>
 
-  <script src="/app.js?v=5" defer></script>
+  <script src="/app.js?v=6" defer></script>
 </body>
 </html>

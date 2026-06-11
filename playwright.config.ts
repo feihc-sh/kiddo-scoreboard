@@ -10,6 +10,12 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
   workers: 1,
+  // Auto-retry once on flaky failures. PR #27 discovery: wrangler dev's workerd
+  // can take >120s to respond to GET /admin/ under accumulated load (after 80+
+  // tests), causing the only-domcontentloaded goto to hit test timeout. Retry
+  // recovers the occasional tail-latency spike. Pair with waitUntil:'domcontentloaded'
+  // on the specific test (ui-admin-pending empty-state) to reduce time-to-goto-return.
+  retries: 1,
   reporter: 'list',
   timeout: 120_000,
   expect: { timeout: 10_000 },

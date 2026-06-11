@@ -69,7 +69,7 @@ test.describe('UI: Child First-time Flow', () => {
     await expect(page.locator('#welcome-modal')).toBeVisible();
     // Error message
     await expect(page.locator('#welcome-error')).toBeVisible();
-    await expect(page.locator('#welcome-error')).toContainText('名字');
+    await expect(page.locator('#welcome-error')).toContainText('代号');  // PR #27: "代号不能为空"
   });
 
   test('whitespace-only name is rejected (trimmed)', async ({ page }) => {

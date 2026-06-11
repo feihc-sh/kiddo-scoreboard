@@ -7,7 +7,7 @@
 >
 > **流程**: PM 整理 clarification → DM 弹给用户拍板 → 用户回 → PM 更新 Item → 入清单等 0:00 cron
 >
-> **5 个旧 Item 已归档**, 见文件底部 § 归档 段
+> **6 个旧 Item 已归档**, 见文件底部 § 归档 段
 
 ---
 
@@ -39,7 +39,7 @@
 
 ---
 
-## 📋 当前清单 (5 个 Item: 3 hold + 1 进行中 + 1 新增待跑)
+## 📋 当前清单 (3 个 Item, 全部 ⏸ hold)
 
 ## Item #006 — 打卡日历 (月历可视化) ⏸ hold (用户 2026-06-08 暂缓)
 
@@ -343,6 +343,47 @@
 
 ---
 
+## Item #009 — Admin 物理删除打卡记录 (紧急, 待拍板) 🔥 ✅
+
+**用户原话**:
+> "我现在需要紧急在 admin 界面里增加把撤销掉的打卡习惯再撤销回来掉, 相当于删掉这条记录。删掉记录意味着允许再次打卡"
+
+**Clarification** (PM 整理, 拍板用):
+- **背景**: 现有 PM 可以"撤销"打卡 (软删, `status='revoked'`, 留 audit_log), 但记录还在, 孩子**当天不能再打卡** (去重逻辑)
+- **新需求**: 物理删除 score_event (或 task_completion) 记录, 让记录**完全消失**, 孩子可重新打卡
+- **跟现有原则冲突**:
+  - 之前 M11 笔记: "软删 status='revoked' + 审计 log 不可删"
+  - 现要物理删, 违反"软删"原则
+  - 折中: **物理删 event/completion 记录, 但 audit_log 写一条 "event_hard_deleted" + 原始数据 JSON** (审计可追溯, 数据不可恢复)
+- **风险**: 🔴 高 (物理删, 不可恢复, 只能靠 deleted_records 表找回)
+- **实施范围**: C (两个都要, score_event + task_completion)
+- **谁能用**: A (PM only, 二次确认弹窗, audit log 强制写)
+- **删除后列表显示**: B (灰色"已删除"标记, 含删除时间 + 谁删)
+- **新表设计** (避免再删 audit_log): 物理删的记录移到 `deleted_records` 表 (含 `record_type`, `original_id`, `original_data JSON`, `deleted_at`, `deleted_by`, `original_table`)
+
+**已拍板** (用户 2026-06-08):
+1. ✅ **范围**: C (两个都要)
+2. ✅ **谁能用**: A (PM only, 二次确认)
+3. ✅ **删除后列表显示**: B (灰色"已删除"标记)
+
+**Status**: ✅ done (PR commit `9c95c4d` + 子 commits `5e4d5fa`/`b96a8be`/`e03c474`/`7375a7d`/`bcd90ff`, 2026-06-08)
+**风险**: 🔴
+**Started**: 2026-06-08
+**Completed**: 2026-06-08
+
+**说明**: **已实现 + 全部 5 段子 commit + PR merged 到 main**:
+- `5e4d5fa` 第 1 段: migration `0006_deleted_records.sql` + unit test 基线
+- `b96a8be` 第 2 段: 3 helpers + score_event `POST /:id/hard-delete` endpoint
+- `e03c474` 第 3 段: task_completion `POST /:id/hard-delete` endpoint
+- `7375a7d` 第 4 段: admin UI "🗑 永久删除" 按钮 + confirm 弹窗 + 灰显 marker
+- `bcd90ff` 第 5 段: PRD §3.5 + TEST_PLAN §3.15 + FEATURE_MATRIX + PROGRESS v2.2 文档
+- `9c95c4d` PR merge (`#009, v2.2`)
+
+单元测试 8/8 ✅ (deleted-records + admin-events-hard-delete + admin-task-completions-hard-delete)。
+cron 2026-06-10 清理孤儿 in_progress 标记。
+
+---
+
 ## 📝 Item 模板 (未来新 Item 用)
 
 ```markdown
@@ -373,13 +414,13 @@
 
 ---
 
-## 📊 归档统计 (5 Item)
+## 📊 归档统计 (6 Item)
 
 | 状态 | 数量 | Item |
 |---|---:|---|
-| ✅ done | 3 | #001 emoji / #002 睡眠 / #005 三进度条 |
+| ✅ done | 4 | #001 emoji / #002 睡眠 / #005 三进度条 / #009 硬删 |
 | 🚫 blocked → 归档 | 2 | #003 英语 / #004 老师投诉 |
-| **总计** | **5** | 全部归档 |
+| **总计** | **6** | 全部归档 |
 
 **用户拍板日期**: 2026-06-08
 **最后编辑**: PM Agent

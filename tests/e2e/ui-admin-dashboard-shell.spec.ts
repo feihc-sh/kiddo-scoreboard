@@ -142,7 +142,18 @@ test.describe('UI: PM Dashboard Shell (§3.2)', () => {
     await btn.click({ noWaitAfter: true, force: true }).catch(() => {});
 
     // No crash; page eventually ends at /admin/login.
-    await page.waitForURL(/\/admin\/login/, { timeout: 5000 });
+    //
+    // Don't use `page.waitForURL(/\/admin\/login/)`: the second rapid click
+    // also kicks off a navigation, but Playwright's policy check cancels
+    // the second one (only one navigation can be in flight at a time), so
+    // `waitForURL`'s default "load" wait fails with "Navigation canceled
+    // by policy check" even though the page IS at /admin/login. Poll the
+    // pathname instead — it doesn't depend on the navigation lifecycle.
+    await page.waitForFunction(
+      () => window.location.pathname === '/admin/login',
+      null,
+      { timeout: 5000 },
+    );
     expect(page.url()).toMatch(/\/admin\/login/);
     // Logout may have been called 1 or 2 times (no debounce), but at least 1.
     expect(logoutCalls).toBeGreaterThanOrEqual(1);
