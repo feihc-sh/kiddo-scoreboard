@@ -102,14 +102,16 @@ test.describe('P0 REGRESSION: admin revoke event must sync to child UI (2026-06-
     expect(ts.completed_task_ids, `expected task #1 NOT in completed_task_ids, got ${JSON.stringify(ts)}`).not.toContain(1);
 
     // Visual contract: child UI renders the task button with
-    // .task-btn-revoked class and "明天再来 🌙" text.
+    // .task-btn-revoked class and the "休眠中" badge. PR #27 changed the
+    // original "明天再来 🌙" text to "系统休眠中" — see comments in
+    // tests/e2e/ui-child-task-complete.spec.ts:73, 251.
     const childPage = await context.newPage();
     await childPage.goto('/');
     await childPage.waitForTimeout(1500);
     const taskBtn = childPage.locator('#task-shortcuts button.task-btn[data-task-id="1"]');
     await expect(taskBtn).toHaveClass(/task-btn-revoked/);
     const html = await taskBtn.innerHTML();
-    expect(html).toContain('明天再来');
+    expect(html).toContain('系统休眠中');
   });
 
   // ─────────────────────────────────────────────────────────────────────────

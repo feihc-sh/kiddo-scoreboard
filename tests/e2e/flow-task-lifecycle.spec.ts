@@ -4,10 +4,16 @@
 // PM creates task → child completes → PM revokes → child re-completes → PM deletes.
 // Single context, API-only (UI is tested in §3.11 + §3.5 separately).
 //
-// KNOWN BUG (PHASE2-FINDING): task_completions.awarded_event_id is NULL after creation,
-// so the revoke handler's UPDATE on score_events targets no row. Balance does NOT
-// actually reverse. Test verifies task_completion status changes (the completion row
-// IS updated) and documents the app bug separately.
+// M2 (Q7, feihao 2026-06-11) notes:
+// - The pre-M2 PHASE2-FINDING comment (awarded_event_id was NULL → revoke
+//   UPDATE matched no row → balance didn't reverse) was already fixed by
+//   5021b7d in commit log. awarded_event_id is populated on complete.
+// - M2 also removed the legacy token_reward event: the complete endpoint
+//   now writes only a +1 coin event, so legacy game_time/pocket_money
+//   balances stay at 0 after a complete (the only effect is +1 coin, not
+//   shown in this assertion). Revoke writes a -1 coin event instead of
+//   flipping the awarded event, so legacy balances stay 0 (the +1/-1
+//   pair nets to 0 on the coin balance).
 
 import { test, expect } from '@playwright/test';
 import { clearAllData, seedPmUser, d1Exec } from './helpers/db';
@@ -44,12 +50,18 @@ test.describe('§4 Flow F: Task lifecycle (API-only, end-to-end)', () => {
       `http://127.0.0.1:8787/api/me/tasks/${taskId}/complete`,
     );
     expect([200, 201]).toContain(compR.status());
-    // Balance: pocket_money=3.
+    // Coin System M2 (Q7, feihao 2026-06-11): task completion no longer
+    // adds token_reward (3) to pocket_money. The +1 coin is invisible to
+    // this assertion (the /api/public/balance endpoint only returns
+    // game_time + pocket_money — see src/utils/balance.ts computeBalance
+    // which excludes 'coins' type from the Balance type cast). The
+    // legacy game_time/pocket_money balances stay at 0.
     let br = await page.context().request.get(
       'http://127.0.0.1:8787/api/public/balance?user_id=2',
     );
     let balance = await br.json();
-    expect(balance.pocket_money).toBe(3);
+    expect(balance.pocket_money).toBe(0);
+    expect(balance.game_time).toBe(0);
 
     // 3. PM revokes task completion.
     const taskCompletionId = Number(
@@ -72,8 +84,11 @@ test.describe('§4 Flow F: Task lifecycle (API-only, end-to-end)', () => {
       )?.toString().trim(),
     );
     expect(tcStatus).toBe('revoked');
-    // PHASE2-FINDING: balance is still 3 because score_event awarded_event_id is NULL
-    // (app bug — see task-completions.ts:revoke handler). Documented separately.
+    // M2 (Q7): revoke no longer UPDATEs the awarded event to 'revoked' —
+    // it writes a separate -1 coin event. Legacy game_time/pocket_money
+    // balances stay at 0 (the +1/-1 coin pair nets to 0 on the coin
+    // balance, which is the only thing that moves). Test now passes
+    // because there's no balance to assert against at this step.
 
     // 5. (skipped re-complete — see PHASE2-FINDING note above)
 

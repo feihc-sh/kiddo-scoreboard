@@ -78,8 +78,11 @@ test.describe('§4 Flow A: New user first day (end-to-end)', () => {
       // 8. Child clicks 整理书桌.
       await childPage.locator('#task-shortcuts .task-btn').filter({ hasText: '整理书桌' }).click();
       await childPage.waitForTimeout(500);
-      // Balance should show +5.
-      await expect(childPage.locator('#balance-pocket-money, .balance-pocket-money, .pm-balance-pocket-money').first()).toContainText('5');
+      // Coin System M2 (Q7, feihao 2026-06-11): task completion no longer
+      // adds token_reward (5) to pocket_money. Balance stays at 0; the only
+      // effect is a +1 coin (not displayed in this version — coin balance
+      // card lands in M4).
+      await expect(childPage.locator('#balance-pocket-money, .balance-pocket-money, .pm-balance-pocket-money').first()).toContainText('0');
 
       // 9. Child submits +10 元 with reason 帮忙洗碗.
       // Open submit modal.
@@ -109,11 +112,13 @@ test.describe('§4 Flow A: New user first day (end-to-end)', () => {
       );
       expect(apR.status()).toBe(200);
 
-      // 11. Child refreshes — balance updates to 15 元.
+      // 11. Child refreshes — balance updates.
       await childPage.locator('#btn-refresh').click();
       await childPage.waitForTimeout(500);
-      // Final balance: pocket_money = 5 (task) + 10 (event approved) = 15.
-      await expect(childPage.locator('#balance-pocket-money, .balance-pocket-money, .pm-balance-pocket-money').first()).toContainText('15');
+      // M2: manual events (PM-approved) still land in pocket_money normally —
+      // the M2 change only affects task completion. So balance = 0 (task
+      // complete no longer adds) + 10 (event approved) = 10.
+      await expect(childPage.locator('#balance-pocket-money, .balance-pocket-money, .pm-balance-pocket-money').first()).toContainText('10');
 
       // 12. Final audit assertions.
       const finalAr = await pmPage.context().request.get(

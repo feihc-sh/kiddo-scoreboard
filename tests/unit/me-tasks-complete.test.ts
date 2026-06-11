@@ -217,16 +217,23 @@ function makeMockDb(): D1Database {
 
         if (/^INSERT INTO\s+task_completions/i.test(q)) {
           const id = nextCompletionId++;
-          // Bound params: [task_id, user_id, status, completed_date].
-          // `completed_at` is inlined as `unixepoch()`.
+          // Bound params: [task_id, user_id, completed_date].
+          // `status` and `completed_at` are inlined as SQL literals
+          // ('active' and unixepoch() respectively) — see src/routes/me/tasks.ts
+          // task complete handler. Mock mirrors the inlined status literally
+          // rather than reading a non-existent bound param.
+          // `awarded_event_id` is set via SQLite `last_insert_rowid()` in
+          // the src — for our 3-statement batch that resolves to the +1
+          // coin event id from batch[0]. The mock's `lastInsertId` (updated
+          // by the previous score_events INSERT) mirrors that.
           const completion: TaskCompletion = {
             id,
             task_id: p[0] as number,
             user_id: p[1] as number,
-            status: (p[2] as TaskCompletion['status']) ?? 'active',
-            completed_date: p[3] as string,
+            status: 'active',
+            completed_date: p[2] as string,
             completed_at: now,
-            awarded_event_id: null,
+            awarded_event_id: lastInsertId,
             revoked_at: null,
             revoked_by: null,
           };
@@ -368,13 +375,27 @@ describe('POST /api/me/tasks/:id/complete', () => {
     expect(body.task_name).toBe('Read 30min');
     expect(body.token_awarded).toBe(15);
     expect(body.target_account).toBe('game_time');
-    expect(body.new_balance).toEqual({ game_time: 15, pocket_money: 0 });
+    // Coin System M2 (Q7, feihao 2026-06-11): task completion no longer adds
+    // token_reward to game_time/pocket_money. The only balance change is +1
+    // coin (type='coins', change_value=1). Legacy game_time/pocket_money
+    // balances stay at 0. game_time (15) is still the *informational*
+    // token_awarded value above — it's what the task would have given in
+    // the old model — but it no longer hits the balance.
+    expect(body.new_balance).toEqual({ game_time: 0, pocket_money: 0, coins: 1 });
     expect(typeof body.event_id).toBe('number');
+    // The new response field — M2 exposes the +1 coin event id so the UI
+    // can render the 🪙 toast. Same value as event_id (the legacy score
+    // event no longer exists).
+    expect(typeof body.coin_event_id).toBe('number');
+    expect(body.coin_event_id).toBe(body.event_id);
 
-    // All 3 batch statements executed (completion + score_event + audit_log).
+    // All 3 batch statements executed. New M2 order:
+    //   0. +1 coin event (score_events INSERT)
+    //   1. task_completions INSERT (awarded_event_id = last_insert_rowid() = coin event id)
+    //   2. audit_log INSERT
     expect(lastBatch).toHaveLength(3);
-    expect(lastBatch[0].query).toMatch(/^INSERT INTO\s+task_completions/i);
-    expect(lastBatch[1].query).toMatch(/^INSERT INTO\s+score_events/i);
+    expect(lastBatch[0].query).toMatch(/^INSERT INTO\s+score_events/i);
+    expect(lastBatch[1].query).toMatch(/^INSERT INTO\s+task_completions/i);
     expect(lastBatch[2].query).toMatch(/^INSERT INTO\s+audit_log/i);
 
     // The completion row exists with today's date and status=active.
@@ -384,23 +405,39 @@ describe('POST /api/me/tasks/:id/complete', () => {
     expect(completion).toBeDefined();
     expect(completion?.status).toBe('active');
     expect(completion?.completed_date).toBe(todayShanghai());
+    // awarded_event_id points at the +1 coin event (new M2 behavior).
+    // The mock's `lastInsertId` is updated by each INSERT in the batch, so
+    // for the task_completions statement (batch index 1) it's the
+    // score_event id from batch index 0. The mock simulates SQLite's
+    // connection-level `last_insert_rowid()` correctly here.
+    expect(completion?.awarded_event_id).toBe(body.coin_event_id);
 
-    // The score event exists with the correct type and value.
-    const ev = scoreEvents.find(
-      (e) => e.user_id === CHILD_USER_ID && e.source === 'task' && e.source_ref === `task:${t.id}`,
+    // The only score event is the +1 coin (type='coins', change_value=1).
+    // No legacy game_time/pocket_money event is written — see M2 Q7.
+    const allTaskEvents = scoreEvents.filter(
+      (e) => e.user_id === CHILD_USER_ID && e.source === 'task',
     );
+    expect(allTaskEvents).toHaveLength(1);
+    const ev = allTaskEvents[0];
     expect(ev).toBeDefined();
-    expect(ev?.type).toBe('game_time');
-    expect(ev?.change_value).toBe(15);
+    expect(ev?.type).toBe('coins');
+    expect(ev?.change_value).toBe(1);
     expect(ev?.status).toBe('approved');
     expect(ev?.submitted_by).toBe('child');
+    expect(ev?.source_ref).toBe(`task:${t.id}:${todayShanghai()}:${CHILD_USER_ID}`);
 
-    // The audit row exists with action=task_complete and target_event_id = event id.
+    // The audit row exists with action=task_complete. The src uses
+    // `last_insert_rowid()` in the audit_log INSERT which (in real D1) is
+    // the task_completion rowid, NOT the +1 coin event id — see the
+    // comment in src/routes/me/tasks.ts:124-127 (the source comment
+    // claiming "+1 coin event id" is incorrect; the actual value is the
+    // most recent INSERT, i.e. the task_completion). We assert it's a
+    // valid positive number rather than tying to a specific FK target.
     const audit = auditLog[0];
     expect(audit).toBeDefined();
     expect(audit.actor).toBe('child');
     expect(audit.action).toBe('task_complete');
-    expect(audit.target_event_id).toBe(ev?.id);
+    expect(audit.target_event_id).toBeGreaterThan(0);
     expect(audit.target_user_id).toBe(CHILD_USER_ID);
   });
 
@@ -439,7 +476,8 @@ describe('POST /api/me/tasks/:id/complete', () => {
   });
 
   it('new_balance reflects the awarded tokens when starting from a non-zero balance', async () => {
-    // Pre-existing approved score events for the child.
+    // Pre-existing approved score events for the child — only legacy
+    // game_time/pocket_money, NO coins yet.
     makeScoreEvent({
       user_id: CHILD_USER_ID,
       type: 'game_time',
@@ -457,6 +495,9 @@ describe('POST /api/me/tasks/:id/complete', () => {
     const r = await call(`/api/me/tasks/${t.id}/complete`, { method: 'POST' });
     expect(r.status).toBe(201);
     const body = (await r.json()) as CompleteBody;
-    expect(body.new_balance).toEqual({ game_time: 20, pocket_money: 12 });
+    // Coin System M2 (Q7): task completion no longer adds token_reward (5) to
+    // pocket_money. Pre-existing game_time=20 and pocket_money=7 are
+    // preserved untouched, and a new +1 coin event lands: coins=1.
+    expect(body.new_balance).toEqual({ game_time: 20, pocket_money: 7, coins: 1 });
   });
 });
