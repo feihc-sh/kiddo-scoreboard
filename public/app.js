@@ -112,6 +112,7 @@ function renderGreeting() {
 function renderBalance() {
   $('#balance-game-time').textContent = state.balance.game_time;
   $('#balance-pocket-money').textContent = state.balance.pocket_money;
+  $('#balance-coins').textContent = state.balance.coins;
 }
 
 function renderProgress() {

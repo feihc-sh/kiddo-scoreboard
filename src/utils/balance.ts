@@ -1,15 +1,15 @@
 // src/utils/balance.ts
 // Balance calculation: sum approved events per account type.
 // Status filter: 'approved' (pending and revoked do NOT affect balance).
-// Result type: Balance = { game_time, pocket_money }.
+// Result type: Balance = { game_time, pocket_money, coins } (Module 7).
 
 import type { Balance, D1Database } from '../db/types.ts';
 
-const ZERO_BALANCE: Balance = { game_time: 0, pocket_money: 0 };
+const ZERO_BALANCE: Balance = { game_time: 0, pocket_money: 0, coins: 0 };
 
 /**
  * Compute current balance for a user by aggregating approved score_events.
- * Returns 0/0 if user has no events.
+ * Returns 0/0/0 if user has no events.
  */
 export async function computeBalance(db: D1Database, userId: number): Promise<Balance> {
   const result = await db
@@ -20,7 +20,7 @@ export async function computeBalance(db: D1Database, userId: number): Promise<Ba
        GROUP BY type`,
     )
     .bind(userId)
-    .all<{ type: 'game_time' | 'pocket_money'; total: number }>();
+    .all<{ type: 'game_time' | 'pocket_money' | 'coins'; total: number }>();
 
   const balance: Balance = { ...ZERO_BALANCE };
   for (const row of result.results ?? []) {
@@ -35,7 +35,7 @@ export async function computeBalance(db: D1Database, userId: number): Promise<Ba
 export async function getAccountBalance(
   db: D1Database,
   userId: number,
-  account: 'game_time' | 'pocket_money',
+  account: 'game_time' | 'pocket_money' | 'coins',
 ): Promise<number> {
   const row = await db
     .prepare(

@@ -114,6 +114,7 @@ export interface AuditLog {
 export interface Balance {
   game_time: number;             // 分钟
   pocket_money: number;          // 元
+  coins: number;                 // 枚 (Module 7 Coin System, RFC §3.4)
 }
 
 // Module 7 (Coin System, RFC §3.2): row interfaces for shop tables.
