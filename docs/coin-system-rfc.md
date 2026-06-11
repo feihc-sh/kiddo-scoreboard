@@ -1295,4 +1295,233 @@ button.disabled = shortage > 0 || weeklyRemaining <= 0;
 
 ---
 
+## 9. 实施分阶段（6 个 Module）
+
+> 风格沿用 docs/PLAN.md §6 模块分段。每个 Module 是一个独立 PR，可单独 review + Qual。
+> 总工期预估：M1-M4 各 30-45 min（10 分钟段 × 3-5），M5 60 min（15 tests），M6 20 min。
+
+### M1: 数据层（migrations + types + utils）
+
+**目标**：DB schema 改造 + TypeScript 类型定义 + 周/ISO 工具函数
+
+**任务清单**：
+
+| # | 任务 | 文件 | 预估时间 |
+|---|------|------|----------|
+| 1.1 | 写 `migrations/0007_coin_system.sql` | migrations/0007_coin_system.sql | 15 min |
+| 1.2 | 本地 D1 跑通 migration（`wrangler d1 execute --local`） | migrations/ | 5 min |
+| 1.3 | 更新 `src/types.ts`：加 `'coins'` 到 type union + 新增 `ShopItem / ShopRedemption` 类型 | src/types.ts | 10 min |
+| 1.4 | 加 ISO 周工具函数 `src/utils/week.ts`：JS 端 `getISOWeek(date)` 双重保险 | src/utils/week.ts | 10 min |
+| 1.5 | 跑现有 e2e 确保 schema 兼容（无 regression） | tests/ | 5 min |
+
+**验收**：`wrangler d1 execute --local --file=migrations/0007_coin_system.sql` 成功 + `npm test` 通过。
+
+**不依赖**：无需其他 Module。
+
+---
+
+### M2: 任务金币 API（hook 进 task completion + bonus 判定 + 撤销联动）
+
+**目标**：F1-F5 的服务端逻辑全部 ready
+
+**任务清单**：
+
+| # | 任务 | 文件 | 预估时间 |
+|---|------|------|----------|
+| 2.1 | 改造 `src/routes/me/tasks.ts` POST /:id/complete：写 +1 coins + 检查 bonus | src/routes/me/tasks.ts | 20 min |
+| 2.2 | 改造 `src/routes/admin/task-completions.ts` POST /:id/revoke：写 -1 coins + 反向 bonus -3 | src/routes/admin/task-completions.ts | 20 min |
+| 2.3 | 新增 `src/lib/coin-bonus.ts`：封装 bonus 判定逻辑（幂等检查 + 写入） | src/lib/coin-bonus.ts | 10 min |
+| 2.4 | 加 unit test：bonus 判定幂等性 + 跨日不重复 | tests/unit/coin-bonus.test.ts | 10 min |
+
+**验收**：unit test 全过 + curl 手动测 F1/F2/F3/F4/F5。
+
+**依赖**：M1（types + utils）。
+
+---
+
+### M3: 商店 API（exchange + 周限额校验 + 兑换历史）
+
+**目标**：F6/F7/F8 的服务端逻辑 + GET 端点
+
+**任务清单**：
+
+| # | 任务 | 文件 | 预估时间 |
+|---|------|------|----------|
+| 3.1 | 新增 `src/routes/me/coins.ts`：GET /api/coins/balance + GET /api/coins/redemptions | src/routes/me/coins.ts | 15 min |
+| 3.2 | 新增 `src/routes/shop/items.ts`：GET /api/shop/items | src/routes/shop/items.ts | 10 min |
+| 3.3 | 新增 `src/routes/shop/exchange.ts`：POST /api/coins/exchange (db.batch 事务) | src/routes/shop/exchange.ts | 25 min |
+| 3.4 | 加 unit test：3 步短路校验 + race condition 处理 | tests/unit/coin-exchange.test.ts | 10 min |
+
+**验收**：unit test 全过 + curl 手动测 F6/F7/F8（跨周可用 fake clock 或 mock）。
+
+**依赖**：M1 + M2（依赖 M2 的 task_completion 链路）。
+
+---
+
+### M4: child UI（第 3 个 balance card + 商店页 + 兑换历史）
+
+**目标**：F9/F10/F11/F12 的 UI 实现
+
+**任务清单**：
+
+| # | 任务 | 文件 | 预估时间 |
+|---|------|------|----------|
+| 4.1 | 替换 `public/index.html` 的 `.balance-card.placeholder` → `.balance-card.coins` | public/index.html | 5 min |
+| 4.2 | 新增 `.balance-card.coins` CSS（金色渐变 + hover/active） | public/app.css | 10 min |
+| 4.3 | `public/app.js` `loadBalance()` 末尾追加：fetch /api/coins/balance + 更新 DOM | public/app.js | 10 min |
+| 4.4 | 新增 `public/shop.html` 商店页（商品列表 + 兑换历史） | public/shop.html | 20 min |
+| 4.5 | 新增 `public/shop.js` 商店页逻辑（兑换 + 状态计算 + modal/toast） | public/shop.js | 25 min |
+| 4.6 | 加 `--coins-*` 颜色变量到 `public/app.css :root` | public/app.css | 5 min |
+
+**验收**：iPad Safari 手动测 F9/F10/F11/F12 + 视觉与 fc0604b 一致。
+
+**依赖**：M3（依赖 4 个 API endpoints）。
+
+---
+
+### M5: e2e spec（coin-system.spec.ts ~15 tests）
+
+**目标**：F1..F12 自动化覆盖 + INV-1..4 数据守恒
+
+**任务清单**：
+
+| # | 任务 | 文件 | 预估时间 |
+|---|------|------|----------|
+| 5.1 | 新增 `tests/e2e/coin-system.spec.ts`：12 个 test（F1..F12） | tests/e2e/coin-system.spec.ts | 30 min |
+| 5.2 | 新增 `tests/e2e/coin-invariants.spec.ts`：4 个 test（INV-1..4 SQL CHECK） | tests/e2e/coin-invariants.spec.ts | 20 min |
+| 5.3 | 跑完整 e2e 套件，确保无 regression（现有测试 + 新增） | tests/ | 10 min |
+
+**验收**：`npm run test:e2e` 全过（15 个新 test + 现有 test）。
+
+**依赖**：M4（需要 UI ready 才能跑端到端）。
+
+---
+
+### M6: 文档同步 + deploy
+
+**目标**：PRD/TEST_PLAN/FEATURE_MATRIX/PROGRESS 同步 + 生产部署
+
+**任务清单**：
+
+| # | 任务 | 文件 | 预估时间 |
+|---|------|------|----------|
+| 6.1 | 更新 `docs/PRD.md` §3.1 双账户模型 → 三账户模型（金币章节） | docs/PRD.md | 5 min |
+| 6.2 | 更新 `docs/TEST_PLAN.md` 加金币系统测试矩阵（F1..F12 + INV-1..4） | docs/TEST_PLAN.md | 5 min |
+| 6.3 | 更新 `docs/FEATURE_MATRIX.md` 金币系统行（v3 新功能标记） | docs/FEATURE_MATRIX.md | 3 min |
+| 6.4 | 更新 `docs/PROGRESS.md` 加 v3 金币系统条目 | docs/PROGRESS.md | 3 min |
+| 6.5 | 更新 `docs/INDEX.md` 加 coin-system-rfc.md 链接 | docs/INDEX.md | 2 min |
+| 6.6 | wrangler deploy + D1 migration 远程应用 | deploy | 5 min |
+
+**验收**：所有 docs 同步 + Cloudflare Pages deploy 成功 + 生产环境冒烟测。
+
+**依赖**：M5（qual 报告出来后更新 PROGRESS）。
+
+---
+
+### 总览：6 个 Module 的依赖关系
+
+```
+M1 (数据层) ──┬──> M2 (任务金币 API) ──┬──> M4 (child UI) ──> M5 (e2e) ──> M6 (docs + deploy)
+             │                          │
+             └──> M3 (商店 API) ────────┘
+```
+
+**并行机会**：M3 和 M2 可以并行开发（共享 lib 但不依赖），M4 必须在 M2+M3 完成后。
+
+**总预估**：~3-4 小时（如果串行），~2-3 小时（如果 M2/M3 并行）。
+
+**风险点**：
+
+- M1 的 schema 改造（SQLite 表重建）如果出错，会影响现有数据 → 必须先在 staging 跑通
+- M4 的 iPad Safari 适配需要真机测试（chromium 模拟器可能漏掉 touch 事件）
+- M5 的跨周测试（F8）需要 mock 时钟或直接 SQL UPDATE `redeemed_at`
+
+---
+
+## 10. Reference（项目 baseline）
+
+### 10.1 现有文档
+
+| 文档 | 用途 | 路径 |
+|------|------|------|
+| PRD | 产品需求文档（v2.0 → v3 加金币章节） | docs/PRD.md |
+| TEST_PLAN | 测试计划（v3 加金币矩阵） | docs/TEST_PLAN.md |
+| FEATURE_MATRIX | 功能矩阵（v3 加金币系统行） | docs/FEATURE_MATRIX.md |
+| PROGRESS | 进度跟踪（v3 加金币条目） | docs/PROGRESS.md |
+| INDEX | 文档索引（加 coin-system-rfc.md 链接） | docs/INDEX.md |
+| ARCHITECTURE | 架构（v2 现状，v3 微调） | docs/ARCHITECTURE.md |
+| PLAN | 实施计划（§6 模块分段风格参考） | docs/PLAN.md |
+| NIGHTLY-TODO | 待办（#010+ 加金币系统条目） | docs/NIGHTLY-TODO.md |
+
+### 10.2 Schema 参考
+
+| 文件 | 内容 |
+|------|------|
+| migrations/0001_initial.sql | users / score_events / tasks / task_completions / audit_log 表 |
+| migrations/0002_auth.sql | PM PIN 认证 |
+| migrations/0003_app_config.sql | 运行时配置 |
+| migrations/0004_sleep_cutoff.sql | 晚睡扣分（**SQLite 表重建模式参考**） |
+| migrations/0006_deleted_records.sql | 硬删除审计 |
+
+### 10.3 代码参考
+
+| 路径 | 参考点 |
+|------|--------|
+| src/routes/me/tasks.ts | 任务完成 endpoint（**M2 改造目标**） |
+| src/routes/admin/task-completions.ts | 任务撤销 endpoint（**M2 改造目标**） |
+| src/routes/admin/exchange.ts | 双账户兑换（**M3 借鉴事务模式**） |
+| src/routes/admin/weekly-grant.ts | 周额度发放（**周限额算法参考**） |
+| src/routes/me/index.ts | child API 注册（**加 coins routes**） |
+| src/routes/admin/index.ts | admin API 注册 |
+| src/types.ts | TypeScript 类型（**M1 扩展**） |
+| public/index.html | child UI 首页（**M4 替换 placeholder**） |
+| public/app.js | child UI 逻辑（**M4 追加 loadBalance**） |
+| public/app.css | child UI 样式（**M4 加 .balance-card.coins**） |
+| public/admin/* | admin UI 参考（**不改造，撤销时复用现有 UI**） |
+
+### 10.4 Git baseline
+
+- **基线 commit**: `71a77a1` (origin/main)
+- **关键参考 commit**: `fc0604b` (3-column balance row + 积分系统 placeholder)
+- **本 RFC branch**: `feat/coin-system` (基于 71a77a1)
+- **本 RFC commits** (5 段):
+  1. `77d652f` docs(coin-rfc): §1+§2 背景与目标 + 需求清单
+  2. `67fb608` docs(coin-rfc): §3+§4 数据模型 + API 设计
+  3. `fca5469` docs(coin-rfc): §5+§6 业务流程 + UI 设计
+  4. `7e164bd` docs(coin-rfc): §7+§8 验收清单 + 风险与边界
+  5. (final) docs(coin-rfc): §9+§10 实施分阶段 + Reference
+
+### 10.5 外部资源
+
+- D1 文档：https://developers.cloudflare.com/d1/
+- Hono 文档：https://hono.dev/
+- Cloudflare Pages：https://developers.cloudflare.com/pages/
+- SQLite CHECK constraint 限制：https://www.sqlite.org/lang_createtable.html#check_constraints
+
+### 10.6 决策记录（ADR）
+
+> 实施过程中如有 RFC 设计变更，需在 docs/INCIDENTS.md 追加 ADR，引用本 RFC。
+
+| ADR 编号 | 主题 | 状态 |
+|---------|------|------|
+| ADR-001 | 金币作为第 3 账户（v3） | ✅ 已锁定 |
+| ADR-002 | 周限额 3 次（v1） | ✅ 已锁定 |
+| ADR-003 | 商品价格 10 金币（v1） | ✅ 已锁定 |
+| ADR-004 | bonus 3 金币（v1） | ✅ 已锁定 |
+| ADR-005 | ISO 周定义（v1） | ✅ 已锁定 |
+| ADR-006 | 任务不再奖励游戏时间（v3） | ✅ 已锁定 |
+| ADR-007 | 撤销不回收兑换的游戏时间（v1） | ✅ 已锁定 |
+| ADR-008 | 历史 token_reward 保留不迁移（v3） | ✅ 已锁定 |
+
+---
+
+## 附录 A: RFC 变更日志
+
+| 日期 | 版本 | 变更 | 作者 |
+|------|------|------|------|
+| 2026-06-11 | v1.0 (draft) | 初稿，5 段提交（§1-§10） | Code Agent 代岑斐灏 |
+
+---
+
+**RFC 完。等 PM 审阅 + 岑斐灏拍板后，进入 M1-M6 实施阶段。**
 
