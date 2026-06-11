@@ -746,6 +746,215 @@ WHERE user_id = ? AND type = 'pocket_money' AND status = 'approved';
 
 ---
 
+## 12. 金币系统（v2.1 新增 — 🪙 coins）
+
+**背景：** v2 已有游戏时间（🎮）+ 零花钱（💰）两个并行账户。v2.1 引入第 3 个账户 **🪙 金币（coins）** 作为"任务激励 + 商店兑换"维度，与现有账户平行但语义独立。
+
+**核心设计理念：** 让孩子体验"完成任务 → 攒金币 → 兑换游戏时间"的完整闭环，游戏时间来源收敛到"主动努力换来的"，而不是被动奖励。
+
+**详细 RFC：** `docs/coin-system-rfc.md`（1527 行完整设计）— 本节为 PRD 摘要。
+
+### 12.1 业务动机（岑斐灏 v2.1 反馈）
+
+1. **任务奖励种类单一** — 现在任务只往 game_time / pocket_money 加分，孩子感受不到"努力攒东西"的乐趣
+2. **游戏时间来源分散** — 任务奖励 + PM 周额度 + 双账户兑换都产出游戏时间，来源不清晰
+3. **缺乏中期目标** — 现有奖励都是即时的（任务完成立刻给 30 分钟游戏），没有"攒 → 兑"成就感
+4. **撤销逻辑不闭环** — 缺少"全任务完成 bonus"这类正向激励的回收机制
+
+### 12.2 需求清单（10 条已锁）
+
+| # | 需求 | 关键决策 |
+|---|------|---------|
+| 1 | 商店架构预留扩展 | `shop_items` + `shop_redemptions` 两表分离，`item.kind` 预留多商品类型 |
+| 2 | 周定义 | 自然周，ISO 8601 `YYYY-Www`，周一 00:00 (Asia/Shanghai) ~ 周日 23:59 |
+| 3 | 任务全完成判定 | **严格**：当天 active 任务数 = 完成任务数（请假/禁用不计）|
+| 4 | UI 入口 | 第 3 个 balance card（替换 commit `fc0604b` 的灰色 placeholder），点击进商店页 |
+| 5 | 不足/用完 UX | 按钮置灰 + 文案（"还差 X 金币" / "本周次数已用完，下周一重置"）|
+| 6 | 兑换历史透明 | child UI 完整展示本周 + 历史兑换记录 |
+| 7 | 游戏时间来源重构 | **只靠兑换**获得；任务不再直接奖励 game_time；历史 token_reward 事件保留不动 |
+| 8 | bonus 发放时机 | 最后一个任务完成**立刻**发（实时反馈，不延迟到次日凌晨）|
+| 9 | 任务撤销联动 | 撤销任务 → 回收金币 -1 + 回收 bonus -3（如果 bonus 已发）|
+| 10 | 撤销后重做 | 撤销后孩子重新完成所有任务 → 再发一次 bonus（状态重置语义）|
+
+### 12.3 数据模型
+
+#### 12.3.1 现有表改动
+
+```sql
+-- migrations/0007_coin_system.sql
+-- 1. score_events.type 加 'coins'
+ALTER TABLE score_events DROP CONSTRAINT IF EXISTS score_events_type_check;
+-- SQLite 不支持修改 CHECK 约束，需要重建表或忽略（实际 D1 SQLite 支持）
+-- 实际做法:新建表 + 数据迁移（见 RFC §3.2 完整 DDL）
+
+-- 2. 复用现有字段
+-- score_events.week_of 已有 → 自然周限额查询
+-- score_events.source = 'task' / 'exchange' 已有 → 金币写入直接复用
+-- idx_score_events_week 已有 → 周限额查询性能 OK
+```
+
+#### 12.3.2 新增 `shop_items` 表
+
+```sql
+CREATE TABLE shop_items (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,                  -- '🎮 游戏时间 10 分钟'
+  kind          TEXT NOT NULL CHECK(kind IN ('game_time', 'pocket_money', 'custom')),
+  reward_type   TEXT,                            -- 'minutes' / 'yuan' / null (custom)
+  reward_value  INTEGER,                         -- 10 (分钟/元)
+  cost_coins    INTEGER NOT NULL CHECK(cost_coins > 0),
+  weekly_limit  INTEGER NOT NULL DEFAULT 3,      -- 周限额
+  icon          TEXT,                            -- emoji
+  is_active     INTEGER NOT NULL DEFAULT 1,
+  sort_order    INTEGER NOT NULL DEFAULT 0,
+  created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at    INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE INDEX idx_shop_items_active ON shop_items(is_active, sort_order);
+```
+
+#### 12.3.3 新增 `shop_redemptions` 表
+
+```sql
+CREATE TABLE shop_redemptions (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL,
+  item_id         INTEGER NOT NULL,
+  week_of         TEXT NOT NULL,                 -- ISO 8601 '2026-W23'
+  cost_coins      INTEGER NOT NULL,              -- 冗余存，避免 JOIN
+  reward_event_id INTEGER,                       -- FK → score_events.id (游戏时间 +10 那条)
+  cost_event_id   INTEGER,                       -- FK → score_events.id (金币 -10 那条)
+  status          TEXT NOT NULL DEFAULT 'consumed' CHECK(status IN ('consumed', 'revoked')),
+  redeemed_at     INTEGER NOT NULL DEFAULT (unixepoch()),
+  revoked_at      INTEGER,
+  FOREIGN KEY (user_id)         REFERENCES users(id),
+  FOREIGN KEY (item_id)         REFERENCES shop_items(id),
+  FOREIGN KEY (reward_event_id) REFERENCES score_events(id),
+  FOREIGN KEY (cost_event_id)   REFERENCES score_events(id)
+);
+
+CREATE INDEX idx_redemptions_user_week ON shop_redemptions(user_id, week_of);
+CREATE INDEX idx_redemptions_user_redeemed ON shop_redemptions(user_id, redeemed_at DESC);
+```
+
+#### 12.3.4 tasks 表变化（重要）
+
+- **`token_reward` 字段保留** — 历史任务奖励记录不变（向后兼容）
+- **新任务不再往 game_time 写 score_event** — v3 兼容开关关闭，tasks → 只写 coins (+1)
+- **全任务完成判定**走 `tasks.is_active = 1` + `task_completions.status = 'active'` 实时查询
+
+### 12.4 API 设计（Hono routes）
+
+| 端点 | 方法 | 功能 | 备注 |
+|------|------|------|------|
+| `/api/coins/balance` | GET | 返回当前金币余额（`SUM(change_value) WHERE type='coins' AND status='approved'`）| 复用 score_events 代数和 |
+| `/api/coins/redemptions` | GET | 返回本周 + 历史兑换记录 | `?week_of=2026-W23` 可选过滤 |
+| `/api/shop/items` | GET | 返回 active 商品列表 | 按 sort_order 排序 |
+| `/api/coins/exchange` | POST | 兑换：扣金币 + 加游戏时间 + 写 shop_redemptions | 服务端校验余额 + 周限额 |
+| `/api/tasks/complete` | POST (改) | 完成任务 → 写 +1 金币 → 检查 bonus → 写 +3 (如有) | **改动现有端点**，追加金币逻辑 |
+| `/api/tasks/revoke` | POST (改) | 撤销任务 → 写反向 -1 金币 → 检查 bonus → 反向 -3 | **改动现有端点**，追加金币回收 |
+
+**关键约束**：
+- 所有金币写入走 `score_events`（type='coins'），余额 = 代数和（不存余额字段）
+- bonus 判定在 task complete 端点内**实时**触发（不在 cron / 次日凌晨）
+- 兑换走 db.batch()（扣金币 + 加游戏时间 + 写 shop_redemptions 三条原子操作）
+
+### 12.5 UI 设计
+
+#### 12.5.1 第 3 个 Balance Card（替换 `fc0604b` placeholder）
+
+```
+┌─────────────────────────┐  ┌─────────────────────────┐  ┌─────────────────────────┐
+│  🎮 游戏时间             │  │  💰 零花钱                │  │  🪙 金币                 │
+│     45 分钟              │  │     30 元                 │  │     23 🪙               │
+│                         │  │                         │  │                         │
+│  [点 card 详情]         │  │  [点 card 详情]         │  │  [点 card 进商店]       │
+└─────────────────────────┘  └─────────────────────────┘  └─────────────────────────┘
+```
+
+- 默认显示余额（大字）
+- hover / tap 显示"点我进商店"提示
+- 余额更新时数字翻转动画（参考 fc0604b commit 风格）
+
+#### 12.5.2 商店页（点击第 3 个 card 后）
+
+```
+[Header: ← 返回 | 商店]
+
+本周剩余: 3/3 次                  总金币: 23 🪙
+
+┌────────────────────────────────────────┐
+│  🎮 游戏时间 10 分钟                    │
+│  💎 10 金币                            │
+│                                        │
+│  [本周剩余: 3/3 次]                    │
+│                                        │
+│  [🎁 兑换 (+10 分钟游戏时间)]          │
+└────────────────────────────────────────┘
+
+--- 兑换历史 (本周) ---
+2026-06-11 14:32  🎮 游戏时间 10 分钟  -10 🪙
+2026-06-09 19:15  🎮 游戏时间 10 分钟  -10 🪙
+```
+
+#### 12.5.3 不足 / 用完 UX（按钮置灰）
+
+- **余额不足**：`[🔒 还差 X 金币]`（置灰，不可点）
+- **周次数用完**：`[⏰ 本周已用 X/3 次，下周一重置]`（置灰，不可点）
+- **可兑换**：`[🎁 兑换 (+10 分钟游戏时间)]`（可点）
+
+### 12.6 验收清单（Coin System 专属）
+
+| # | 项 | 验收标准 | Given/When/Then |
+|---|----|----------|-----------------|
+| F1 | 任务完成 +1 金币 | 完成任务后金币立即 +1，child UI 第 3 个 card 数字更新 | Given: 金币 = 10<br>When: 完成 1 个 active 任务<br>Then: 金币 = 11，1s 内 UI 更新 |
+| F2 | 全任务完成 +3 bonus | 当天所有 active 任务完成时，bonus +3 金币，弹出"🎉 全任务完成！"提示 3 秒 | Given: 5 个 active 任务，已完成 4 个<br>When: 完成第 5 个<br>Then: 金币 +3（含任务本身的 +1 = +4），弹提示 |
+| F3 | 撤销任务回收 -1 | PM 撤销任务，金币 -1，UI 立即更新 | Given: 金币 = 11<br>When: PM 撤销该任务<br>Then: 金币 = 10，audit_log 写 revoke:task#X |
+| F4 | 撤销任务回收 bonus -3 | 撤销触发过 bonus 的任务，bonus 也回收 -3 | Given: 当天已发过 +3 bonus<br>When: PM 撤销其中一个任务<br>Then: 金币 -1 (任务) -3 (bonus) = -4 |
+| F5 | 撤销后重做再发 bonus | 撤销 → 重新完成所有任务 → 再发一次 +3 bonus | Given: 撤销过 1 个任务<br>When: 重新完成所有任务<br>Then: 写入新 bonus +3 score_event，audit_log 标记 |
+| F6 | 兑换扣金币 + 加游戏时间 | 兑换成功 → 金币 -10，游戏时间 +10，shop_redemptions 写入 | Given: 金币 = 20, 周限额 3/3 没用<br>When: 点击"兑换"<br>Then: 金币 = 10, 游戏时间 +10, redemptions.status = consumed |
+| F7 | 周限额 3 次 | 本周第 4 次兑换被拒绝，按钮置灰 | Given: 本周已兑换 3 次<br>When: 尝试第 4 次兑换<br>Then: API 返 429 / UI 按钮置灰显示"本周已用完" |
+| F8 | 跨周自动重置 | 周一 00:00 (Asia/Shanghai) 后，周限额重置为 3 | Given: 上周已兑换 3 次<br>When: 周一 00:00 后<br>Then: 周限额显示 3/3，可兑换 |
+| F9 | 按钮置灰（余额不足）| 金币 < 商品价格时按钮置灰 + 文案 | Given: 金币 = 5, 商品价格 = 10<br>When: 查看商店页<br>Then: 按钮显示"🔒 还差 5 金币"，置灰不可点 |
+| F10 | 按钮置灰（周次数用完）| 周次数用完时按钮置灰 + 文案 | Given: 本周已兑换 3 次<br>When: 查看商店页<br>Then: 按钮显示"⏰ 本周已用 3/3 次，下周一重置"，置灰不可点 |
+| F11 | 兑换历史展示 | child UI 透明展示本周 + 历史兑换记录 | Given: 本周兑换过 2 次<br>When: 打开商店页<br>Then: "兑换历史 (本周)" 区显示 2 条记录，含时间/商品名/消耗金币 |
+| F12 | 第 3 个 balance card | child UI 显示金币余额，点击进商店页 | Given: child UI 加载<br>When: 看到 3 个 balance card<br>Then: 第 3 个显示"🪙 金币 XX"，点击跳转商店页 |
+
+### 12.7 实施分阶段（6 个 Module）
+
+| Module | 内容 | 估计工时 | 依赖 |
+|--------|------|----------|------|
+| M1 | migrations (0007_coin_system.sql) + types + utils (weekOf / bonus 判定 / 撤销回收) | 30 min | — |
+| M2 | 任务金币 API（hook 进 /api/tasks/complete + /revoke，bonus 实时触发）| 60 min | M1 |
+| M3 | 商店 API（/api/shop/items + /api/coins/exchange + /api/coins/redemptions）| 45 min | M1 |
+| M4 | child UI（第 3 个 balance card + 商店页 + 兑换历史）| 60 min | M2, M3 |
+| M5 | e2e spec（coin-system.spec.ts ~15 tests，F1-F12 覆盖）| 45 min | M4 |
+| M6 | 文档同步（TEST_PLAN.md + FEATURE_MATRIX.md + PROGRESS.md + 部署）| 30 min | M5 |
+
+**总估计：~4.5 小时**（PM §6 模块分段开发模式）
+
+### 12.8 风险与边界
+
+| 风险 | 应对 |
+|------|------|
+| 跨周撤销（周一 23:59 发 bonus，周二 00:01 撤销 → ISO 周变更）| bonus 回收走 source_ref（日期 + user_id），不依赖 week_of 字段 |
+| 周次数 race condition（同时 2 个 click）| 兑换走 db.batch() 原子操作 + 服务端二次校验 |
+| 兑换后立刻撤销任务（游戏时间已加，bonus 还在）| 撤销只回收金币和 bonus，不回收兑换出的游戏时间（设计如此，避免循环）|
+| 历史 token_reward 事件处理 | **只对新生效，历史保留**（不写 migration 回滚历史数据）|
+| 多孩场景（目前 1 个 child）| schema 已 support 多孩（所有表都带 user_id FK），UI 层 v1 只显示当前 child |
+
+### 12.9 Reference
+
+- **完整 RFC**：`docs/coin-system-rfc.md`（1527 行详细设计 + DDL + 流程图 + edge case）
+- **基础架构**：`migrations/0001_initial.sql`（users / score_events / tasks / task_completions 表）
+- **现有 API 风格**：`src/routes/`（Hono routes + D1 batch pattern）
+- **现有 UI 风格**：`public/index.html` + `app.js` + `app.css`（含 fc0604b commit 的 3-col balance card 框架）
+- **撤销联动参考**：commit `5000d0f` (P0 #24) + `71a77a1` (P0 #26) 的 task_completion / score_event 软删除模式
+
+---
+
+
 ## 附录 A: 与 plan 的对应关系
 
 - 数据模型 → plan §2（含 v2 tasks + task_completions）
