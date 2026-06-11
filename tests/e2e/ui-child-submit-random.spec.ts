@@ -95,7 +95,7 @@ test.describe('UI: Child Submit — Random Fill + Log Integrity', () => {
     await expect(newRow).toContainText(expectedAmount);
     await expect(newRow).toContainText(reason);
     await expect(newRow).toContainText(type === 'game_time' ? '⚡' : '⚙️');
-    await expect(newRow.locator('.event-status')).toHaveText('⏳ 待审');
+    await expect(newRow.locator('.event-status')).toHaveText('◷ 待确认');
     await expect(newRow).toHaveClass(/event-status-pending/);
   });
 
