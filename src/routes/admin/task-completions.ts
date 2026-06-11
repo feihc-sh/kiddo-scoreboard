@@ -166,8 +166,15 @@ taskCompletions.post('/:id/revoke', async (c) => {
     completion.completed_date,
   );
 
-  // Atomic transaction: completion UPDATE + awarded event UPDATE +
-  // -1 coin INSERT + audit_log INSERT in one batch.
+  // Atomic transaction: completion UPDATE + -1 coin INSERT +
+  // audit_log INSERT in one batch.
+  //
+  // Coin System Q7 (feihao 2026-06-11): 撤销时**不**再 UPDATE score_events
+  // 把 awarded_event_id 指向的 event flip 成 'revoked'。原因: 新模型下
+  // task_completions.awarded_event_id 指向 +1 coin event,如果把它
+  // flip 成 revoked → balance 不算 +1,但 -1 仍然算 → 余额 = -1
+  // (数学错)。正确做法:不动 +1 coin event,只插入 -1 作为补偿事件,
+  // balance = +1 + (-1) = 0。Audit trail 完整保留 +1 (approved) 和 -1。
   const results = await db.batch([
     db
       .prepare(
@@ -176,22 +183,17 @@ taskCompletions.post('/:id/revoke', async (c) => {
          WHERE id = ?`,
       )
       .bind(now, pmUserId, id),
-    db
-      .prepare(
-        `UPDATE score_events
-         SET status = 'revoked', reviewed_at = ?, reviewed_by = ?
-         WHERE id = ?`,
-      )
-      .bind(now, pmUserId, completion.awarded_event_id),
     // -1 coin (Coin System M2, RFC §4.7 / §5.3)
     db.prepare(revokeCoin.query).bind(...revokeCoin.params),
     db
       .prepare(
         `INSERT INTO audit_log
            (actor, action, target_event_id, target_user_id, details, created_at)
-         VALUES ('pm', 'task_revoke', ?, ?, ?, ?)`,
+           VALUES ('pm', 'task_revoke', ?, ?, ?, ?)`,
       )
       .bind(
+        // audit target 仍然引用 awarded_event_id (即 +1 coin event id),
+        // 跟 task_completion FK 语义一致。
         completion.awarded_event_id,
         completion.user_id,
         JSON.stringify({
@@ -203,8 +205,8 @@ taskCompletions.post('/:id/revoke', async (c) => {
       ),
   ]);
 
-  // The -1 coin INSERT is now statement index 2 in the batch.
-  const revokeCoinEventId = Number(results[2]?.meta?.last_row_id ?? 0);
+  // The -1 coin INSERT is now statement index 1 in the batch (was index 2).
+  const revokeCoinEventId = Number(results[1]?.meta?.last_row_id ?? 0);
 
   // Bonus check: if a +3 bonus was granted on the same date, also
   // write a -3 reversal. SELECT-driven, runs in its own batch so a
