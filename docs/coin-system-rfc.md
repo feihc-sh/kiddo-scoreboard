@@ -1038,3 +1038,261 @@ button.disabled = shortage > 0 || weeklyRemaining <= 0;
 - ❌ 深色模式（沿用现有浅色主题）
 
 ---
+
+## 7. 验收清单 F1..F12
+
+> 验收清单格式：Given/When/Then。供 Qual Agent 后续对照实施 e2e spec（§9 M5）。
+> 每条对应一个或多个 §3-§6 中的设计点，编号贯穿 RFC + e2e spec + Qual 报告。
+
+### F1: 任务完成 +1 金币
+
+- **Given** child 登录，today 完成 0 个任务，金币余额 = N
+- **When** child 点击任务 T1 的"完成"按钮
+- **Then**:
+  - `task_completions` 新增 1 条 status='active'
+  - `score_events` 新增 1 条 `type='coins', change_value=+1, reason='task:#T1_id'`
+  - 金币余额 = N + 1
+  - coins card 数字更新
+
+### F2: 全任务完成 +3 bonus
+
+- **Given** 今天有 K 个 active 任务，child 已完成 K-1 个，金币余额 = N
+- **When** child 完成最后一个任务 TK
+- **Then**:
+  - `score_events` 新增 1 条 `type='coins', change_value=+1, reason='task:#TK_id'` (F1)
+  - `score_events` 额外新增 1 条 `type='coins', change_value=+3, reason='bonus:<today>:<user_id>'`
+  - 金币余额 = N + 1 + 3 = N + 4
+  - 前端弹出 toast "🎉 全任务完成！+3 金币 bonus！"
+  - 全过程 1 次原子（不能在 +1 后崩了而漏掉 bonus）
+
+### F3: 撤销任务回收 -1 金币
+
+- **Given** child 完成任务 T1，金币 = N+1
+- **When** PM 撤销 T1 完成
+- **Then**:
+  - `task_completions.status` = 'revoked'
+  - `score_events` 新增 1 条 `type='coins', change_value=-1, reason='revoke:task#T1_id'`
+  - 金币余额 = N
+
+### F4: 撤销任务回收 bonus -3（如果 bonus 已发）
+
+- **Given** child 今天全完成（金币 +4），然后 PM 撤销 T1
+- **When** PM 撤销 T1
+- **Then**:
+  - F3 的反向 -1 coins
+  - **额外**：反向 -3 coins bonus（reason='revoke:bonus:<today>:<user_id>'）
+  - 金币余额从 N+4 降到 N
+
+### F5: 撤销后重做再发 bonus
+
+- **Given** F4 状态（金币 = N，已撤销 T1 + bonus）
+- **When** child 重新完成 T1（再次全完成）
+- **Then**:
+  - `score_events` 新增 +1 coins（F1）
+  - `score_events` 新增 +3 coins bonus（幂等检查通过：原 bonus 已被反向，无 status='approved' 的 +3）
+  - 金币余额 = N + 4
+  - `score_events` 中今天关于 bonus 的累计：+3 → -3 → +3 = 净 +3（守恒）
+
+### F6: 兑换扣金币 + 加游戏时间
+
+- **Given** 金币 = 15，游戏时间 = 0，今天/本周未兑换
+- **When** child 兑换商品 id=1（10 金币 → 10 分钟游戏时间）
+- **Then**:
+  - `score_events` 新增 1 条 `type='coins', change_value=-10, reason='exchange:item#1', submitted_by='child'`
+  - `score_events` 新增 1 条 `type='game_time', change_value=+10, reason='exchange:item#1', submitted_by='system'`
+  - `shop_redemptions` 新增 1 条 `status='consumed'`
+  - 金币余额 = 5
+  - 游戏时间 = 10
+  - `coin_event_id` 和 `reward_event_id` 正确关联到 shop_redemptions
+
+### F7: 周限额 3 次
+
+- **Given** 本周已兑换 2 次（第 3 次成功状态）
+- **When** child 第 3 次兑换
+- **Then**:
+  - 第 3 次成功（金币够 + 未达限额）
+  - `shop_redemptions` 本周累计 = 3
+  - `weekly_remaining` = 0
+- **再次 When** child 第 4 次兑换
+- **Then**:
+  - API 返回 429 `weekly_limit_reached`
+  - 前端按钮置灰，文案 "⏰ 本周已用 3/3 次，下周一重置"
+  - 数据库无任何写入（事务回滚）
+
+### F8: 跨周自动重置
+
+- **Given** 当前是 2026-W23 周日 23:59，金币 = 0，本周已兑换 3 次（用完）
+- **When** 时间推进到 2026-W24 周一 00:00 (Asia/Shanghai)
+- **Then**:
+  - `week_of` 计算为 '2026-W24'
+  - `shop_redemptions WHERE week_of='2026-W24'` COUNT = 0
+  - `weekly_remaining` = 3
+  - 兑换按钮恢复可点
+
+### F9: 按钮置灰（余额不足）
+
+- **Given** 金币 = 5，商品价格 = 10
+- **When** child 打开商店页
+- **Then**:
+  - 商品 card 兑换按钮显示 "🔒 还差 5 金币"
+  - 按钮 `disabled`，opacity 0.5，cursor not-allowed
+  - 点击按钮无反应（不触发 API）
+- **API 校验**: 即使前端绕过直接 POST，API 返回 400 `insufficient_coins`
+
+### F10: 按钮置灰（周次数用完）
+
+- **Given** 本周已兑换 3 次，金币 = 100（够）
+- **When** child 打开商店页
+- **Then**:
+  - 兑换按钮显示 "⏰ 本周已用 3/3 次，下周一重置"
+  - 按钮 `disabled`
+- **API 校验**: 即使前端绕过直接 POST，API 返回 429 `weekly_limit_reached`
+
+### F11: 兑换历史展示
+
+- **Given** child 本周兑换过 2 次，历史共 5 次
+- **When** child 打开商店页
+- **Then**:
+  - "本周兑换历史"区域显示 2 条记录（最新在上）
+  - "历史兑换"区域显示最近 30 条（或分页）
+  - 每条记录字段：时间、商品图标 + 名称、消耗金币、状态
+  - 时间格式：YYYY-MM-DD HH:mm (Asia/Shanghai)
+
+### F12: 第 3 个 balance card 显示 + 跳转
+
+- **Given** child 打开首页（/）
+- **When** 页面加载
+- **Then**:
+  - 第 3 个 balance card 显示 🪙 + "金币" + 数字（从 `/api/coins/balance` 拉取）
+  - 不再是 fc0604b 的灰色 placeholder（有 cursor: pointer 和 hover 效果）
+  - 点击 card 跳转到 `/shop`
+  - URL 变化后渲染商店页
+
+### 数据守恒验收（Qual 自动跑 SQL CHECK）
+
+| Invariant | SQL |
+|-----------|-----|
+| INV-1: 金币余额守恒 | `SELECT SUM(change_value) FROM score_events WHERE user_id=? AND type='coins' AND status='approved'` 应等于 `/api/coins/balance` 返回值 |
+| INV-2: bonus 每天 ≤ 1 次 | `SELECT COUNT(*) FROM score_events WHERE user_id=? AND type='coins' AND change_value=+3 AND reason LIKE 'bonus:%' AND status='approved' GROUP BY source_ref HAVING COUNT > 1` 应返回 0 行 |
+| INV-3: 兑换消耗守恒 | `SELECT SUM(sr.cost_coins) FROM shop_redemptions sr WHERE sr.user_id=? AND sr.status='consumed'` 应等于 `SELECT SUM(change_value) FROM score_events WHERE user_id=? AND type='coins' AND source='exchange' AND status='approved'` 的相反数 |
+| INV-4: 兑换奖励守恒 | `SELECT SUM(sr.reward_value) FROM shop_redemptions sr WHERE sr.user_id=? AND sr.status='consumed' AND sr.reward_type='game_time'` 应等于 `SELECT SUM(change_value) FROM score_events WHERE user_id=? AND type='game_time' AND source='exchange' AND status='approved'` |
+
+### F1..F12 + INV-1..4 编号贯穿
+
+- **e2e spec**: `tests/e2e/coin-system.spec.ts` 用同样的 F1..F12 编号作为 `test('F1: ...', ...)`
+- **Qual 报告**: `docs/QUAL_REPORT_<date>-coin-system.md` 用 F1..F12 + INV-1..4 作为章节标题
+- **实施 PR**: 标题用 `feat(coin): F1..F4 任务金币 API` 风格
+
+---
+
+## 8. 风险与边界（4-5 个 edge case）
+
+### 8.1 跨周撤销（bonus 周一 23:59 发，周二 00:01 撤销）
+
+**场景**：
+
+- 2026-W23 周日 2026-06-08 23:59: child 全完成 → bonus +3 coins
+- 2026-W24 周一 2026-06-09 00:01: PM 撤销 2026-06-08 的 T1 完成
+
+**风险**：撤销时查询 `source_ref='2026-06-08:<user_id>'` 的 bonus 是否存在 → 答案：是（来自上周）。
+
+**处理**：
+
+- ✅ **正确处理**：撤销照常执行，反向 bonus -3 写入 `week_of='2026-W24'`（当前周）。
+- ✅ **守恒仍成立**：`source_ref='2026-06-08:<user_id>'` 的 SUM(+3) = SUM(-3)，跨周不影响。
+- ✅ **审计清晰**：reason='revoke:bonus:2026-06-08:<user_id>' 标明原 bonus 日期，week_of 是当前撤销操作周。
+
+**不引入跨周 bonus 失效逻辑**：v1 简化，bonus 一旦发出，撤销永远能反向（不区分周）。
+
+### 8.2 周次数 race condition（同时 2 个 click）
+
+**场景**：child 双击兑换按钮（或网络慢时点 2 次）。
+
+**风险**：2 个并发请求都通过周限额检查（看到 COUNT=2 < 3）→ 都写入 → 实际本周兑换 4 次。
+
+**处理**：
+
+- ✅ D1 单库串行执行，2 个 `db.batch` 不会真正并发
+- ✅ 即使并发，第 2 个请求写入前会再次查 COUNT（事务内 SELECT）→ 看到 3 → 返回 429
+- ⚠️ **极端 case**：2 个请求在 D1 tick 之间发起，D1 串行化执行 → 第 2 个会失败
+
+**前端防护**：
+
+- 兑换按钮点击后立即 `disabled`（防止双击）
+- 成功后 modal 弹出期间按钮 disabled
+- 失败后按钮恢复可点
+
+### 8.3 兑换后立刻撤销任务（游戏时间已加，bonus 还在）
+
+**场景**：
+
+1. child 今天全完成 → bonus +3，金币余额 = 18
+2. child 兑换 1 次 → 金币 = 8，游戏时间 +10
+3. PM 撤销 T1 → 金币 -1（变 7），bonus -3（变 4）
+
+**风险**：游戏时间是兑换得到的（不受撤销影响），但金币被回收 → **账本守恒但游戏时间"凭空"留下**。
+
+**处理**：
+
+- ✅ 这是预期行为：兑换是孩子主动操作，已"消费"的金币不能因任务撤销回流（否则孩子会"反悔"兑换）
+- ✅ 撤销只回收"任务激励"部分（金币 +1 / bonus -3），不回收"消费"部分（兑换的游戏时间）
+- ✅ **守恒检查**：金币账户从 18 → 8 → 7 → 4（兑换扣 10 + 撤销任务扣 1 + 撤销 bonus 扣 3 = 净扣 14）
+- ✅ **审计可追溯**：audit_log 显示 3 次操作：exchange → revoke_task → revoke_bonus
+
+**用户沟通**：
+
+- 兑换时 modal 文案明确："兑换后游戏时间不再因任务撤销而回收"
+- PM 在撤销时如果想回收游戏时间，需要手动发起"反向兑换"（v1 不实现，靠 PM 自觉）
+
+### 8.4 历史 token_reward 事件的处理
+
+**场景**：v2 阶段，任务直接奖励 game_time / pocket_money（`source='task', type='game_time'`），大量历史数据。
+
+**风险**：v3 改造后，任务不再直接奖励 game_time，但历史数据语义模糊。
+
+**处理（明确"只对新生效，历史保留"）**：
+
+- ✅ **不迁移数据**：所有历史 `type='game_time', source='task'` 事件保留不变
+- ✅ **不删字段**：`tasks.token_reward` 字段保留（避免破坏历史数据语义），但代码层面忽略
+- ✅ **从改造日（deployment day）开始**：
+  - 任务完成只写 `type='coins', change_value=+1`
+  - 不再写 `type='game_time' / 'pocket_money'` 的 task 奖励 event
+- ✅ **双账户兑换保留**：PM 仍可在 admin 端发起双账户兑换（v2 功能），这是金币系统之外的另一条游戏时间来源
+
+**查询语义保留**：
+
+- "游戏时间余额" = SUM(type='game_time' AND status='approved') 不变（包括历史 + 兑换 + PM 周额度）
+- "任务奖励贡献" 历史 SUM 仍可用，但不再有新数据流入
+
+### 8.5 多孩场景（目前 1 个 child，但 schema 要 support）
+
+**场景**：v1 部署时只有 1 个 child，但岑斐灏提到未来可能 2 个孩子。
+
+**风险**：所有金币逻辑如果 hardcode "the child" → 多孩时崩溃。
+
+**处理**：
+
+- ✅ **所有 score_events 写**带 `user_id` FK（已有），自然支持多孩
+- ✅ **所有 shop_redemptions** 带 `user_id` FK + `idx_redemptions_user_week`，周限额按 `user_id` 隔离
+- ✅ **API 默认取 "当前 child"**：v1 通过 `users WHERE role='child' LIMIT 1` 查
+- ✅ **bonus source_ref** 用 `'<date>:<user_id>'` 区分多孩（不会冲突）
+- ✅ **前端余额显示** 默认显示 child（公开页面），不显示 PM
+
+**多孩切换（v2+ 预留）**：
+
+- URL 加 `?child_id=N` 参数（v1 隐藏，PM 后台可切换）
+- 不在 v1 范围（明确不做）
+
+### 8.6 边界 case 优先级
+
+| 风险 | 严重度 | v1 必须处理？ |
+|------|--------|--------------|
+| 8.1 跨周撤销 | 低（守恒仍成立） | ✅ 已设计（week_of 用当前周） |
+| 8.2 race condition | 中 | ✅ 已设计（D1 串行 + 前端 disabled） |
+| 8.3 兑换后撤销 | 中 | ✅ 已设计（明确不回收游戏时间） |
+| 8.4 历史数据 | 低 | ✅ 已设计（保留不迁移） |
+| 8.5 多孩 | 低（v1 只 1 个） | ✅ schema 已支持 |
+
+---
+
+
