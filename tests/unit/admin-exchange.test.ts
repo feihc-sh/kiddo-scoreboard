@@ -340,7 +340,7 @@ describe('POST /api/admin/exchange — happy path', () => {
 
     expect(body.from_event_id).toBeGreaterThan(0);
     expect(body.to_event_id).toBeGreaterThan(body.from_event_id!);
-    expect(body.new_balance).toEqual({ game_time: 70, pocket_money: 50 });
+    expect(body.new_balance).toEqual({ game_time: 70, pocket_money: 50, coins: 0 });
 
     // 2 new events were inserted
     const newEvents = events.filter((e) => e.source === 'exchange');
@@ -394,7 +394,7 @@ describe('POST /api/admin/exchange — happy path', () => {
     });
     expect(r.status).toBe(200);
     const body = (await r.json()) as ExchangeResponse;
-    expect(body.new_balance).toEqual({ game_time: 60, pocket_money: 0 });
+    expect(body.new_balance).toEqual({ game_time: 60, pocket_money: 0, coins: 0 });
 
     const newEvents = events.filter((e) => e.source === 'exchange');
     expect(newEvents).toHaveLength(2);

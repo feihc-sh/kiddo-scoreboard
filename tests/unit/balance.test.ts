@@ -105,7 +105,7 @@ describe('balance', () => {
   it('returns zero balance for new user', async () => {
     const db = makeMockDb();
     const bal = await computeBalance(db, 1);
-    expect(bal).toEqual({ game_time: 0, pocket_money: 0 });
+    expect(bal).toEqual({ game_time: 0, pocket_money: 0, coins: 0 });
   });
 
   it('sums positive and negative approved events per account', async () => {
@@ -116,7 +116,7 @@ describe('balance', () => {
       { id: 4, user_id: 1, type: 'pocket_money', change_value:  -5, status: 'approved' },
     ];
     const bal = await computeBalance(makeMockDb(), 1);
-    expect(bal).toEqual({ game_time: 20, pocket_money: 15 });
+    expect(bal).toEqual({ game_time: 20, pocket_money: 15, coins: 0 });
   });
 
   it('excludes pending, rejected, and revoked events', async () => {

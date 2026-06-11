@@ -203,7 +203,7 @@ describe('POST /api/admin/task-completions/:id/hard-delete', () => {
     expect(body.deleted_id).toBe(1);
     // The underlying score_event (id=201) is NOT touched by this
     // endpoint, so the balance still reflects it.
-    expect(body.balance).toEqual({ game_time: 30, pocket_money: 0 });
+    expect(body.balance).toEqual({ game_time: 30, pocket_money: 0, coins: 0 });
 
     // 1) task_completions: id=1 is gone
     const remaining = await db
