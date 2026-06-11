@@ -841,3 +841,247 @@ await context.route('**/api/coins/balance', route => route.fulfill({ status: 500
 - 文件数: 12 个新 spec 文件 + 1 个 invariants spec
 
 **注**：表中的 edge TC（`-edge-*`）是主 TC 的子用例，可选择性覆盖。P0 范围 = 24 条必跑 + P1 范围 = 12 条优先 + P2 范围 = 8 条 nice-to-have。
+
+---
+
+## 7. 实施顺序
+
+> 跟 RFC §9 module 配对：每个 Module 完成后跑对应的 TC，再 commit。
+
+### Phase 1: 数据层 ready → TC-F1..F5 的 DB 准备
+
+**触发**：RFC §9 M1 完成（migration 0007 + types + week utils）
+
+**可跑测试**：
+- ✅ `tests/unit/coin-history-token-reward.test.ts` (TC-X5): 验证 schema 兼容历史数据
+- ✅ `tests/unit/coin-bonus.test.ts` 部分 (TC-F2-idempotent unit 子用例): 验证 week_utils
+
+**不跑**：F1-F5 主 TC（需要 M2 API）
+
+### Phase 2: M2 完成 → 跑 TC-F1..F5（任务金币 + bonus + 撤销）
+
+**触发**：RFC §9 M2 完成（task completion/revoke hook + bonus 判定）
+
+**跑测试**：
+- ✅ TC-F1 (integration, 15min)
+- ✅ TC-F2 (integration, 20min) + TC-F2-idempotent + TC-F2-cross-day
+- ✅ TC-F3 (integration, 15min) + TC-F3-double-revoke
+- ✅ TC-F4 (integration, 20min) + TC-F4-no-bonus
+- ✅ TC-F5 (integration, 20min) + TC-F5-partial
+
+**累计工时**：~2h
+
+### Phase 3: M3 完成 → 跑 TC-F6..F10（兑换 API + 周限额 + 跨周）
+
+**触发**：RFC §9 M3 完成（coins API + shop items + exchange）
+
+**跑测试**：
+- ✅ TC-F6 (integration, 25min) + TC-F6-item-404 + TC-F6-item-disabled
+- ✅ TC-F7 (integration, 15min) + TC-F7-boundary + TC-F7-unlimited
+- ✅ TC-F8 (integration, 25min) + TC-F8-edge-second + TC-F8-year-cross
+
+**累计工时**：~2h
+
+### Phase 4: M4 完成 → 跑 TC-F9..F12（UI）
+
+**触发**：RFC §9 M4 完成（balance card + 商店页 + 兑换历史）
+
+**跑测试**：
+- ✅ TC-F9 (UI e2e, 20min) + TC-F9-exact + TC-F9-zero
+- ✅ TC-F10 (UI e2e, 20min) + TC-F10-combo
+- ✅ TC-F11 (UI e2e, 20min) + TC-F11-empty + TC-F11-over-30
+- ✅ TC-F12 (UI e2e, 20min) + TC-F12-zero + TC-F12-api-fail
+
+**累计工时**：~2h
+
+### Phase 5: 全部 Module 完成 → 跑 §3 额外 8 条 edge case + INV-1..4
+
+**触发**：M1-M4 全完成
+
+**跑测试**：
+- ✅ TC-INV-1..4 (10min × 4 = 40min) — 数据守恒 SQL CHECK
+- ✅ TC-X1 (跨周重置, 25min)
+- ✅ TC-X2 (race condition, 30min)
+- ✅ TC-X3 (跨周撤销, 20min)
+- ✅ TC-X4 (bonus 重发, 20min)
+- ✅ TC-X5 (历史 token_reward, 15min) — 跟 Phase 1 重复, 但跑在完整数据流上
+- ⚠️ TC-X6 (多孩, 15min, P2) — v1 可 skip
+- ✅ TC-X7 (db.batch 原子, 20min)
+- ⚠️ TC-X8 (索引性能, 25min, P2)
+
+**累计工时**：~3.5h
+
+### Phase 6: 部署 + 冒烟
+
+**触发**：RFC §9 M6 完成（docs sync + wrangler deploy）
+
+**跑测试**：
+- ✅ 完整 e2e 套件（含 coin-system.spec.ts）→ 0 regression
+- ✅ 手动冒烟（iPad Safari 真机）：
+  - F12 点击 card → 跳转
+  - F9/F10 按钮置灰视觉
+  - F11 历史展示视觉
+
+### 总实施顺序一览
+
+```
+M1 (数据层)
+   ↓
+   TC-X5 部分
+   ↓
+M2 (任务金币 API)
+   ↓
+   TC-F1..F5
+   ↓
+M3 (商店 API)         ←── 可与 M2 并行开发 (RFC §9)
+   ↓
+   TC-F6..F8
+   ↓
+M4 (child UI)
+   ↓
+   TC-F9..F12
+   ↓
+M5 (e2e spec + invariants)
+   ↓
+   TC-INV-1..4 + TC-X1..X8
+   ↓
+M6 (docs + deploy)
+   ↓
+   完整回归 + 手动冒烟
+```
+
+### 串行 vs 并行策略
+
+| 阶段 | 串行/并行 | 说明 |
+|------|----------|------|
+| M1 → Phase 1 | 串行 | 数据层必先 |
+| M2 + M3 | **可并行** | RFC §9 已明确, 2 个独立 PR |
+| M4 | 串行 | UI 依赖 M2+M3 完成 |
+| Phase 5 (INV + edge) | 串行 | 需要完整系统 |
+| Phase 6 | 串行 | 部署后冒烟 |
+
+---
+
+## 8. 风险与依赖
+
+### 8.1 测试运行依赖
+
+| 依赖 | 影响 | 应对 |
+|------|------|------|
+| `wrangler pages dev` 启动 | UI e2e 必须 | playwright.config.ts webServer block 自动管理, 加 `--d1=DB --local` |
+| D1 local migration apply | 所有 test 必跑 | `beforeAll` 跑所有 migrations (0001-0007) |
+| miniflare D1 engine | unit + integration | 沿用现有 `tests/unit/setup.ts` |
+| Node TZ 配置 (Asia/Shanghai) | ISO week + 时间格式化 | `TZ=Asia/Shanghai npm test` (CI 环境变量) |
+| iPad Safari WebKit | F9/F10/F11/F12 视觉验证 | 手动冒烟 (Phase 6), 不在自动化范围 |
+
+### 8.2 时区风险 (RFC §2.3 强调)
+
+**问题**：D1 `unixepoch()` 是 UTC 秒，但 ISO week 计算要用 Asia/Shanghai。
+
+**测试策略**：
+```bash
+# package.json scripts 加
+"test:tz": "TZ=Asia/Shanghai vitest run",
+"test:e2e:tz": "TZ=Asia/Shanghai playwright test"
+```
+
+**CI 配置**：
+```yaml
+# .github/workflows/test.yml
+env:
+  TZ: Asia/Shanghai  # 跟生产一致
+```
+
+**风险场景**：
+- 测试机器 TZ=UTC → ISO week 计算错误 → 跨周测试失败
+- 修复：用 `Intl.DateTimeFormat` 显式指定 timezone (RFC §2.3 JS 端双保险)
+- 不要依赖 `process.env.TZ`，在每个测试 setup 里强制 `process.env.TZ = 'Asia/Shanghai'`
+
+### 8.3 D1 串行化假设 (RFC §8.2)
+
+**问题**：race condition 测试 (TC-X2) 假设 D1 单库串行执行。
+
+**风险**：未来如果 D1 加并发优化（多 partition），race 测试可能 flaky。
+
+**应对**：
+- 跑 2 次（2-run rule，沿用 QUAL_REPORT 约定）确保稳定
+- 加 `test.skip` 条件：如果发现长期 flaky，标记并降级为 manual test
+
+### 8.4 视觉类不在自动化范围
+
+参考 `docs/PHASE2_FINDINGS.md`（如果有 iPad Safari 兼容性记录）。
+
+| 视觉测试 | 自动化 | 手动 | 备注 |
+|---------|--------|------|------|
+| F9 按钮置灰样式 (opacity, cursor) | ⚠️ 部分 (computed style) | ✅ 真机 | Chromium 模拟 iPad UA 不完全等同 Safari |
+| F10 周限额文案 | ✅ (文本匹配) | ✅ 真机 | 文案准确 |
+| F11 时间格式 (Asia/Shanghai) | ⚠️ 部分 | ✅ 真机 | 浏览器 locale 影响 |
+| F12 hover 动画 (transform) | ❌ | ✅ 真机 | transition 在 chromium 可能不一样 |
+| Balance card 金色 gradient | ⚠️ 部分 (background-image 检查) | ✅ 真机 | 颜色渲染差异 |
+| Toast 位置 (避开 home indicator) | ❌ | ✅ 真机 | 仅 Safari 真机可见 |
+
+### 8.5 数据迁移风险 (RFC §8.4)
+
+**问题**：0007_coin_system.sql 重建 score_events 表（SQLite 不支持 ALTER CHECK）。
+
+**风险**：重建过程中数据丢失 → 现有测试 regression。
+
+**应对**：
+- M1 完成后**立即**跑全量现有 e2e（无 coin 改动也应通过）
+- 备份 D1: `scripts/backup-d1.sh`（已有，RFC §9 M1.2 提到）
+- 失败回滚：`wrangler d1 execute --local --file=migrations/0006_deleted_records.sql` 反向
+
+### 8.6 浏览器兼容
+
+| 浏览器 | 覆盖 |
+|--------|------|
+| Chromium (Playwright default) | ✅ 所有 TC |
+| iPad Safari (WebKit) | ⚠️ 手动冒烟 (Phase 6) |
+| Firefox | ❌ v1 不覆盖 |
+| Android Chrome | ❌ v1 不覆盖 |
+
+### 8.7 性能测试局限 (TC-X8)
+
+**问题**：miniflare D1 在内存中跑，**不代表生产 D1 性能**。
+
+**应对**：
+- TC-X8 是 sanity check，不是 SLA 验证
+- 生产环境跑 EXPLAIN QUERY PLAN 确认索引
+- D1 生产数据 < 10k 行时，索引查询都在 10ms 内（经验值）
+
+### 8.8 已知 limitation（不在 v1 测试范围）
+
+- ❌ 真实并发（wrangler dev 之外）— D1 串行化假设
+- ❌ 多孩 UI 切换 — v1 只 1 个 child (RFC §8.5)
+- ❌ 金币动画/音效 — RFC §6.8 明确不做
+- ❌ PM 后台商品管理 UI — RFC §6.8 v1 hardcode seed
+- ❌ 视觉回归 (pixel diff) — 沿用现有 TEST_PLAN §1.5 "deferred to v2"
+- ❌ 离线模式 — RFC §5.5 明确不做
+
+---
+
+## 附录 A: 与现有文档的关联
+
+| 文档 | 关联 |
+|------|------|
+| `docs/coin-system-rfc.md` §7 | F1-F12 验收清单来源（TC-F1..F12 一一对应） |
+| `docs/coin-system-rfc.md` §8 | 风险与边界（TC-X1..X8 覆盖） |
+| `docs/coin-system-rfc.md` §3.4 | INV-1..4 数据守恒（TC-INV-1..4） |
+| `docs/coin-system-rfc.md` §9 | 实施分阶段（Phase 1-6 配对 M1-M6） |
+| `docs/PRD.md` §12 | PRD 摘要（与 RFC §7 同源） |
+| `docs/TEST_PLAN.md` | 现有 web UI test plan（本 plan 是其补充） |
+| `docs/QUAL_REPORT_*.md` | 历史 P0 报告（参考 root cause 分析风格） |
+| `docs/PHASE2_FINDINGS.md` | iPad Safari 兼容性记录（视觉测试参考） |
+| `tests/unit/admin-task-revoke.test.ts` | 现有 revoke 测试 pattern（TC-F3 参考） |
+| `tests/unit/week.test.ts` | 现有 ISO week utils 测试（TC-F8 复用） |
+| `tests/e2e/helpers/db.ts` | 现有 clearAllData / seedChildData（§4 seed 脚本扩展） |
+
+## 附录 B: 修订记录
+
+| 版本 | 日期 | 作者 | 说明 |
+|------|------|------|------|
+| v1 | 2026-06-11 | Code Agent | 初稿: 12 验收 + 8 edge case + seed + mock + 实施顺序 |
+
+---
+
+**End of Test Plan**
