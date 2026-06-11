@@ -240,9 +240,18 @@
 - [ ] **汇报**: PR 链接, 等用户 merge → GH Action 自动 backup + deploy
 
 **风险**: 🟡 (UI-only, 不动 schema / 后端; 改变既有 task 按钮 click 行为, 算小回归风险)
-**Status**: 🔧 running
-**Commit**: —
+**Status**: 🔧 running (PR #33 OPEN, 代码已落 `feat/010-sprint-modal` 分支, 等用户 merge)
+**Commit**: `26051a0` (PR #33 head, **未 merge**)
 **Started**: 2026-06-11
+**Last Updated**: 2026-06-12 (cron sync: PR #33 已开, 仍缺 unit/e2e + docs, 见下方)
+
+> **cron 2026-06-12 同步状态** (自动):
+> - ✅ 段 1 (DOM/CSS/JS scaffold + show/hide helpers + click 改造) 全部合入 `26051a0` (HTML +19 / CSS +111 / JS +104)
+> - ⏳ 段 1 末尾: `tests/unit/sprint-modal.test.ts` 未写 (项目无 jsdom/happy-dom 基建, 需 playwright e2e 兜底)
+> - ⏳ 段 2 末尾: `tests/e2e/ui-child-sprint-modal.spec.ts` 未写
+> - ⏳ 段 3: PRD §3 / FEATURE_MATRIX / TEST_PLAN / PROGRESS 文档未补
+> - ⏳ PR #33 仍 OPEN, 等用户拍板 merge → GH Action 自动 deploy
+> - **下次 cron**: PR #33 merged 后, 写段 2 e2e + 段 3 文档 → 把 Item #010 归档到 § 归档
 
 ---
 
