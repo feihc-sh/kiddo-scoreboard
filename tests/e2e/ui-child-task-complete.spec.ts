@@ -115,7 +115,15 @@ test('HAPPY-1: child completes a single task — balance + score_event appear', 
   await expect(page.locator('#balance-pocket-money')).toHaveText('0', { timeout: 5000 });
   await expect(btn).toHaveClass(/task-btn-done/);
   await expect(btn).toContainText('任务完成');  // PR #27: badge "✅ 今日已完成 (点击撤销)" → "✓ 任务完成"
-  await expect(page.locator('#event-list .event-item')).toContainText('+1 元');
+  // Coin System M2 (Q9): completing the only active task also fires the
+  // daily-bonus +3 event (all-tasks-done). So we expect 2 events total:
+  //   1. +1 coin (task grant)
+  //   2. +3 coin (daily bonus)
+  // Playwright strict mode: 2 .event-item elements need .first() to pick one.
+  const eventCount = await page.locator('#event-list .event-item').count();
+  expect(eventCount).toBe(2);
+  await expect(page.locator('#event-list .event-item').first()).toContainText('+1 元');
+  await expect(page.locator('#event-list .event-item').nth(1)).toContainText('+3 元');
 });
 
 test('HAPPY-2: completing 2 different tasks the same day — both succeed', async ({ page }) => {
@@ -138,11 +146,13 @@ test('HAPPY-2: completing 2 different tasks the same day — both succeed', asyn
   await page.locator(`#task-shortcuts [data-task-id="${t2}"]`).click();
   await expect(page.locator('#balance-pocket-money')).toHaveText('0', { timeout: 5000 });
 
-  // Both buttons are task-btn-done, both events in list (each task → 1 +1 coin event).
+  // Both buttons are task-btn-done. With Coin System M2 (Q9): t1 = +1 coin
+  // (not all-done yet, no bonus); t2 = +1 coin + +3 daily bonus (all-done).
+  // Total events = 3.
   await expect(page.locator(`#task-shortcuts [data-task-id="${t1}"]`)).toHaveClass(/task-btn-done/);
   await expect(page.locator(`#task-shortcuts [data-task-id="${t2}"]`)).toHaveClass(/task-btn-done/);
   const eventCount = await page.locator('#event-list .event-item').count();
-  expect(eventCount).toBe(2);
+  expect(eventCount).toBe(3);
 });
 
 // ────────────────────────────────────────────────────────────────────────────
