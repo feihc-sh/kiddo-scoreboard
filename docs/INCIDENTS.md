@@ -27,3 +27,11 @@
 - **Backup was OK** (data safe), but deploy/smoke-test broke something
 - **Recovery**: Roll back to last known good deploy via Cloudflare dashboard
 
+## 2026-06-11T14:47:58Z - Deploy or smoke test FAILED
+- **Commit**: d5c86c82b662c15e6496c5bdc541782c4b576167
+- **Actor**: feihc-sh
+- **Run**: 27355332922
+- **Branch**: refs/heads/main
+- **Backup was OK** (data safe), but deploy/smoke-test broke something
+- **Recovery**: Roll back to last known good deploy via Cloudflare dashboard
+
