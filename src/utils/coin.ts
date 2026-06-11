@@ -241,6 +241,175 @@ export async function grantCoinsForTaskCompletion(
   return { coinEventId, bonusEventId };
 }
 
+// =============================================================
+// SQL builders (M2 atomicity bridge)
+// =============================================================
+//
+// M1's grantCoinsForTaskCompletion / revokeCoinsForTask do 2-3 sequential
+// statements (grant, check, bonus) and the SELECT-driven branches can't
+// be flattened into one batch. The M2 route layer, however, owns the
+// task_completions transaction and wants the +1 / -1 coin grant to
+// share that batch (so a "complete a task" failure can never leave a
+// child with a completion but no +1 coin — see PM 委托 关键约束 #4).
+//
+// These four functions return the {query, params} for the INSERT
+// statement so the route layer can wrap them with `db.prepare(q).bind(...p)`
+// and add them to its own db.batch() call. The bonus / revoke-bonus
+// builders are async because they have to read state
+// (isAllTasksCompleted / findBonusEvent) to decide whether to return
+// a SQL payload or null.
+//
+// (We deliberately return raw SQL+params rather than a D1PreparedStatement
+// instance: the @cloudflare/workers-types ambient D1PreparedStatement and
+// the local mock in src/db/types.ts are structurally identical but TS
+// treats them as distinct types, so a returned statement object would
+// not be assignable to `db.batch(statements: D1PreparedStatement[])` from
+// the route layer's perspective.)
+
+/**
+ * Build the +1 coin INSERT (query, params) for a task completion.
+ * Route layer wraps with `db.prepare(q).bind(...p)` and adds to its
+ * existing db.batch() so the +1 coin is committed atomically with
+ * the task_completions row.
+ *
+ * No SELECT, no read; safe to inject into a batch directly.
+ */
+export function buildTaskCoinGrantSQL(
+  userId: number,
+  taskId: number,
+  date: string,
+): { query: string; params: unknown[] } {
+  // SQL shape mirrors the original route's score_events INSERT (5 bound
+  // params: user_id, type, change_value, reason, source_ref; status,
+  // submitted_by, source, week_of, created_at are inlined as literals /
+  // NULL / unixepoch()).
+  //
+  // Why bind 'coins' and 1 instead of inlining them: unit-test mocks
+  // (and any future consumer that introspects bound params) expect the
+  // first 5 ? slots to be [user_id, type, change_value, reason,
+  // source_ref]. M1's writeTaskCoinGrant took a similar shortcut by
+  // leaving type/change_value as SQL literals — that one is 4-params
+  // and is only used internally by grantCoinsForTaskCompletion where
+  // no test mock is involved. M2 puts the +1 coin into a route-layer
+  // batch where mocks DO read bound params, so we bind all 5.
+  //
+  // week_of is inlined to NULL — M2 does not depend on weekly
+  // aggregation for coin grants (weekly_limit is checked on
+  // shop_redemptions, not score_events).
+  return {
+    query:
+      `INSERT INTO score_events ` +
+      `(user_id, type, change_value, reason, status, submitted_by, source, source_ref, week_of, created_at) ` +
+      `VALUES (?, ?, ?, ?, 'approved', 'child', 'task', ?, NULL, unixepoch())`,
+    params: [
+      userId,
+      'coins',
+      1,
+      `task:#${taskId}`,
+      `task:${taskId}:${date}:${userId}`,
+    ],
+  };
+}
+
+/**
+ * Build the +3 daily-bonus INSERT (query, params) iff all active tasks
+ * are completed for (userId, date) and no bonus has been issued yet.
+ *
+ * Returns null when: (a) some task is still un-done, OR (b) a bonus
+ * already exists (idempotent re-issue guard, mirrors
+ * writeDailyBonusIfMissing's existing semantics).
+ *
+ * Async because the decision requires 2 SELECTs (active task count
+ * + existing-bonus lookup). The route layer awaits this AFTER its
+ * primary batch has already committed the +1 coin, so a "bonus
+ * already exists" answer simply means we skip the second batch.
+ */
+export async function buildDailyBonusSQLIfAllDone(
+  _db: D1Database,
+  userId: number,
+  date: string,
+): Promise<{ query: string; params: unknown[] } | null> {
+  const allDone = await isAllTasksCompleted(_db, userId, date);
+  if (!allDone) return null;
+
+  const existing = await findBonusEvent(_db, userId, date);
+  if (existing !== null) return null;
+
+  return {
+    query:
+      `INSERT INTO score_events ` +
+      `(user_id, type, change_value, reason, status, submitted_by, source, source_ref, week_of, created_at) ` +
+      `VALUES (?, ?, ?, ?, 'approved', 'system', 'task', ?, NULL, unixepoch())`,
+    params: [
+      userId,
+      'coins',
+      3,
+      `bonus:${date}:${userId}`,
+      `bonus:${date}:${userId}`,
+    ],
+  };
+}
+
+/**
+ * Build the -1 coin INSERT (query, params) for a task revoke.
+ * Mirrors buildTaskCoinGrantSQL but for the inverse direction.
+ * source_ref is anchored on the original (date, userId, taskId) tuple
+ * — NOT on the task_completion id, so a cross-day revoke can still
+ * find the original +1 if needed for audit reconciliation.
+ */
+export function buildRevokeTaskCoinSQL(
+  userId: number,
+  taskId: number,
+  date: string,
+): { query: string; params: unknown[] } {
+  return {
+    query:
+      `INSERT INTO score_events ` +
+      `(user_id, type, change_value, reason, status, submitted_by, source, source_ref, week_of, created_at) ` +
+      `VALUES (?, ?, ?, ?, 'approved', 'pm', 'task', ?, NULL, unixepoch())`,
+    params: [
+      userId,
+      'coins',
+      -1,
+      `revoke:task:#${taskId}`,
+      `revoke:task:${taskId}:${date}:${userId}`,
+    ],
+  };
+}
+
+/**
+ * Build the -3 daily-bonus-reverse INSERT (query, params) iff a +3
+ * bonus still exists for (userId, date). Mirrors findBonusEvent
+ * semantics: filters change_value = 3 (positive), so a
+ * previously-reversed bonus (already at -3) does NOT trigger a
+ * duplicate -3 (TC-F4 idempotent).
+ *
+ * Returns null when: no bonus exists, or bonus was already reversed
+ * by a prior revoke. Async because of the existence SELECT.
+ */
+export async function buildRevokeBonusSQLIfPresent(
+  _db: D1Database,
+  userId: number,
+  date: string,
+): Promise<{ query: string; params: unknown[] } | null> {
+  const existing = await findBonusEvent(_db, userId, date);
+  if (existing === null) return null;
+
+  return {
+    query:
+      `INSERT INTO score_events ` +
+      `(user_id, type, change_value, reason, status, submitted_by, source, source_ref, week_of, created_at) ` +
+      `VALUES (?, ?, ?, ?, 'approved', 'pm', 'task', ?, NULL, unixepoch())`,
+    params: [
+      userId,
+      'coins',
+      -3,
+      `revoke:bonus:${date}:${userId}`,
+      `revoke:bonus:${date}:${userId}`,
+    ],
+  };
+}
+
 /**
  * Task revoke → reverse -1 coin, check + reverse -3 bonus if it was granted.
  * Mirrors grantCoinsForTaskCompletion. The +1 grant's existence is assumed

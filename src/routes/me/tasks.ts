@@ -17,6 +17,10 @@ import type { Env } from '../../worker.ts';
 import type { Task } from '../../db/types.ts';
 import { todayShanghai, nowShanghaiHHMM, hhmmAfter } from '../../utils/week.ts';
 import { computeBalance } from '../../utils/balance.ts';
+import {
+  buildTaskCoinGrantSQL,
+  buildDailyBonusSQLIfAllDone,
+} from '../../utils/coin.ts';
 
 const tasks = new Hono<{ Bindings: Env }>();
 
@@ -94,19 +98,39 @@ tasks.post('/:id/complete', async (c) => {
   // SQLite/D1's `last_insert_rowid()` returns the rowid of the most recent
   // insert on the same connection, so the audit row can reference the
   // score_event just inserted in the previous batch statement.
+  //
+  // M2 (Coin System): the +1 coin event is appended to this same batch so
+  // a "complete a task" failure can never leave a child with a completion
+  // but no +1 coin (PM 委托 关键约束 #4). Order is chosen so:
+  //   - awarded_event_id (on task_completions) still points at the legacy
+  //     game_time/pocket_money event (RFC §8.4 — historical token_reward
+  //     rows must keep their old FK target to preserve revoke semantics
+  //     for v2 historical completions).
+  //   - audit_log.target_event_id points at the new +1 coin event, which
+  //     is the auditable "reward" being awarded under the v3 coin model.
+  //   - coinEventId (returned in the response) is the +1 coin event's id
+  //     so the child UI can show a "🪙 +1" toast alongside the legacy
+  //     game_time/pocket_money balance update.
+  //
+  // Bonus (+3) is intentionally NOT in this batch: it requires a SELECT
+  // (isAllTasksCompleted + findBonusEvent) to decide whether to issue, so
+  // it is evaluated sequentially after the primary batch commits. If the
+  // bonus write fails, the +1 coin (and the legacy event + completion)
+  // are still safe; the bonus can be re-issued on the next task complete.
   const sourceRef = `task:${taskId}`;
   const reason = `Task: ${task.name}`;
-  const detailsJson = JSON.stringify({
+  const coinDetailsJson = JSON.stringify({
     task_id: taskId,
     task_name: task.name,
-    token_reward: task.token_reward,
+    change_value: 1,
+    type: 'coins',
   });
+  // +1 coin SQL builder returns {query, params}; wrap with db.prepare().bind()
+  // so it can join the same atomic db.batch() as the legacy event + completion.
+  const coinGrant = buildTaskCoinGrantSQL(CHILD_USER_ID, taskId, today);
 
-  // Order matters: score_events first so task_completions can reference its
-  // last_insert_rowid() as awarded_event_id. This is what task-completions.ts:revoke
-  // needs to find the score_event to flip to 'revoked'. (PHASE2-FINDING: previously
-  // awarded_event_id was NULL on task_completions rows, so revoke UPDATE found nothing.)
   const results = await db.batch([
+    // 0. Legacy game_time / pocket_money reward (RFC §8.4 historical)
     db
       .prepare(
         `INSERT INTO score_events
@@ -115,6 +139,7 @@ tasks.post('/:id/complete', async (c) => {
          VALUES (?, ?, ?, ?, 'approved', 'child', 'task', ?, NULL, unixepoch())`,
       )
       .bind(CHILD_USER_ID, task.target_account, task.token_reward, reason, sourceRef),
+    // 1. task_completions row — awarded_event_id points at the legacy event (row 0)
     db
       .prepare(
         `INSERT INTO task_completions
@@ -122,17 +147,52 @@ tasks.post('/:id/complete', async (c) => {
          VALUES (?, ?, 'active', ?, unixepoch(), last_insert_rowid())`,
       )
       .bind(taskId, CHILD_USER_ID, today),
+    // 2. +1 coin event (Coin System M2, RFC §4.6 / §5.1)
+    db.prepare(coinGrant.query).bind(...coinGrant.params),
+    // 3. audit_log — target_event_id points at the +1 coin event (row 2)
     db
       .prepare(
         `INSERT INTO audit_log
            (actor, action, target_event_id, target_user_id, details, created_at)
          VALUES ('child', 'task_complete', last_insert_rowid(), ?, ?, unixepoch())`,
       )
-      .bind(CHILD_USER_ID, detailsJson),
+      .bind(CHILD_USER_ID, coinDetailsJson),
   ]);
 
-  // The score_events insert is now the 1st statement (index 0).
+  // Legacy score_event id (row 0) is still the task_completions FK target.
   const eventId = Number(results[0]?.meta?.last_row_id ?? 0);
+  // +1 coin event id (row 2) is the new "coin reward" handle.
+  const coinEventId = Number(results[2]?.meta?.last_row_id ?? 0);
+
+  // 4.5. Bonus check: if all active tasks for today are done and no bonus
+  //      has been issued yet, write a +3 coin event. This is a sequential
+  //      SELECT-driven step; see RFC §5.1 step 3-4. Runs in its own batch
+  //      so a bonus-only failure does not roll back the primary batch.
+  let bonusEventId: number | null = null;
+  const bonusSql = await buildDailyBonusSQLIfAllDone(
+    db,
+    CHILD_USER_ID,
+    today,
+  );
+  if (bonusSql) {
+    const bonusDetailsJson = JSON.stringify({
+      task_id: taskId,
+      change_value: 3,
+      type: 'coins',
+      reason: 'all-tasks-completed',
+    });
+    const bonusResults = await db.batch([
+      db.prepare(bonusSql.query).bind(...bonusSql.params),
+      db
+        .prepare(
+          `INSERT INTO audit_log
+             (actor, action, target_event_id, target_user_id, details, created_at)
+           VALUES ('system', 'task_complete', last_insert_rowid(), ?, ?, unixepoch())`,
+        )
+        .bind(CHILD_USER_ID, bonusDetailsJson),
+    ]);
+    bonusEventId = Number(bonusResults[0]?.meta?.last_row_id ?? 0);
+  }
 
   // 5. Recompute the balance so the client can update UI optimistically.
   const newBalance = await computeBalance(db, CHILD_USER_ID);
@@ -145,6 +205,11 @@ tasks.post('/:id/complete', async (c) => {
       target_account: task.target_account,
       new_balance: newBalance,
       event_id: eventId,
+      // Coin System M2 (RFC §4.6 / TC-F1 / TC-F2): expose the +1 coin event
+      // id (and any bonus +3 id) so the child UI can render the 🪙 toast
+      // and Qual can assert the SQL writes.
+      coin_event_id: coinEventId,
+      bonus_event_id: bonusEventId,
     },
     201,
   );
