@@ -345,7 +345,7 @@ async function uncompleteTask(taskId) {
     state.balance = r.new_balance;
     renderBalance();
     renderTasks();
-    toast(`-${r.token_revoked} ${r.target_account === 'game_time' ? '⚡' : '⚙️'} 已回收`, 'success');
+    toast(`-${r.token_revoked} ${r.target_account === 'game_time' ? '⚡' : r.target_account === 'pocket_money' ? '⚙️' : '🪙'} 已回收`, 'success');
     // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
     loadProgress().then(renderProgress).catch(() => {});  // §5.2 fix: revoke must refresh progress

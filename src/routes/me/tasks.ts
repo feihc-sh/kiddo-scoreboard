@@ -20,6 +20,8 @@ import { computeBalance } from '../../utils/balance.ts';
 import {
   buildTaskCoinGrantSQL,
   buildDailyBonusSQLIfAllDone,
+  buildRevokeTaskCoinSQL,
+  buildRevokeBonusSQLIfPresent,
 } from '../../utils/coin.ts';
 
 const tasks = new Hono<{ Bindings: Env }>();
@@ -272,14 +274,15 @@ tasks.post('/:id/uncomplete', async (c) => {
     );
   }
 
-  // 4. Refuse if no active completion exists (must complete first before revoke).
+  // 4. Load active completion WITH awarded_event_id (for audit target).
+  //    Coin System M2: awarded_event_id points to the +1 coin event.
   const active = await db
     .prepare(
-      `SELECT id FROM task_completions
+      `SELECT id, awarded_event_id FROM task_completions
        WHERE task_id = ? AND user_id = ? AND status = 'active' AND completed_date = ?`,
     )
     .bind(taskId, CHILD_USER_ID, today)
-    .first<{ id: number }>();
+    .first<{ id: number; awarded_event_id: number | null }>();
   if (!active) {
     return c.json(
       { error: { code: 'NOT_COMPLETED_TODAY', message: 'task was not completed today' } },
@@ -287,46 +290,84 @@ tasks.post('/:id/uncomplete', async (c) => {
     );
   }
 
-  // 5. Atomic soft-revoke: 3 statements in one batch.
-  const sourceRef = `task:${taskId}`;
+  // 5. Atomic soft-revoke: 3 statements in one batch (Coin System M2 model).
+  //    Mirror src/routes/admin/task-completions.ts revoke pattern:
+  //      - DO NOT flip the +1 coin event to 'revoked' (math: balance would
+  //        become -1). Instead write a -1 compensation event so balance
+  //        = +1 + (-1) = 0 (RFC §5.3 / TC-F3).
+  //      - Audit target_event_id = the +1 coin event id (the awarded_event_id
+  //        FK target), keeping audit trail consistent with admin revoke.
+  const revokeCoin = buildRevokeTaskCoinSQL(CHILD_USER_ID, taskId, today);
   const detailsJson = JSON.stringify({
     task_id: taskId,
     task_name: task.name,
     token_reward: task.token_reward,
+    completion_id: active.id,
+    awarded_event_id: active.awarded_event_id,
   });
 
-  await db.batch([
+  const results = await db.batch([
+    // 0. Mark completion as revoked
     db
       .prepare(
         `UPDATE task_completions SET status = 'revoked'
          WHERE task_id = ? AND user_id = ? AND status = 'active' AND completed_date = ?`,
       )
       .bind(taskId, CHILD_USER_ID, today),
-    db
-      .prepare(
-        `UPDATE score_events SET status = 'revoked'
-         WHERE source_ref = ? AND user_id = ? AND status = 'approved'`,
-      )
-      .bind(sourceRef, CHILD_USER_ID),
+    // 1. -1 coin compensation (Coin System M2, RFC §4.7 / §5.3)
+    db.prepare(revokeCoin.query).bind(...revokeCoin.params),
+    // 2. Audit log
     db
       .prepare(
         `INSERT INTO audit_log
            (actor, action, target_event_id, target_user_id, details, created_at)
-         VALUES ('child', 'task_uncomplete', NULL, ?, ?, unixepoch())`,
+         VALUES ('child', 'task_uncomplete', ?, ?, ?, unixepoch())`,
       )
-      .bind(CHILD_USER_ID, detailsJson),
+      .bind(active.awarded_event_id, CHILD_USER_ID, detailsJson),
   ]);
+  // The -1 coin INSERT is statement index 1 in the batch.
+  const revokeCoinEventId = Number(results[1]?.meta?.last_row_id ?? 0);
 
-  // 6. Recompute balance so the client can update UI optimistically.
+  // 6. Bonus check: if a +3 daily bonus was granted on the same date,
+  //    also write a -3 reversal (SELECT-driven; separate batch so a
+  //    bonus-only failure does not roll back the primary revoke).
+  let revokeBonusEventId: number | null = null;
+  const bonusSql = await buildRevokeBonusSQLIfPresent(db, CHILD_USER_ID, today);
+  if (bonusSql) {
+    const bonusDetailsJson = JSON.stringify({
+      task_id: taskId,
+      change_value: -3,
+      type: 'coins',
+      reason: 'bonus-revoked',
+    });
+    const bonusResults = await db.batch([
+      db.prepare(bonusSql.query).bind(...bonusSql.params),
+      db
+        .prepare(
+          `INSERT INTO audit_log
+             (actor, action, target_event_id, target_user_id, details, created_at)
+           VALUES ('child', 'task_uncomplete', ?, ?, ?, unixepoch())`,
+        )
+        .bind(active.awarded_event_id, CHILD_USER_ID, bonusDetailsJson),
+    ]);
+    revokeBonusEventId = Number(bonusResults[0]?.meta?.last_row_id ?? 0);
+  }
+
+  // 7. Recompute balance so the client can update UI optimistically.
   const newBalance = await computeBalance(db, CHILD_USER_ID);
 
   return c.json(
     {
       task_id: taskId,
       task_name: task.name,
-      token_revoked: task.token_reward,
-      target_account: task.target_account,
+      // Coin System M2 (RFC §4.7): the actual revoked amount is always 1
+      // coin (regardless of the task's legacy target_account). Use
+      // target_account='coins' so the FE renders the 🪙 toast icon.
+      token_revoked: 1,
+      target_account: 'coins',
       new_balance: newBalance,
+      revoke_coin_event_id: revokeCoinEventId,
+      revoke_bonus_event_id: revokeBonusEventId,
     },
     200,
   );
