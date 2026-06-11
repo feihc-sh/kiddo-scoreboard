@@ -642,3 +642,202 @@ DELETE FROM shop_items;         -- NEW (会重新 seed)
 | shop_redemptions | 自动递增 | NEW |
 
 测试间 ID 复用通过 `clearAllData()` 保证 (沿用现有 pattern)。
+
+---
+
+## 5. Mock 策略
+
+### 5.1 D1 mock（Unit + Integration 层）
+
+**方案**：沿用现有 vitest + miniflare D1 pattern（参考 `tests/unit/admin-task-revoke.test.ts`）。
+
+```typescript
+// tests/unit/setup.ts (已有, 沿用)
+import { getMiniflare } from './helpers/miniflare';
+
+beforeAll(async () => {
+  const mf = await getMiniflare();
+  // 每次 reset D1 到 schema-only 状态
+  await mf.d1.exec('DELETE FROM score_events; DELETE FROM ...');
+  // 应用所有 migrations
+  await mf.d1.exec(fs.readFileSync('migrations/0001_initial.sql', 'utf8'));
+  await mf.d1.exec(fs.readFileSync('migrations/0002_xxx.sql', 'utf8'));
+  // ... 包括新加的 0007_coin_system.sql
+});
+```
+
+**关键点**：
+- **不要 mock D1**——miniflare 已提供真实 D1（SQLite engine），业务逻辑零修改即可跑
+- 所有 `db.batch()` 原子性测试在 miniflare 下行为与生产 D1 一致
+- **不要 mock Hono app**——直接 `app.fetch(request, env)` 走真实路由
+
+### 5.2 API mock（UI e2e 层）
+
+**方案**：用 `wrangler pages dev` + 真实 D1 local，**不 mock API**。
+
+```typescript
+// playwright.config.ts (已有 webServer block, 沿用)
+webServer: {
+  command: 'wrangler pages dev ./public --port 8787 --d1=DB --local',
+  port: 8787,
+  reuseExistingServer: true,
+  timeout: 60_000,
+}
+```
+
+**为什么不用 `page.route` mock API**：
+- 兑换流程涉及 db.batch 原子性，mock API 无法验证真实写入
+- 周限额需要查真实 shop_redemptions 表
+- 时间推进（TC-F8, TC-X1）需要服务器端时间逻辑，client mock 无法控制
+
+**例外**（可选择性 mock）：
+- 测试 "API 500 时 UI 行为" → 用 `page.route` mock 该 endpoint
+- 测试 "网络断开" → `context.setOffline(true)`
+
+### 5.3 时间 mock（跨周测试）
+
+**Unit 层**（vitest）：
+```typescript
+import { vi } from 'vitest';
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-06-08T15:59:30Z'));  // Asia/Shanghai 23:59:30
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+```
+
+**Integration 层**（miniflare D1）：
+- vitest `vi.setSystemTime()` 在 miniflare 内**也生效**（miniflare 用同一个全局时间）
+- `Date.now()` 和 `unixepoch()` 返回 mock 时间
+- 但 `Intl.DateTimeFormat` 的 ISO week 计算需要测试单独验证（避免依赖 Node 端时间）
+
+**UI e2e 层**（Playwright）：
+```typescript
+// 选项 A: 直接 UPDATE 数据库
+await page.evaluate(async () => {
+  await fetch('/api/test/clock?iso=2026-06-08T15:59:30Z', { method: 'POST' });
+});
+
+// 选项 B: Playwright clock (1.45+)
+await page.clock.install({ time: new Date('2026-06-08T15:59:30Z') });
+```
+
+**关键点**：ISO week 计算必须在 SQL 端用 `date()` 或 JS 端用 `Intl.DateTimeFormat`，**双保险**（RFC §2.3）。如果只用客户端 mock，服务器端 `date('now', 'localtime')` 不会被影响。
+
+### 5.4 并发 mock（race condition 测试）
+
+```typescript
+// TC-X2: 2 个并发 exchange
+const responses = await Promise.all([
+  app.fetch(new Request('http://localhost/api/coins/exchange', {
+    method: 'POST', body: JSON.stringify({ item_id: 1 }), ...
+  })),
+  app.fetch(new Request('http://localhost/api/coins/exchange', {
+    method: 'POST', body: JSON.stringify({ item_id: 1 }), ...
+  })),
+]);
+
+expect(responses.filter(r => r.status === 200)).length === 1;
+expect(responses.filter(r => r.status === 429)).length === 1;
+```
+
+**关键点**：
+- D1 miniflare **单库串行**执行，2 个 batch 不会真正并发
+- 但 2 个 batch 在 miniflare 调度之间仍是顺序的，所以 race 会被序列化
+- 真正的并发测试需要 **wrangler dev + 真实网络**（不在 unit 范围）
+- 替代方案：在 TC-X2 用 `await new Promise(r => setTimeout(r, 0))` 让 2 个请求交错发起，验证 D1 串行化保证
+
+### 5.5 db.batch 失败 mock（TC-X7）
+
+```typescript
+// 模拟 batch 中第 2 条 SQL 失败
+const originalBatch = db.batch.bind(db);
+db.batch = async (stmts: any[]) => {
+  // 拦截第 2 条: INSERT score_events (game_time, +10)
+  if (stmts[1]?.includes("'game_time'")) {
+    throw new Error('Simulated D1 failure on game_time insert');
+  }
+  return originalBatch(stmts);
+};
+```
+
+**关键点**：
+- 验证 batch 抛出 → score_events 没有任何写入（D1 事务原子）
+- 验证金币余额不变
+- 不要测客户端 retry 逻辑（v1 不重试，RFC §5.4）
+
+### 5.6 浏览器 mock（仅特殊情况）
+
+**iPad Safari 模拟**（沿用 `playwright.config.ts` iPad project）：
+- chromium engine + iPad UA + touch events
+- **真实 WebKit 不在 unit test 范围**（必须 cf pages dev 真机验证）
+- 视觉类（hover、transform）用 `chromium` 即可，touch 用 `hasTouch: true`
+
+**网络 mock**（仅 UI e2e 错误路径测试）：
+```typescript
+await context.route('**/api/coins/balance', route => route.fulfill({ status: 500 }));
+```
+
+---
+
+## 6. 验收对照表
+
+> 总览：12 条 RFC §7 验收 (F1-F12) + 4 条数据守恒 (INV-1..4) + 8 条额外 edge case (TC-X1..X8) = **24 条测试用例**。
+
+| 验收 ID | TC ID | 类型 | 优先级 | 估计工时 | 关联文件 |
+|---------|-------|------|--------|----------|---------|
+| **F1** | TC-F1 | integration | P0 | 15 min | tests/unit/me-tasks-complete-coin.test.ts |
+| F1 | TC-F1-edge-revoke | integration | P0 | 10 min | (覆盖 F3) |
+| F1 | TC-F1-edge-duplicate | integration | P1 | 5 min | (复用现有 409 测试) |
+| **F2** | TC-F2 | integration | P0 | 20 min | tests/unit/coin-bonus.test.ts |
+| F2 | TC-F2-idempotent | unit | P0 | 10 min | (source_ref 幂等) |
+| F2 | TC-F2-cross-day | unit | P1 | 5 min | (周日 → 周一) |
+| **F3** | TC-F3 | integration | P0 | 15 min | tests/unit/admin-task-completions-coin.test.ts |
+| F3 | TC-F3-double-revoke | integration | P1 | 5 min | (409 idempotent) |
+| **F4** | TC-F4 | integration | P0 | 20 min | tests/unit/coin-bonus-revoke.test.ts |
+| F4 | TC-F4-no-bonus | integration | P1 | 10 min | (撤销前未发 bonus) |
+| **F5** | TC-F5 | integration | P0 | 20 min | tests/unit/coin-bonus-reissue.test.ts |
+| F5 | TC-F5-partial | integration | P1 | 10 min | (只重做 1 个) |
+| **F6** | TC-F6 | integration | P0 | 25 min | tests/unit/shop-exchange.test.ts |
+| F6 | TC-F6-item-404 | integration | P1 | 5 min | (invalid_item_id) |
+| F6 | TC-F6-item-disabled | integration | P1 | 5 min | (is_active=0) |
+| **F7** | TC-F7 | integration | P0 | 15 min | tests/unit/shop-exchange-weekly-limit.test.ts |
+| F7 | TC-F7-boundary | integration | P1 | 5 min | (第 3 次刚好用完) |
+| F7 | TC-F7-unlimited | integration | P2 | 5 min | (weekly_limit=0) |
+| **F8** | TC-F8 | integration | P0 | 25 min | tests/unit/shop-exchange-week-reset.test.ts |
+| F8 | TC-F8-edge-second | unit | P1 | 5 min | (周日 23:59:59 vs 周一 00:00:00) |
+| F8 | TC-F8-year-cross | unit | P2 | 5 min | (W52 → W01) |
+| **F9** | TC-F9 | UI e2e | P1 | 20 min | tests/e2e/shop-ui-coin-balance.spec.ts |
+| F9 | TC-F9-exact | UI e2e | P1 | 5 min | (金币刚好够) |
+| F9 | TC-F9-zero | UI e2e | P2 | 5 min | (金币 0) |
+| **F10** | TC-F10 | UI e2e | P1 | 20 min | tests/e2e/shop-ui-weekly-limit.spec.ts |
+| F10 | TC-F10-combo | UI e2e | P1 | 10 min | (金币不足 + 周限额用完) |
+| **F11** | TC-F11 | UI e2e | P1 | 20 min | tests/e2e/shop-ui-history.spec.ts |
+| F11 | TC-F11-empty | UI e2e | P2 | 5 min | (空状态) |
+| F11 | TC-F11-over-30 | UI e2e | P2 | 10 min | (31 条 LIMIT 30) |
+| **F12** | TC-F12 | UI e2e | P1 | 20 min | tests/e2e/coin-balance-card.spec.ts |
+| F12 | TC-F12-zero | UI e2e | P2 | 5 min | (金币 0 不隐藏) |
+| F12 | TC-F12-api-fail | UI e2e | P2 | 10 min | (API 500 → "--" + toast) |
+| **INV-1** | TC-INV-1 | integration | P0 | 10 min | tests/e2e/coin-invariants.spec.ts |
+| **INV-2** | TC-INV-2 | integration | P0 | 15 min | (含 ±3 配对守恒) |
+| **INV-3** | TC-INV-3 | integration | P0 | 10 min | (兑换消耗守恒) |
+| **INV-4** | TC-INV-4 | integration | P0 | 10 min | (兑换奖励守恒) |
+| **额外** | TC-X1 | integration | P1 | 25 min | (跨周重置) |
+| 额外 | TC-X2 | integration | P1 | 30 min | (race condition) |
+| 额外 | TC-X3 | integration | P1 | 20 min | (跨周撤销) |
+| 额外 | TC-X4 | integration | P1 | 20 min | (bonus 重发) |
+| 额外 | TC-X5 | integration | P1 | 15 min | (历史 token_reward) |
+| 额外 | TC-X6 | integration | P2 | 15 min | (多孩隔离, 预留) |
+| 额外 | TC-X7 | integration | P0 | 20 min | (db.batch 原子回滚) |
+| 额外 | TC-X8 | integration | P2 | 25 min | (索引性能) |
+
+**总计**：
+- 44 行（12 验收主 TC + 12 验收 edge TC + 4 INV + 8 额外 TC + 8 额外 edge）
+- 工时预估: **~9.5 小时**（P0 部分 ~3h, P1 ~4.5h, P2 ~2h）
+- 文件数: 12 个新 spec 文件 + 1 个 invariants spec
+
+**注**：表中的 edge TC（`-edge-*`）是主 TC 的子用例，可选择性覆盖。P0 范围 = 24 条必跑 + P1 范围 = 12 条优先 + P2 范围 = 8 条 nice-to-have。
