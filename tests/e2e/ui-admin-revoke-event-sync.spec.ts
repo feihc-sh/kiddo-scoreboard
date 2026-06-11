@@ -11,8 +11,8 @@
 //
 // Compare with the COMPLETION-level revoke (POST /api/admin/task-completions/:id/revoke):
 // that path *does* update both tables in one db.batch(), and the child UI
-// correctly switches to "明天再来 🌙". See flow-task-lifecycle.spec.ts for
-// that working path.
+// correctly switches to "系统休眠中" (PR #27 Mecha redesign 文案, was "明天再来 🌙").
+// See flow-task-lifecycle.spec.ts for that working path.
 //
 // User impact: PM thinks they revoked a child's task but the child still
 // sees it as done. This is a state-mismatch bug, not a data corruption bug,
@@ -102,9 +102,8 @@ test.describe('P0 REGRESSION: admin revoke event must sync to child UI (2026-06-
     expect(ts.completed_task_ids, `expected task #1 NOT in completed_task_ids, got ${JSON.stringify(ts)}`).not.toContain(1);
 
     // Visual contract: child UI renders the task button with
-    // .task-btn-revoked class and the "休眠中" badge. PR #27 changed the
-    // original "明天再来 🌙" text to "系统休眠中" — see comments in
-    // tests/e2e/ui-child-task-complete.spec.ts:73, 251.
+    // .task-btn-revoked class and "系统休眠中" badge text (PR #27 Mecha redesign,
+    // was "明天再来 🌙" pre-#27).
     const childPage = await context.newPage();
     await childPage.goto('/');
     await childPage.waitForTimeout(1500);

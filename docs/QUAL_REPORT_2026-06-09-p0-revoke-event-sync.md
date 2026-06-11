@@ -47,7 +47,7 @@ Admin UI 在 v2.2 (#009) 之前, 撤销按钮在「全部事件」和「任务�
 - DB: `score_events.status = 'revoked'`, `task_completions.status = 'active'` — **矛盾**
 
 **期望结果** (之一, 由 PM 选):
-- 方案 A: PM 撤销 event 后, child 任务立即显示「明天再来 🌙」+ 灰色 (与 completion-level 撤销一致)
+- 方案 A: PM 撤销 event 后, child 任务立即显示「系统休眠中」+ 灰色 (与 completion-level 撤销一致) (PR #27 Mecha redesign 文案, 原「明天再来 🌙」)
 - 方案 B: 端点拒绝 + 友好错误 (e.g. `REFERENCED_BY_COMPLETION`), UI 提示 PM 去「任务完成历史」section 用 completion-level 撤销
 - 方案 C: Admin UI 在「全部事件」里, 对被 task_completion 引用的 event **不显示**撤销按钮, 强制走 completion-level 路径
 
