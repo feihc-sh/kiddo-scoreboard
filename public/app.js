@@ -264,13 +264,17 @@ function showSprintModal(task) {
   const cd = modal.querySelector('.sprint-countdown');
   if (task.cutoff_time && cd) {
     cd.hidden = false;
+    // NOTE: 必须先 modal.hidden = false 再调 updateSprintCountdown() —
+    // updateSprintCountdown 内部 early-return 当 modal.hidden,否则首次打开
+    // modal 时 text 会残留上次的剩余时间,直到 setInterval 1s 后才"跳"成正确时间。
+    modal.hidden = false;
     updateSprintCountdown();
     if (_sprintCountdownTimer) clearInterval(_sprintCountdownTimer);
     _sprintCountdownTimer = setInterval(updateSprintCountdown, 1000);
   } else if (cd) {
     cd.hidden = true;
+    modal.hidden = false;
   }
-  modal.hidden = false;
 }
 function hideSprintModal() {
   const modal = $('#sprint-modal');
