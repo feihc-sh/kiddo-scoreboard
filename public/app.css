@@ -1000,7 +1000,8 @@ body {
   max-width: 480px;
   padding: 32px 28px 24px;
   text-align: center;
-  background: linear-gradient(180deg, #FFF9F0 0%, #FFFFFF 100%);
+  /* 跟 .modal 默认 var(--bg-panel) 一致 (项目 Mecha dark theme),
+     不再用 light cream gradient,避免跟 dark backdrop 冲突 */
 }
 .sprint-close {
   position: absolute;
@@ -1010,7 +1011,7 @@ body {
   height: 36px;
   border: none;
   background: transparent;
-  color: var(--text-soft);
+  color: var(--text-secondary);
   font-size: 28px;
   line-height: 1;
   cursor: pointer;
@@ -1018,14 +1019,15 @@ body {
   transition: background 0.15s var(--ease), color 0.15s var(--ease);
   font-family: inherit;
 }
-.sprint-close:hover { background: rgba(0,0,0,0.06); color: var(--text-strong); }
+.sprint-close:hover { background: rgba(0, 245, 255, 0.10); color: var(--cyan); }
 .sprint-close:active { transform: scale(0.92); }
 .sprint-title {
   margin: 0 0 18px;
   font-size: 24px;
-  color: var(--accent-orange);
+  color: var(--cyan);
   letter-spacing: 1px;
   font-weight: 800;
+  text-shadow: 0 0 20px var(--cyan-glow);
 }
 .sprint-detail {
   display: flex;
@@ -1037,12 +1039,12 @@ body {
 .sprint-icon {
   font-size: 72px;
   line-height: 1;
-  filter: drop-shadow(0 4px 8px rgba(255, 138, 76, 0.25));
+  filter: drop-shadow(0 4px 12px rgba(0, 245, 255, 0.35));
 }
 .sprint-name {
   font-size: 20px;
   font-weight: 700;
-  color: var(--text-strong);
+  color: var(--text-primary);
 }
 .sprint-countdown {
   display: flex;
@@ -1052,7 +1054,8 @@ body {
   margin: 18px 0 22px;
   padding: 14px 12px;
   border-radius: var(--radius-md);
-  background: rgba(0,0,0,0.04);
+  background: var(--bg-plate);
+  border: 1px solid var(--border-glow);
   transition: color 0.2s var(--ease);
 }
 .sprint-countdown[hidden] { display: none; }
@@ -1062,27 +1065,31 @@ body {
   font-variant-numeric: tabular-nums;
   letter-spacing: 2px;
   line-height: 1;
-  color: #6B5E50;
+  color: var(--text-primary);
 }
 .sprint-countdown-hint {
   font-size: 13px;
-  color: var(--text-soft);
+  color: var(--text-secondary);
   font-weight: 500;
 }
-.sprint-countdown[data-urgency="ok"] .sprint-countdown-text { color: #6B5E50; }
+.sprint-countdown[data-urgency="ok"] .sprint-countdown-text { color: var(--text-primary); }
 .sprint-countdown[data-urgency="warning"] {
-  background: rgba(245, 158, 11, 0.10);
+  background: rgba(255, 107, 53, 0.10);
+  border-color: rgba(255, 107, 53, 0.35);
 }
-.sprint-countdown[data-urgency="warning"] .sprint-countdown-text { color: #B45309; }
+.sprint-countdown[data-urgency="warning"] .sprint-countdown-text { color: var(--orange); }
 .sprint-countdown[data-urgency="danger"] {
-  background: rgba(234, 88, 12, 0.12);
+  background: rgba(255, 61, 61, 0.12);
+  border-color: rgba(255, 61, 61, 0.40);
 }
-.sprint-countdown[data-urgency="danger"] .sprint-countdown-text { color: #C2410C; }
+.sprint-countdown[data-urgency="danger"] .sprint-countdown-text { color: var(--red); }
 .sprint-countdown[data-urgency="critical"] {
-  background: rgba(220, 38, 38, 0.12);
+  background: rgba(255, 61, 61, 0.18);
+  border-color: var(--red);
   animation: sprint-pulse 1s ease-in-out infinite;
+  box-shadow: 0 0 24px rgba(255, 61, 61, 0.45);
 }
-.sprint-countdown[data-urgency="critical"] .sprint-countdown-text { color: #B91C1C; }
+.sprint-countdown[data-urgency="critical"] .sprint-countdown-text { color: var(--red); text-shadow: 0 0 16px var(--red); }
 @keyframes sprint-pulse {
   0%, 100% { transform: scale(1); }
   50%      { transform: scale(1.04); }
