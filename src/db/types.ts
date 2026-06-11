@@ -6,13 +6,26 @@
 // Enums (kept narrow — match CHECK constraints in SQL)
 // =============================================================
 export type UserRole = 'child' | 'pm';
-export type AccountType = 'game_time' | 'pocket_money';
+// Module 7 (Coin System, RFC §3): added 'coins' as 3rd account type.
+// Each user's coin balance is SUM(change_value) of approved score_events
+// with type='coins'. Coin events are written by task completion hooks
+// (grantCoinsForTaskCompletion / revokeCoinsForTask in src/utils/coin.ts).
+export type AccountType = 'game_time' | 'pocket_money' | 'coins';
 export type EventStatus = 'pending' | 'approved' | 'rejected' | 'revoked';
 export type EventSource = 'manual' | 'task' | 'exchange' | 'weekly_grant';
 export type SubmittedBy = 'child' | 'pm' | 'system';
 export type Actor = 'child' | 'pm' | 'system';
 export type TaskCategory = 'habit' | 'study' | 'chore' | 'custom';
 export type CompletionStatus = 'active' | 'revoked';
+
+// Shop item enum (RFC §3.2): kind determines what account type the reward flows into.
+// v1 hardcode only uses 'game_time'; 'pocket_money' / 'custom' are reserved for v2+.
+// reward_type mirrors kind (with 'none' for 'custom' items that don't credit any account).
+export type ShopItemKind = 'game_time' | 'pocket_money' | 'custom';
+export type ShopRewardType = 'game_time' | 'pocket_money' | 'none';
+// shop_redemptions.status: v1 simplification — redemption is final on creation.
+// 'revoked' reserved for future PM-side undo (M3+).
+export type ShopRedemptionStatus = 'consumed' | 'revoked';
 
 // Audit actions: covers all write operations across the app
 export type AuditAction =
@@ -101,6 +114,52 @@ export interface AuditLog {
 export interface Balance {
   game_time: number;             // 分钟
   pocket_money: number;          // 元
+  coins: number;                 // 枚 (Module 7 Coin System, RFC §3.4)
+}
+
+// Module 7 (Coin System, RFC §3.2): row interfaces for shop tables.
+// These mirror the SQL columns exactly so callers can use them with the
+// raw D1 row shape (snake_case) before mapping to API responses.
+//
+// CoinBalance is a computed view (sum of approved coin events) — not a
+// stored row. Returned by getCoinBalance() in src/utils/coin.ts.
+export interface CoinBalance {
+  userId: number;
+  balance: number;               // SUM(change_value WHERE type='coins' AND status='approved')
+  lastUpdatedAt: number;         // unix seconds of the latest contributing event (0 if none)
+}
+
+export interface ShopItem {
+  id: number;
+  name: string;
+  kind: ShopItemKind;
+  costCoins: number;             // SQL: cost_coins
+  rewardValue: number;           // SQL: reward_value
+  rewardType: ShopRewardType;
+  description: string | null;
+  icon: string | null;
+  isActive: 0 | 1;               // SQL: is_active
+  sortOrder: number;             // SQL: sort_order
+  weeklyLimit: number;           // SQL: weekly_limit; 0 = unlimited
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ShopRedemption {
+  id: number;
+  userId: number;
+  itemId: number;
+  weekOf: string;                // ISO 8601 '2026-W23'
+  costCoins: number;
+  rewardValue: number;
+  rewardType: ShopRewardType;
+  status: ShopRedemptionStatus;
+  redeemedAt: number;
+  revokedAt: number | null;
+  revokedBy: number | null;
+  coinEventId: number;           // FK → score_events (type='coins', change_value=-cost)
+  rewardEventId: number;         // FK → score_events (type=reward_type, change_value=+reward)
+  createdAt: number;
 }
 
 export interface EventWithMeta extends ScoreEvent {

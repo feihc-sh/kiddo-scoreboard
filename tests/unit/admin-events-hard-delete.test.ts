@@ -192,7 +192,7 @@ describe('POST /api/admin/events/:id/hard-delete', () => {
     const body = (await r.json()) as HardDeleteResponse;
     expect(body.success).toBe(true);
     expect(body.deleted_id).toBe(101);
-    expect(body.balance).toEqual({ game_time: 0, pocket_money: 50 });
+    expect(body.balance).toEqual({ game_time: 0, pocket_money: 50, coins: 0 });
 
     // 1) score_events: id=101 is gone, id=102 is intact
     const remaining = await db

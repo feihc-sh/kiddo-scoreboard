@@ -22,6 +22,10 @@ import { computeBalance, recalcAfterHardDelete } from '../../utils/balance.ts';
 import { moveToDeletedRecords } from '../../utils/deleted-records.ts';
 import { logAudit } from '../../utils/audit.ts';
 import { todayShanghai } from '../../utils/week.ts';
+import {
+  buildRevokeTaskCoinSQL,
+  buildRevokeBonusSQLIfPresent,
+} from '../../utils/coin.ts';
 import type { Env } from '../../worker.ts';
 import type { Balance, CompletionStatus, TaskCompletion } from '../../db/types.ts';
 
@@ -147,8 +151,31 @@ taskCompletions.post('/:id/revoke', async (c) => {
 
   const now = Math.floor(Date.now() / 1000);
 
-  // Atomic transaction: completion + event + audit.
-  await db.batch([
+  // M2 (Coin System): the -1 coin revoke event is appended to this same
+  // batch so a "revoke a task" failure can never leave a completion
+  // marked 'revoked' without the matching -1 coin (PM 委托 关键约束 #4).
+  // The completion row was completed on completion.completed_date, so
+  // we feed that date to the helper (not today) so cross-day revoke
+  // still produces a -1 anchored on the original (date, userId, taskId)
+  // tuple. bonus -3 is also date-anchored to the original completion
+  // date — findBonusEvent looks up by source_ref='bonus:<date>:<userId>'
+  // which is date-scoped, so cross-day revoke still works (RFC §8.1).
+  const revokeCoin = buildRevokeTaskCoinSQL(
+    completion.user_id,
+    completion.task_id,
+    completion.completed_date,
+  );
+
+  // Atomic transaction: completion UPDATE + -1 coin INSERT +
+  // audit_log INSERT in one batch.
+  //
+  // Coin System Q7 (feihao 2026-06-11): 撤销时**不**再 UPDATE score_events
+  // 把 awarded_event_id 指向的 event flip 成 'revoked'。原因: 新模型下
+  // task_completions.awarded_event_id 指向 +1 coin event,如果把它
+  // flip 成 revoked → balance 不算 +1,但 -1 仍然算 → 余额 = -1
+  // (数学错)。正确做法:不动 +1 coin event,只插入 -1 作为补偿事件,
+  // balance = +1 + (-1) = 0。Audit trail 完整保留 +1 (approved) 和 -1。
+  const results = await db.batch([
     db
       .prepare(
         `UPDATE task_completions
@@ -156,20 +183,17 @@ taskCompletions.post('/:id/revoke', async (c) => {
          WHERE id = ?`,
       )
       .bind(now, pmUserId, id),
-    db
-      .prepare(
-        `UPDATE score_events
-         SET status = 'revoked', reviewed_at = ?, reviewed_by = ?
-         WHERE id = ?`,
-      )
-      .bind(now, pmUserId, completion.awarded_event_id),
+    // -1 coin (Coin System M2, RFC §4.7 / §5.3)
+    db.prepare(revokeCoin.query).bind(...revokeCoin.params),
     db
       .prepare(
         `INSERT INTO audit_log
            (actor, action, target_event_id, target_user_id, details, created_at)
-         VALUES ('pm', 'task_revoke', ?, ?, ?, ?)`,
+           VALUES ('pm', 'task_revoke', ?, ?, ?, ?)`,
       )
       .bind(
+        // audit target 仍然引用 awarded_event_id (即 +1 coin event id),
+        // 跟 task_completion FK 语义一致。
         completion.awarded_event_id,
         completion.user_id,
         JSON.stringify({
@@ -181,6 +205,43 @@ taskCompletions.post('/:id/revoke', async (c) => {
       ),
   ]);
 
+  // The -1 coin INSERT is now statement index 1 in the batch (was index 2).
+  const revokeCoinEventId = Number(results[1]?.meta?.last_row_id ?? 0);
+
+  // Bonus check: if a +3 bonus was granted on the same date, also
+  // write a -3 reversal. SELECT-driven, runs in its own batch so a
+  // bonus-only failure does not roll back the primary revoke batch.
+  let revokeBonusEventId: number | null = null;
+  const bonusSql = await buildRevokeBonusSQLIfPresent(
+    db,
+    completion.user_id,
+    completion.completed_date,
+  );
+  if (bonusSql) {
+    const bonusDetailsJson = JSON.stringify({
+      task_id: completion.task_id,
+      change_value: -3,
+      type: 'coins',
+      reason: 'bonus-revoked',
+    });
+    const bonusResults = await db.batch([
+      db.prepare(bonusSql.query).bind(...bonusSql.params),
+      db
+        .prepare(
+          `INSERT INTO audit_log
+             (actor, action, target_event_id, target_user_id, details, created_at)
+           VALUES ('pm', 'task_revoke', ?, ?, ?, ?)`,
+        )
+        .bind(
+          completion.awarded_event_id,
+          completion.user_id,
+          bonusDetailsJson,
+          now,
+        ),
+    ]);
+    revokeBonusEventId = Number(bonusResults[0]?.meta?.last_row_id ?? 0);
+  }
+
   // Recompute the user's balance after the event was flipped to 'revoked'.
   const newBalance: Balance = await computeBalance(db, completion.user_id);
 
@@ -189,6 +250,11 @@ taskCompletions.post('/:id/revoke', async (c) => {
     task_id: completion.task_id,
     revoked_at: now,
     new_balance: newBalance,
+    // Coin System M2 (RFC §4.7 / TC-F3 / TC-F4): expose the -1 coin event
+    // id (and any -3 bonus id) so Qual can assert the SQL writes and the
+    // PM UI can display "🪙 -1" alongside the legacy balance update.
+    revoke_coin_event_id: revokeCoinEventId,
+    revoke_bonus_event_id: revokeBonusEventId,
   });
 });
 

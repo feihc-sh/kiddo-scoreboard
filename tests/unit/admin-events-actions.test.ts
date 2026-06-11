@@ -327,7 +327,7 @@ describe('POST /api/admin/events/:id/approve', () => {
 
     expect(body.id).toBe(21);
     expect(body.status).toBe('approved');
-    expect(body.new_balance).toEqual({ game_time: 20, pocket_money: 50 });
+    expect(body.new_balance).toEqual({ game_time: 20, pocket_money: 50, coins: 0 });
 
     const ev = events.find((e) => e.id === 21);
     expect(ev?.status).toBe('approved');
@@ -416,7 +416,7 @@ describe('POST /api/admin/events/:id/revoke', () => {
     const body = (await r.json()) as EventActionResponse;
     expect(body.id).toBe(41);
     expect(body.status).toBe('revoked');
-    expect(body.new_balance).toEqual({ game_time: 0, pocket_money: 10 });
+    expect(body.new_balance).toEqual({ game_time: 0, pocket_money: 10, coins: 0 });
 
     const ev = events.find((e) => e.id === 41);
     expect(ev?.status).toBe('revoked');
@@ -559,6 +559,6 @@ describe('PUT /api/admin/events/:id  (edit)', () => {
     expect(r.status).toBe(200);
     const body = (await r.json()) as EventActionResponse;
     expect(body.event?.change_value).toBe(100);
-    expect(body.new_balance).toEqual({ game_time: 120, pocket_money: 0 });
+    expect(body.new_balance).toEqual({ game_time: 120, pocket_money: 0, coins: 0 });
   });
 });

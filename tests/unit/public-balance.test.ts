@@ -115,7 +115,7 @@ describe('GET /api/public/balance', () => {
     const r = await call('/api/public/balance?user_id=1');
     expect(r.status).toBe(200);
     const body = (await r.json()) as BalanceBody;
-    expect(body).toEqual({ game_time: 0, pocket_money: 0 });
+    expect(body).toEqual({ game_time: 0, pocket_money: 0, coins: 0 });
   });
 
   it('sums only approved events across both account types', async () => {
@@ -128,7 +128,7 @@ describe('GET /api/public/balance', () => {
     const r = await call('/api/public/balance?user_id=1');
     expect(r.status).toBe(200);
     const body = (await r.json()) as BalanceBody;
-    expect(body).toEqual({ game_time: 20, pocket_money: 15 });
+    expect(body).toEqual({ game_time: 20, pocket_money: 15, coins: 0 });
   });
 
   it('excludes pending, rejected, and revoked events from the balance', async () => {

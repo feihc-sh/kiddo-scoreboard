@@ -200,17 +200,42 @@ function makeStmt(query: string): D1PreparedStatement & TaggedStmt {
           meta: { changes: c ? 1 : 0, last_row_id: 0, duration: 0 },
         });
       }
-      if (/UPDATE\s+score_events/i.test(query)) {
-        const [now, pmUserId, id] = params as [number, number, number];
-        const e = events.find((x) => x.id === id);
-        if (e) {
-          e.status = 'revoked';
-          e.reviewed_at = now;
-          e.reviewed_by = pmUserId;
-        }
+      // Coin System M2 (Q7, feihao 2026-06-11): revoke no longer UPDATEs
+      // the awarded score_event to 'revoked' (that would corrupt the coin
+      // balance — see src/routes/admin/task-completions.ts:172-177 for the
+      // mathematical argument). Instead it INSERTs a -1 coin event
+      // (buildRevokeTaskCoinSQL) whose change_value is the inverse of the
+      // original +1 coin grant, so balance = +1 + (-1) = 0.
+      if (/INSERT\s+INTO\s+score_events/i.test(query)) {
+        // SQL builder inlines status/submitted_by/source/week_of/created_at
+        // as SQL literals, so bound params are:
+        //   [user_id, type, change_value, reason, source_ref]
+        const [user_id, type, change_value, reason, source_ref] = params as [
+          number,
+          ScoreEvent['type'],
+          number,
+          string,
+          string,
+        ];
+        const newEvent: ScoreEvent = {
+          id: events.length + 1,
+          user_id,
+          type,
+          change_value,
+          reason,
+          status: 'approved',
+          submitted_by: 'pm',
+          source: 'task',
+          source_ref,
+          reviewed_by: null,
+          reviewed_at: null,
+          week_of: null,
+          created_at: nowOverride,
+        };
+        events.push(newEvent);
         return Promise.resolve({
           success: true,
-          meta: { changes: e ? 1 : 0, last_row_id: 0, duration: 0 },
+          meta: { changes: 1, last_row_id: newEvent.id, duration: 0 },
         });
       }
       if (/INSERT\s+INTO\s+audit_log/i.test(query)) {
@@ -385,8 +410,15 @@ describe('POST /api/admin/task-completions/:id/revoke', () => {
     expect(body.completion_id).toBe(7);
     expect(body.task_id).toBe(task.id);
     expect(typeof body.revoked_at).toBe('number');
-    // The revoked event (id=42) no longer counts; only event 43 remains.
-    expect(body.new_balance).toEqual({ game_time: 0, pocket_money: 20 });
+    // M2 (Q7): the awarded event (id=42) is NOT flipped to 'revoked' — the
+    // revoke writes a -1 coin event instead, so legacy game_time/pocket_money
+    // balances stay at their pre-revoke values. The coin balance is the only
+    // thing that moves, and it goes to -1.
+    expect(body.new_balance).toEqual({ game_time: 30, pocket_money: 20, coins: -1 });
+    // New M2 response fields — revoke event id for the PM UI 🪙 toast
+    expect(typeof body.revoke_coin_event_id).toBe('number');
+    expect(body.revoke_coin_event_id).toBeGreaterThan(0);
+    expect(body.revoke_bonus_event_id).toBeNull(); // no +3 bonus issued → no -3
 
     // Completion row updated
     const c = completions.find((x) => x.id === 7);
@@ -394,19 +426,42 @@ describe('POST /api/admin/task-completions/:id/revoke', () => {
     expect(c?.revoked_at).toBe(body.revoked_at);
     expect(c?.revoked_by).toBe(1);
 
-    // Awarded event row updated
+    // Awarded event (id=42) is UNTOUCHED in M2. The new code path
+    // preserves it as 'approved' and writes a separate -1 coin event so
+    // balance = (+1 original) + (-1 revoke) = 0 mathematically.
     const ev = events.find((e) => e.id === 42);
-    expect(ev?.status).toBe('revoked');
+    expect(ev?.status).toBe('approved');
+    // reviewed_by/reviewed_at stay at their pre-test values (addEvent set
+    // reviewed_by: 1, reviewed_at: nowOverride — these are seed data, not
+    // written by the revoke handler).
     expect(ev?.reviewed_by).toBe(1);
     expect(typeof ev?.reviewed_at).toBe('number');
     // The unrelated event is untouched
     const ev2 = events.find((e) => e.id === 43);
     expect(ev2?.status).toBe('approved');
 
+    // New -1 coin event written by buildRevokeTaskCoinSQL
+    const coinRevoke = events.find(
+      (e) => e.type === 'coins' && e.change_value === -1,
+    );
+    expect(coinRevoke).toBeDefined();
+    expect(coinRevoke?.user_id).toBe(1);
+    expect(coinRevoke?.status).toBe('approved');
+    expect(coinRevoke?.submitted_by).toBe('pm');
+    expect(coinRevoke?.source).toBe('task');
+    expect(coinRevoke?.reason).toBe('revoke:task:#1');
+    expect(coinRevoke?.source_ref).toBe('revoke:task:1:2026-06-05:1');
+    // The response's revoke_coin_event_id matches the row's id.
+    expect(coinRevoke?.id).toBe(body.revoke_coin_event_id);
+
     // Audit log entry
     const entry = audit.find((a) => a.action === 'task_revoke');
     expect(entry).toBeDefined();
     expect(entry?.actor).toBe('pm');
+    // target_event_id explicitly references the +1 coin event id from
+    // completion.awarded_event_id (the src binds this directly, not via
+    // last_insert_rowid()) — the test verifies it ties back to the
+    // awarded event for audit reconciliation.
     expect(entry?.target_event_id).toBe(42);
     expect(entry?.target_user_id).toBe(1);
     const details = JSON.parse(entry?.details ?? '{}') as Record<string, unknown>;
@@ -414,16 +469,23 @@ describe('POST /api/admin/task-completions/:id/revoke', () => {
     expect(details.task_id).toBe(task.id);
     expect(details.original_token_reward).toBe(30);
 
-    // db.batch() contained exactly 3 statements, in spec order
+    // db.batch() contained exactly 3 statements, in new M2 order:
+    //   0. UPDATE task_completions
+    //   1. INSERT INTO score_events  (the new -1 coin; was UPDATE score_events pre-M2)
+    //   2. INSERT INTO audit_log
     expect(batchStatements).toHaveLength(3);
     expect(batchStatements[0].query.toUpperCase()).toMatch(/^UPDATE\s+TASK_COMPLETIONS/);
-    expect(batchStatements[1].query.toUpperCase()).toMatch(/^UPDATE\s+SCORE_EVENTS/);
+    expect(batchStatements[1].query.toUpperCase()).toMatch(/^INSERT\s+INTO\s+SCORE_EVENTS/);
     expect(batchStatements[2].query.toUpperCase()).toMatch(/^INSERT\s+INTO\s+AUDIT_LOG/);
     // The completion UPDATE used the right id
     const cParams = batchStatements[0].params as unknown[];
     expect(cParams[2]).toBe(7);
-    // The event UPDATE used the awarded_event_id (42)
-    const eParams = batchStatements[1].params as unknown[];
-    expect(eParams[2]).toBe(42);
+    // The -1 coin INSERT bound [user_id, type, change_value, reason, source_ref]
+    const coinParams = batchStatements[1].params as unknown[];
+    expect(coinParams[0]).toBe(1);       // user_id
+    expect(coinParams[1]).toBe('coins'); // type
+    expect(coinParams[2]).toBe(-1);      // change_value (was 42 pre-M2)
+    expect(coinParams[3]).toBe('revoke:task:#1');
+    expect(coinParams[4]).toBe('revoke:task:1:2026-06-05:1');
   });
 });

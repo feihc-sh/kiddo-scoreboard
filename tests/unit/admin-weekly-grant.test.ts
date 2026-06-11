@@ -333,7 +333,7 @@ describe('POST /api/admin/weekly-grant — happy paths', () => {
     const body = (await r.json()) as GrantResponse;
 
     expect(body.event_ids).toEqual([1]);
-    expect(body.new_balance).toEqual({ game_time: 60, pocket_money: 0 });
+    expect(body.new_balance).toEqual({ game_time: 60, pocket_money: 0, coins: 0 });
 
     expect(events).toHaveLength(1);
     const ev = events[0];
@@ -383,7 +383,7 @@ describe('POST /api/admin/weekly-grant — happy paths', () => {
     const body = (await r.json()) as GrantResponse;
 
     expect(body.event_ids).toEqual([1, 2]);
-    expect(body.new_balance).toEqual({ game_time: 30, pocket_money: 5 });
+    expect(body.new_balance).toEqual({ game_time: 30, pocket_money: 5, coins: 0 });
 
     expect(events).toHaveLength(2);
     const gt = events.find((e) => e.type === 'game_time');
@@ -466,7 +466,7 @@ describe('POST /api/admin/weekly-grant — happy paths', () => {
     });
     expect(r.status).toBe(200);
     const body = (await r.json()) as GrantResponse;
-    expect(body.new_balance).toEqual({ game_time: 200, pocket_money: 7 });
+    expect(body.new_balance).toEqual({ game_time: 200, pocket_money: 7, coins: 0 });
 
     // Zero filter: pocket_money: 0 is dropped, only game_time event created.
     const r2 = await call('/api/admin/weekly-grant', {
@@ -477,6 +477,6 @@ describe('POST /api/admin/weekly-grant — happy paths', () => {
     expect(r2.status).toBe(200);
     const body2 = (await r2.json()) as GrantResponse;
     expect(body2.event_ids).toEqual([4]); // id 1 (pre), 2 + 3 (first grant), 4 (this one)
-    expect(body2.new_balance).toEqual({ game_time: 250, pocket_money: 7 });
+    expect(body2.new_balance).toEqual({ game_time: 250, pocket_money: 7, coins: 0 });
   });
 });

@@ -349,6 +349,20 @@ body {
   box-shadow: inset 0 0 30px rgba(255, 107, 53, 0.08), var(--glow-orange);
   transform: translateY(-3px) scale(1.01);
 }
+/* Coin System card — gold system (Module 7, RFC §6.1) */
+.balance-card.coins {
+  border-color: var(--gold-border, rgba(255, 215, 0, 0.35));
+  box-shadow: inset 0 0 30px rgba(255, 215, 0, 0.04), var(--shadow-panel);
+}
+.balance-card.coins:hover {
+  border-color: var(--gold, #FFD700);
+  box-shadow: inset 0 0 30px rgba(255, 215, 0, 0.10),
+              0 0 20px rgba(255, 215, 0, 0.35),
+              0 0 60px rgba(255, 215, 0, 0.10);
+  transform: translateY(-3px) scale(1.01);
+}
+.balance-card.coins .balance-icon { color: var(--gold, #FFD700); }
+.balance-card.coins .balance-value { color: var(--gold, #FFD700); text-shadow: 0 0 12px rgba(255, 215, 0, 0.45); }
 
 .balance-icon {
   font-size: 32px;
