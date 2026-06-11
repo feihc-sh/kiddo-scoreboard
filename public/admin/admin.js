@@ -446,6 +446,11 @@ function startEditTask(id) {
   f.elements['target_account'].value = t.target_account;
   f.elements['category'].value = t.category;
   f.elements['sort_order'].value = t.sort_order;
+  // v2.1 (PRD §3.12) — cutoff_time + is_self_lockout must also be prefilled.
+  // Without these 2 lines, PM edits a sleep task → both fields blank in form
+  // → saving clears the sleep task's "准时上床" config. Regression: see #18.
+  f.elements['cutoff_time'].value = t.cutoff_time || '';
+  f.elements['is_self_lockout'].checked = t.is_self_lockout === 1;
   $('#new-task-form-wrap').hidden = false;
   $('#btn-new-task').textContent = '编辑中…';
   f.scrollIntoView({ behavior: 'smooth', block: 'center' });
