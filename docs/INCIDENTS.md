@@ -89,3 +89,11 @@
 
 **新 deploy 在修 0007 前会继续翻车** (6-11 之后没再 push, 是因为没修). feihao 提 PR 修 0007 是 P0, 否则 0008_health_events 也上不去.
 
+## 2026-06-14T14:17:26Z - Deploy or smoke test FAILED
+- **Commit**: d032482087e99508594279370fffa76c208d69d2
+- **Actor**: feihc-sh
+- **Run**: 27501579015
+- **Branch**: refs/heads/main
+- **Backup was OK** (data safe), but deploy/smoke-test broke something
+- **Recovery**: Roll back to last known good deploy via Cloudflare dashboard
+
