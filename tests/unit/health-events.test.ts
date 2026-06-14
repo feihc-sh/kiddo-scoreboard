@@ -286,21 +286,30 @@ function makeMockDb(): D1Database {
           // Bound params differ by action:
           //   create:  params = [actor, target_user_id, details]   (CC writes 'child' or 'pm' as bound ?)
           //   resolve: params = [actor, target_user_id, details]  (§4.2.4 + §4.2.5 — both bind actor)
+          //   delete:  params = [actor, target_event_id, target_user_id, details]  (M1.2 §4.2.6 + §4.2.7)
           // Actor can be 'child' (self-resolve) or 'pm' (admin resolve).
           const actionMatch = q.match(/'(health_event_create|health_event_resolve|health_event_delete)'/i);
           const action = actionMatch ? actionMatch[1] : 'unknown';
-          // Read actor from p[0] (works for both create and resolve).
+          // Read actor from p[0] (works for create, resolve, and delete).
           const actor: 'child' | 'pm' | 'system' = (typeof p[0] === 'string' ? p[0] : 'pm') as
             | 'child'
             | 'pm'
             | 'system';
-          const targetUserId = (p[1] as number | null) ?? null;
-          const details = typeof p[2] === 'string' ? p[2] : JSON.stringify(p[2] ?? {});
+          // For delete, bind is [actor, target_event_id, target_user_id, details] (4 params).
+          // For create/resolve, bind is [actor, target_user_id, details] (3 params — target_event_id is NULL in SQL).
+          const isDelete = action === 'health_event_delete';
+          const targetUserId = (p[isDelete ? 2 : 1] as number | null) ?? null;
+          const details = typeof p[isDelete ? 3 : 2] === 'string'
+            ? p[isDelete ? 3 : 2] as string
+            : JSON.stringify((isDelete ? p[3] : p[2]) ?? {});
+          // For delete, target_event_id is the deleted event id (p[1]); for create/resolve
+          // it's NULL in SQL, but the mock tracks lastInsertId from the prior INSERT health_events.
+          const deleteTargetEventId = isDelete ? (p[1] as number | null) : null;
           auditLog.push({
             id,
             actor,
             action,
-            target_event_id: lastInsertId,        // CC sets NULL in SQL but for v1 mock tracks via lastInsertId
+            target_event_id: deleteTargetEventId ?? lastInsertId,  // delete: explicit id; create/resolve: lastInsertId from prior INSERT
             target_user_id: targetUserId,
             details,
             created_at: nowOverride,
@@ -325,6 +334,13 @@ function makeMockDb(): D1Database {
             success: true,
             meta: { changes: e ? 1 : 0, last_row_id: 0, duration: 0 },
           } as D1Result<T>);
+        } else if (/^DELETE\s+FROM\s+health_events/i.test(q)) {
+          // M1.2: Mock for deleteEvent's DELETE. Params: [id]
+          const id = p[0] as number;
+          const before = healthEvents.length;
+          healthEvents.splice(healthEvents.findIndex(h => h.id === id), 1);
+          const changes = before - healthEvents.length;
+          results.push({ success: true, meta: { changes, last_row_id: 0, duration: 0 } } as D1Result<T>);
         } else {
           // Unknown statement — no-op.
           results.push({ success: true, meta: { changes: 0, last_row_id: 0, duration: 0 } } as D1Result<T>);
@@ -590,6 +606,88 @@ describe('EDGE — boundary cases', () => {
     expect(res.status).toBe(409);
     const body = await res.json() as { error: { code: string } };
     expect(body.error.code).toBe('ALREADY_RESOLVED');
+  });
+
+  it('HAPPY-4: pm DELETE /api/admin/health/events/:id → 200 + audit_log snapshot', async () => {
+    const existing = seedHealthEvent({
+      user_id: CHILD_USER_ID,
+      event_type: 'ulcer',
+      start_date: '2026-06-10',
+    });
+    const cookie = await pmCookie();
+    const res = await call(`/api/admin/health/events/${existing.id}`, {
+      method: 'DELETE',
+      headers: { cookie },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { ok: boolean; deleted_event: { id: number; event_type: string } };
+    expect(body.ok).toBe(true);
+    expect(body.deleted_event.id).toBe(existing.id);
+    expect(body.deleted_event.event_type).toBe('ulcer');
+
+    // Event gone from health_events
+    const after = healthEvents.find((h) => h.id === existing.id);
+    expect(after).toBeUndefined();
+
+    // audit_log row written with action='health_event_delete', actor='pm'
+    const deletes = auditLog.filter((a) => a.action === 'health_event_delete');
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0].actor).toBe('pm');
+    expect(deletes[0].target_user_id).toBe(CHILD_USER_ID);
+    const details = JSON.parse(deletes[0].details) as { deleted_event: { id: number }; deleted_by_role: string };
+    expect(details.deleted_event.id).toBe(existing.id);
+    expect(details.deleted_by_role).toBe('pm');
+  });
+
+  it('HAPPY-5: child DELETE /api/me/health/events/:id (own event) → 200 + actor=child', async () => {
+    const existing = seedHealthEvent({
+      user_id: CHILD_USER_ID,
+      event_type: 'cough',
+      start_date: '2026-06-14',
+    });
+    const res = await call(`/api/me/health/events/${existing.id}`, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { ok: boolean; deleted_event: { id: number } };
+    expect(body.ok).toBe(true);
+    expect(body.deleted_event.id).toBe(existing.id);
+
+    // Event gone
+    const after = healthEvents.find((h) => h.id === existing.id);
+    expect(after).toBeUndefined();
+
+    // audit_log actor='child'
+    const deletes = auditLog.filter((a) => a.action === 'health_event_delete' && a.target_user_id === CHILD_USER_ID);
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0].actor).toBe('child');
+  });
+
+  it('EDGE-18: child DELETE /api/me/.../id for other user\'s event → 403 FORBIDDEN', async () => {
+    const existing = seedHealthEvent({ user_id: 99, event_type: 'ulcer', start_date: '2026-06-14' });
+    const res = await call(`/api/me/health/events/${existing.id}`, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json() as { error: { code: string } };
+    expect(body.error.code).toBe('FORBIDDEN');
+
+    // Event unchanged
+    const after = healthEvents.find((h) => h.id === existing.id);
+    expect(after).toBeDefined();
+  });
+
+  it('EDGE-19: pm DELETE non-existent event_id → 404 NOT_FOUND', async () => {
+    const cookie = await pmCookie();
+    const res = await call('/api/admin/health/events/99999', {
+      method: 'DELETE',
+      headers: { cookie },
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json() as { error: { code: string } };
+    expect(body.error.code).toBe('NOT_FOUND');
   });
 
   it('EDGE-5: POST invalid event_type "flu" → 400 INVALID_EVENT_TYPE', async () => {

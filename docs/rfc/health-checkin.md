@@ -239,8 +239,10 @@ export type AuditAction =
 | POST | `/api/admin/health/events` | pm | PM 打卡 (代孩子记录) | ✅ health_event_create (actor=pm) |
 | PATCH | `/api/admin/health/events/:id/resolve` | pm | PM 标记任意 child 已愈 + end_date | ✅ health_event_resolve (actor=pm) |
 | PATCH | `/api/me/health/events/:id/resolve` | child | 儿子自己标记已愈 + end_date | ✅ health_event_resolve (actor=child) |
+| DELETE | `/api/admin/health/events/:id` | pm | PM 硬删任意 child event (修正错录) | ✅ health_event_delete (actor=pm) |
+| DELETE | `/api/me/health/events/:id` | child | 儿子硬删自己的 event (修正错录) | ✅ health_event_delete (actor=child) |
 
-**5 个端点** (v1.1 加 §4.2.5)，不开放修改 event_type / start_date，不开放非 PM 删除。
+**7 个端点** (v1.2 加 §4.2.6 + §4.2.7)，不开放修改 event_type / start_date。
 
 ### 4.2 详细规范
 
@@ -406,6 +408,61 @@ export type AuditAction =
 - /api/admin/... 仍 PM-only（EDGE-13 401 测试保留）
 - /api/me/... 仅 child 自己（EDGE-15 跨 child 403）
 
+#### 4.2.6 `DELETE /api/admin/health/events/:id`  ← 新增 v1.2
+
+**用途**：PM 硬删任意 child 的 event（修正错录数据）
+
+**Auth**：pm session
+
+**Request body**：无
+
+**Behavior**：
+1. 查 event by id
+2. 校验：event exists（→ 404 NOT_FOUND）
+3. SELECT 完整 row 作为 snapshot 存档
+4. atomic DELETE + INSERT audit_log：
+   - actor='pm', action='health_event_delete'
+   - details 含 deleted_event 完整 snapshot (event_type/start_date/end_date/submitted_by/note) + deleted_by_role='pm'
+5. 返回 { ok: true, deleted_event: <snapshot> }
+
+**Response 200**：
+```json
+{
+  "ok": true,
+  "deleted_event": {
+    "id": 11, "user_id": 2, "event_type": "ulcer",
+    "start_date": "2026-06-10", "end_date": "2026-06-14",
+    "is_resolved": true
+  }
+}
+```
+
+**错误码**：
+- 400 BAD_REQUEST (id 不是正整数)
+- 404 NOT_FOUND
+- 401 UNAUTHORIZED
+- 409 CONCURRENT_DELETE (并发删除)
+
+#### 4.2.7 `DELETE /api/me/health/events/:id`  ← 新增 v1.2
+
+**用途**：孩子自己硬删自己的 event（修正错录数据）
+
+**Auth**：child session（hardcoded id=2）
+
+**Request body**：无
+
+**Behavior**：跟 §4.2.6 一样，但：
+- **校验：event.user_id === 当前 child id**（跨 child 阻止 → 403）
+- actor='child', deleted_by_role='child'
+- 只能删自己
+
+**错误码**：
+- 400 BAD_REQUEST
+- 403 FORBIDDEN
+- 404 NOT_FOUND
+- 401 UNAUTHORIZED
+- 409 CONCURRENT_DELETE
+
 ### 4.3 原子操作（"又起新" 路径）
 
 前端调 2 个 API 实现"又起新"（避免 1 次 API 干太多事）：
@@ -417,7 +474,6 @@ export type AuditAction =
 
 ### 4.4 不做的 API
 
-- ❌ `DELETE /api/admin/health/events/:id` — PM 硬删不在 v1 范围（已拍板非目标）
 - ❌ `PUT /api/admin/health/events/:id` — 不开放修改 event_type / start_date
 - ❌ `GET /api/public/health/events/active` — 续接 UX 复用 `GET /api/public/health/events?active_only=true`，不重复造轮子
 

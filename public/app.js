@@ -263,6 +263,11 @@ function renderHealthCalendar() {
         emojis.appendChild(span);
       });
       cell.appendChild(emojis);
+      cell.classList.add('health-cal-cell-has-events');
+      cell.dataset.date = dateStr;
+      // Store event ids as JSON for click handler. Comma-separated would
+      // be simpler but JSON handles edge cases (single event OK, multi OK).
+      cell.dataset.eventIds = JSON.stringify(dayEvents.map(e => e.id));
     }
     grid.appendChild(cell);
   }
@@ -323,6 +328,118 @@ function showNewEventForm(type) {
   $('#health-new-date').min = '';  // 不限过去 (溃疡可能追溯)
   $('#health-new-note').value = '';
   $('#health-new-modal').hidden = false;
+}
+
+// ---------- M1.2: 日历 cell 点击 → 详情 dialog (RFC §4.2.6/§4.2.7) ----------
+// 状态: 当前选中的 event (来自日历点击)
+let healthSelectedEvent = null;
+// 状态: confirm delete 时缓存要删的 event id + 调用哪个 endpoint
+let healthPendingDeleteId = null;
+let healthPendingDeleteVia = 'me';  // 'me' (child) 或 'admin' (pm)
+
+function openEventDetailModal(event, date) {
+  healthSelectedEvent = event;
+  const t = HEALTH_EVENT_TYPES.find((x) => x.type === event.event_type);
+  const isActive = !event.is_resolved;
+  const statusText = isActive
+    ? `还在继续 (从 ${event.start_date} 起)`
+    : `${event.start_date} → ${event.end_date} (已愈)`;
+  const submitterText = event.submitted_by === 'child' ? '儿子' : '爸爸 (PM)';
+
+  $('#health-event-detail-title').textContent = `${t?.emoji ?? '•'} ${t?.label ?? event.event_type} 详情`;
+  $('#health-event-detail-body').innerHTML = `
+    <div class="field"><strong>状态：</strong> ${statusText}</div>
+    <div class="field"><strong>记录人：</strong> ${submitterText}</div>
+    ${event.note ? `<div class="field"><strong>备注：</strong> ${escapeHtml(event.note)}</div>` : ''}
+    <div class="field" style="opacity:0.6;font-size:11px">点击日期: ${date} · event id: ${event.id}</div>
+  `;
+
+  const actions = $('#health-event-detail-actions');
+  actions.innerHTML = '';
+  if (isActive) {
+    const btnResolve = mkBtn('已愈', 'btn-primary', () => {
+      // 复用 §4.2.5 resolve 流程 — 把 event 存进 healthActiveEvent 然后显示 date picker
+      healthActiveEvent = event;
+      closeEventDetailModal();
+      openResumeDialogForResolve(event);
+    });
+    const btnNew = mkBtn('又起新的', 'btn-secondary', () => {
+      // 复用 §5.3 又起新流程
+      healthActiveEvent = event;
+      closeEventDetailModal();
+      doStartNew(event.id);
+    });
+    const btnDelete = mkBtn('删除', 'btn-danger', () => openConfirmDelete(event, 'me'));
+    const btnClose = mkBtn('关闭', 'btn-secondary', closeEventDetailModal);
+    actions.append(btnResolve, btnNew, btnDelete, btnClose);
+  } else {
+    const btnDelete = mkBtn('删除', 'btn-danger', () => openConfirmDelete(event, 'me'));
+    const btnClose = mkBtn('关闭', 'btn-secondary', closeEventDetailModal);
+    actions.append(btnDelete, btnClose);
+  }
+
+  $('#health-event-detail-modal').hidden = false;
+}
+
+function closeEventDetailModal() {
+  $('#health-event-detail-modal').hidden = true;
+  healthSelectedEvent = null;
+}
+
+function openResumeDialogForResolve(event) {
+  // 跟 showResumeDialog 类似, 但 event 已固定 (从 cell 点击来的)
+  const t = HEALTH_EVENT_TYPES.find((x) => x.type === event.event_type);
+  $('#health-resume-title').textContent = `标记 ${t?.label ?? ''} 已愈 (${event.start_date} 起)`;
+  $('#health-resume-modal').hidden = false;
+  $('#health-resolve-date-row').hidden = false;
+  $('#health-resolve-date').value = shanghaiTodayStr();
+  $('#health-resolve-date').max = shanghaiTodayStr();
+  $('#health-resolve-date').min = event.start_date;
+}
+
+function mkBtn(text, cls, onclick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = `btn ${cls}`;
+  b.textContent = text;
+  b.onclick = onclick;
+  return b;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function openConfirmDelete(event, via /* 'me' | 'admin' */) {
+  healthPendingDeleteId = event.id;
+  healthPendingDeleteVia = via;
+  const t = HEALTH_EVENT_TYPES.find((x) => x.type === event.event_type);
+  $('#health-confirm-delete-hint').textContent =
+    `确定要删除 ${t?.emoji ?? ''} ${t?.label ?? event.event_type} (${event.start_date}${event.end_date ? ' → ' + event.end_date : ' 还在继续'})？删除后无法恢复`;
+  $('#health-confirm-delete-modal').hidden = false;
+}
+
+function closeConfirmDelete() {
+  $('#health-confirm-delete-modal').hidden = true;
+  healthPendingDeleteId = null;
+}
+
+async function doConfirmDelete() {
+  if (!healthPendingDeleteId) return;
+  const id = healthPendingDeleteId;
+  const via = healthPendingDeleteVia;
+  const path = via === 'admin'
+    ? `/api/admin/health/events/${id}`
+    : `/api/me/health/events/${id}`;
+  try {
+    await api('DELETE', path);
+    toast('已删除', 'success');
+    closeConfirmDelete();
+    closeEventDetailModal();
+    await loadHealthEvents();
+  } catch (e) {
+    toast('删除失败：' + e.message, 'error');
+  }
 }
 
 function closeNewModal() {
@@ -871,6 +988,33 @@ function bindEvents() {
   });
   $('#health-new-modal')?.addEventListener('click', (e) => {
     if (e.target.id === 'health-new-modal') closeNewModal();
+  });
+  // M1.2: 日历 cell 点击 → 详情 dialog
+  $('#health-calendar')?.addEventListener('click', (e) => {
+    const cell = e.target.closest('.health-cal-cell-has-events');
+    if (!cell) return;
+    const date = cell.dataset.date;
+    const eventIds = JSON.parse(cell.dataset.eventIds || '[]');
+    const events = (state.health.events || []).filter(
+      ev => eventIds.includes(ev.id) && ev.event_type === state.health.activeType
+    );
+    if (events.length === 0) return;
+    if (events.length === 1) {
+      openEventDetailModal(events[0], date);
+    } else {
+      // 多 event 同日 (业务允许, EDGE-1): 列出来选
+      // 简化: 取第一个, TODO M-later 弹 picker
+      openEventDetailModal(events[0], date);
+    }
+  });
+  // M1.2: 详情 dialog + 删除 confirm 按钮 bind
+  $('#health-confirm-delete-confirm')?.addEventListener('click', doConfirmDelete);
+  $('#health-confirm-delete-cancel')?.addEventListener('click', closeConfirmDelete);
+  $('#health-event-detail-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'health-event-detail-modal') closeEventDetailModal();
+  });
+  $('#health-confirm-delete-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'health-confirm-delete-modal') closeConfirmDelete();
   });
 }
 

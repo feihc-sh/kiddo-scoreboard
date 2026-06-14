@@ -137,6 +137,8 @@ export interface HealthEvent {
   submitted_by: HealthSubmittedBy;
   created_at: number;            // Unix seconds
   resolved_at: number | null;    // Unix seconds, set when end_date written
+  resolved_by: number | null;    // user id who resolved (PM or child, §4.2.4/§4.2.5)
+  updated_at: number;            // Unix seconds, last write
 }
 
 // =============================================================

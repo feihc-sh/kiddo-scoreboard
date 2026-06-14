@@ -2196,3 +2196,26 @@ body {
 .task-bonus-hint.achieved strong {
   color: var(--cyan, #00F5FF);
 }
+
+/* M1.2: 日历 cell 有 events 时显示手型 + hover 高亮 */
+.health-cal-cell.health-cal-cell-has-events {
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.health-cal-cell.health-cal-cell-has-events:hover {
+  border-color: var(--cyan, #00F5FF);
+  background: rgba(0, 245, 255, 0.05);
+}
+.health-cal-cell.health-cal-cell-has-events:active {
+  background: rgba(0, 245, 255, 0.12);
+}
+
+/* M1.2: 删除按钮 (danger) */
+.btn.btn-danger {
+  background: var(--red, #ff3b30);
+  color: #fff;
+  border: 1px solid var(--red, #ff3b30);
+}
+.btn.btn-danger:hover {
+  filter: brightness(0.9);
+}
