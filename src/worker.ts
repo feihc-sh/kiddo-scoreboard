@@ -7,7 +7,6 @@ import publicTasks from './routes/public/tasks.ts';
 import publicHealth from './routes/public/health.ts';
 import me from './routes/me/index.ts';
 import meHealth from './routes/me/health.ts';
-import adminHealth from './routes/admin/health.ts';
 
 export interface Env {
   DB: D1Database;
@@ -28,7 +27,6 @@ app.get('/', (c) =>
 app.get('/health', (c) => c.json({ status: 'healthy' }));
 
 app.route('/api/admin', admin);
-app.route('/api/admin/health', adminHealth);
 app.route('/api/public/user', publicUser);
 app.route('/api/public/balance', publicBalance);
 app.route('/api/public/events', publicEvents);
