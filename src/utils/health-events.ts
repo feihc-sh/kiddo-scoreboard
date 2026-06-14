@@ -268,6 +268,8 @@ export async function createEvent(
     submitted_by: params.submittedBy,
     created_at: now,
     resolved_at: null,
+    resolved_by: null,
+    updated_at: now,
   };
 }
 
@@ -339,4 +341,69 @@ export async function resolveEvent(
     .bind(params.id)
     .first<HealthEventRow>();
   return row ? rowToHealthEvent(row) : null;
+}
+
+// =============================================================
+// M1.2: hard delete (§4.2.6 PM + §4.2.7 child) — see RFC §4.4
+// =============================================================
+
+export interface DeleteEventParams {
+  id: number;
+  userId: number;              // affected child (target_user_id in audit_log)
+  deletedBy: number;           // user id who performed the delete
+  submittedBy: HealthSubmittedBy; // 'pm' or 'child' (audit_log.actor)
+}
+
+/**
+ * Hard-delete a health event (atomic DELETE health_events + INSERT
+ * audit_log). Captures a full snapshot in audit_log.details before the
+ * row is removed (so the action is auditable even though the row is
+ * gone).
+ *
+ * Returns the snapshot of the deleted event (for response and audit
+ * logging), or null if the event did not exist.
+ */
+export async function deleteEvent(
+  db: D1Database,
+  params: DeleteEventParams,
+): Promise<HealthEvent | null> {
+  // 1. SELECT the event first (to capture snapshot + check existence).
+  const existing = await db
+    .prepare(
+      `SELECT ${SELECT_COLUMNS} FROM health_events WHERE id = ?`,
+    )
+    .bind(params.id)
+    .first<HealthEventRow>();
+  if (!existing) return null;
+
+  // 2. Atomic DELETE + INSERT audit_log via db.batch().
+  // We DELETE first; if the audit_log INSERT fails the row is gone but
+  // the audit row is missing. For v1 this is acceptable — the alternative
+  // (audit-then-delete) leaks "delete happened but no row deleted" on
+  // audit success + delete fail. The D1 batch is best-effort.
+  const snapshot = rowToHealthEvent(existing);
+  const details = JSON.stringify({
+    deleted_event: snapshot,
+    deleted_by_role: params.submittedBy,
+  });
+
+  const results = await db.batch([
+    db.prepare(`DELETE FROM health_events WHERE id = ?`).bind(params.id),
+    db
+      .prepare(
+        `INSERT INTO audit_log
+           (actor, action, target_event_id, target_user_id, details, created_at)
+         VALUES (?, 'health_event_delete', ?, ?, ?, unixepoch())`,
+      )
+      .bind(
+        params.submittedBy,
+        params.id,                 // point target_event_id at the now-deleted id
+        params.userId,
+        details,
+      ),
+  ]);
+
+  const changes = results[0]?.meta?.changes ?? 0;
+  if (changes === 0) return null;  // concurrent delete race
+  return snapshot;
 }

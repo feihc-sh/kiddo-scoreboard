@@ -29,6 +29,7 @@ import {
   HEALTH_EVENT_TYPES,
   todayShanghai,
   resolveEvent,
+  deleteEvent,
 } from '../../utils/health-events.ts';
 import type { Env } from '../../worker.ts';
 
@@ -247,6 +248,62 @@ adminHealth.patch('/events/:id/resolve', async (c) => {
   }
 
   return c.json(updated, 200);
+});
+
+// ---------------- DELETE /events/:id (§4.2.6) ----------------
+// PM can hard-delete any user's health event. Useful for cleaning up
+// wrong/duplicate entries recorded by accident. Mirrors the PATCH
+// resolve route's auth pattern (PM session via getPmUserId).
+//
+// Request: no body.
+// Response 200: { ok: true, deleted_event: <snapshot> }
+// Errors: 400 BAD_REQUEST, 401 UNAUTHORIZED, 404 NOT_FOUND.
+
+adminHealth.delete('/events/:id', async (c) => {
+  const pmUserId = await getPmUserId(c);
+  if (pmUserId == null) return unauthorized(c);
+
+  const id = badId(c.req.param('id'));
+  if (id == null) {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'id must be a positive integer' } },
+      400,
+    );
+  }
+
+  // Pre-check: event must exist (so we can return 404 vs silent 200 with no row deleted).
+  const db = c.env.DB;
+  const existing = await db
+    .prepare(`SELECT user_id FROM health_events WHERE id = ?`)
+    .bind(id)
+    .first<{ user_id: number }>();
+  if (!existing) {
+    return c.json(
+      { error: { code: 'NOT_FOUND', message: 'health event not found' } },
+      404,
+    );
+  }
+
+  const deleted = await deleteEvent(db, {
+    id,
+    userId: existing.user_id,
+    deletedBy: pmUserId,
+    submittedBy: 'pm',
+  });
+
+  if (!deleted) {
+    return c.json(
+      {
+        error: {
+          code: 'CONCURRENT_DELETE',
+          message: 'event was deleted by another request',
+        },
+      },
+      409,
+    );
+  }
+
+  return c.json({ ok: true, deleted_event: deleted }, 200);
 });
 
 export default adminHealth;

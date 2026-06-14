@@ -29,6 +29,7 @@ import {
   HEALTH_EVENT_TYPES,
   todayShanghai,
   resolveEvent,
+  deleteEvent,
 } from '../../utils/health-events.ts';
 
 const meHealth = new Hono<{ Bindings: Env }>();
@@ -235,6 +236,79 @@ meHealth.patch('/events/:id/resolve', async (c: Context<{ Bindings: Env }>) => {
   }
 
   return c.json(updated, 200);
+});
+
+// ---------------- DELETE /events/:id (§4.2.7) ----------------
+// Children can hard-delete their OWN events. Mirrors the PATCH resolve
+// route's auth pattern (hardcoded CHILD_USER_ID + ownership check).
+//   - 403 if event.user_id !== CHILD_USER_ID (cross-child)
+//   - 404 if event not found
+//   - 200 with snapshot on success
+//
+// Request: no body.
+// Response 200: { ok: true, deleted_event: <snapshot> }
+
+meHealth.delete('/events/:id', async (c: Context<{ Bindings: Env }>) => {
+  // 1. Parse :id.
+  const idRaw = c.req.param('id');
+  const id = (() => {
+    if (!idRaw) return null;
+    const n = Number(idRaw);
+    if (!Number.isInteger(n) || n <= 0) return null;
+    return n;
+  })();
+  if (id == null) {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'id must be a positive integer' } },
+      400,
+    );
+  }
+
+  // 2. Pre-check: event exists AND owned by this child.
+  const db = c.env.DB;
+  const existing = await db
+    .prepare(`SELECT user_id FROM health_events WHERE id = ?`)
+    .bind(id)
+    .first<{ user_id: number }>();
+  if (!existing) {
+    return c.json(
+      { error: { code: 'NOT_FOUND', message: 'health event not found' } },
+      404,
+    );
+  }
+  if (existing.user_id !== CHILD_USER_ID) {
+    return c.json(
+      {
+        error: {
+          code: 'FORBIDDEN',
+          message: 'children can only delete their own events',
+        },
+      },
+      403,
+    );
+  }
+
+  // 3. Atomic delete as child.
+  const deleted = await deleteEvent(db, {
+    id,
+    userId: existing.user_id,
+    deletedBy: CHILD_USER_ID,
+    submittedBy: 'child',
+  });
+
+  if (!deleted) {
+    return c.json(
+      {
+        error: {
+          code: 'CONCURRENT_DELETE',
+          message: 'event was deleted by another request',
+        },
+      },
+      409,
+    );
+  }
+
+  return c.json({ ok: true, deleted_event: deleted }, 200);
 });
 
 export default meHealth;
