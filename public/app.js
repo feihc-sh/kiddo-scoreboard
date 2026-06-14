@@ -331,7 +331,9 @@ function closeNewModal() {
 
 async function doResolve(eventId, endDate) {
   try {
-    await api('PATCH', `/api/admin/health/events/${eventId}/resolve`, { end_date: endDate });
+    // §4.2.5: child can resolve their own event via /api/me/...
+    // (was /api/admin/... but that requires PM session → 401 silent fail on child device)
+    await api('PATCH', `/api/me/health/events/${eventId}/resolve`, { end_date: endDate });
     toast('已记录', 'success');
     closeResumeDialog();
     await loadHealthEvents();
@@ -359,8 +361,8 @@ async function doCreate(type, startDate, note) {
 async function doStartNew(oldEventId) {
   const today = shanghaiTodayStr();
   try {
-    // 1. resolve 旧
-    await api('PATCH', `/api/admin/health/events/${oldEventId}/resolve`, { end_date: today });
+    // 1. resolve 旧 (child self-resolve via §4.2.5; was /api/admin/... → 401 on iPad)
+    await api('PATCH', `/api/me/health/events/${oldEventId}/resolve`, { end_date: today });
     // 2. create 新
     await api('POST', '/api/me/health/events', {
       user_id: CHILD_USER_ID,

@@ -227,7 +227,8 @@ adminHealth.patch('/events/:id/resolve', async (c) => {
     id,
     userId: existing.user_id,
     endDate,
-    pmUserId,
+    resolvedBy: pmUserId,
+    submittedBy: 'pm',
   });
 
   // resolveEvent returns null only if the WHERE clause matched 0 rows —

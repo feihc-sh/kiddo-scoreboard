@@ -237,9 +237,10 @@ export type AuditAction =
 | GET | `/api/public/health/events` | 任意 | 月历查询 + 活跃检查 | ❌ |
 | POST | `/api/me/health/events` | child | 儿子打卡 | ✅ health_event_create (actor=child) |
 | POST | `/api/admin/health/events` | pm | PM 打卡 (代孩子记录) | ✅ health_event_create (actor=pm) |
-| PATCH | `/api/admin/health/events/:id/resolve` | pm | 标记已愈 + end_date | ✅ health_event_resolve |
+| PATCH | `/api/admin/health/events/:id/resolve` | pm | PM 标记任意 child 已愈 + end_date | ✅ health_event_resolve (actor=pm) |
+| PATCH | `/api/me/health/events/:id/resolve` | child | 儿子自己标记已愈 + end_date | ✅ health_event_resolve (actor=child) |
 
-**4 个端点**，不开放修改 event_type / start_date，不开放非 PM 删除。
+**5 个端点** (v1.1 加 §4.2.5)，不开放修改 event_type / start_date，不开放非 PM 删除。
 
 ### 4.2 详细规范
 
@@ -342,7 +343,7 @@ export type AuditAction =
 
 #### 4.2.4 `PATCH /api/admin/health/events/:id/resolve`
 
-**用途**：标记已愈 + 设置 end_date
+**用途**：PM 标记任意 child 的 event 已愈 + 设置 end_date
 
 **Auth**：pm session
 
@@ -369,10 +370,47 @@ export type AuditAction =
 - 409 ALREADY_RESOLVED
 - 401 UNAUTHORIZED
 
+#### 4.2.5 `PATCH /api/me/health/events/:id/resolve`  ← 新增 v1.1
+
+**用途**：孩子自己点"已愈"时调用（续接 UX §2.3 第三选项）
+
+**Auth**：child session（hardcoded id=2 to match seeds/local.sql；M5 替成真 auth）
+
+**Request body**：
+```json
+{
+  "end_date": "2026-06-20"            // required, 'YYYY-MM-DD', >= start_date
+}
+```
+
+**Behavior**：
+1. 查 event by id
+2. **校验：event.user_id === 当前 child id**（跨 child 阻止 → 403；v1 hardcoded id=2 时等同 user_id=2）
+3. 校验：event exists && !is_resolved
+4. 校验：end_date >= start_date
+5. UPDATE health_events SET end_date=?, is_resolved=1, resolved_at=now, resolved_by=child_user_id, updated_at=now
+6. 写 audit_log (actor='child', action='health_event_resolve', details=含 end_date + resolved_by_role='child')
+7. 返回更新后的 event（resolved_by=child.id）
+
+**Response 200**：更新后的 event 对象
+
+**错误码**：
+- 400 INVALID_DATE_FORMAT / INVALID_DATE
+- 403 FORBIDDEN（event 不属于当前 child）
+- 404 NOT_FOUND
+- 409 ALREADY_RESOLVED
+
+**Spec 变更原因**：原 §4.2.4 设计 PM-only，但续接 UX 让 child 触发"已愈"按钮，iPad 测试时 PATCH `/api/admin/.../resolve` → 401 无 toast，体感"无反应"。§4.2.5 是 M1.1 hotfix 补的 child-friendly 路由，不改 §4.2.4（PM 仍可代任意 child 解决事件）。
+
+**Boundary**：
+- /api/admin/... 仍 PM-only（EDGE-13 401 测试保留）
+- /api/me/... 仅 child 自己（EDGE-15 跨 child 403）
+
 ### 4.3 原子操作（"又起新" 路径）
 
 前端调 2 个 API 实现"又起新"（避免 1 次 API 干太多事）：
-1. PATCH `/api/admin/health/events/:id/resolve` 关闭旧
+1. PATCH `/api/me/health/events/:id/resolve` (§4.2.5) 关闭旧（child 自己关）
+   - 或 PM 关其他 child 时用 §4.2.4
 2. POST `/api/me/health/events` 或 `/api/admin/health/events` 开新
 
 **为什么不让"又起新"成为 1 个 API**：避免后端逻辑复杂（要管理"close 旧 + open 新"原子性），前端简单 2 步就够。失败时前端重试 resolve 已幂等。
