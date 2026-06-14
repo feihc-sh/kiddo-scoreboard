@@ -4,7 +4,9 @@ import publicUser from './routes/public/user.ts';
 import publicEvents from './routes/public/events.ts';
 import publicBalance from './routes/public/balance.ts';
 import publicTasks from './routes/public/tasks.ts';
+import publicHealth from './routes/public/health.ts';
 import me from './routes/me/index.ts';
+import meHealth from './routes/me/health.ts';
 
 export interface Env {
   DB: D1Database;
@@ -29,6 +31,8 @@ app.route('/api/public/user', publicUser);
 app.route('/api/public/balance', publicBalance);
 app.route('/api/public/events', publicEvents);
 app.route('/api/public/tasks', publicTasks);
+app.route('/api/public/health', publicHealth);
 app.route('/api/me', me);
+app.route('/api/me/health', meHealth);
 
 export default app;

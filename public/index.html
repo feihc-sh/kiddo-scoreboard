@@ -134,6 +134,38 @@
       <button id="btn-refresh" class="btn btn-secondary action-btn">🔄 刷新</button>
     </section>
 
+    <!-- ====== M2: Health Checkin (RFC §6.2) — 主 tab「健康」+ 8 子 tab + 月历 ====== -->
+    <section class="section health-section" id="tab-health" aria-label="健康打卡">
+      <h2 class="section-title">🩺 健康打卡 <span class="section-hint">// 8 子 tab + 月历</span></h2>
+
+      <!-- 8 sub-tab bar (horizontal scroll on mobile) -->
+      <div id="health-subtab-bar" class="health-subtab-bar" role="tablist"></div>
+
+      <!-- Active event banner (shown when current type has an active event) -->
+      <div id="health-active-banner" class="health-active-banner" hidden></div>
+
+      <!-- Month calendar header (prev / label / next) -->
+      <div class="health-cal-header">
+        <button id="health-prev-month" class="health-month-nav" type="button" aria-label="上一月">◀</button>
+        <span id="health-month-label" class="health-month-label">2026-06</span>
+        <button id="health-next-month" class="health-month-nav" type="button" aria-label="下一月">▶</button>
+      </div>
+
+      <!-- 7×6 calendar grid (max 6 weeks to cover any month) -->
+      <div id="health-calendar" class="health-calendar" role="grid"></div>
+
+      <!-- Empty / loading state -->
+      <div id="health-empty" class="empty" hidden>
+        <div class="empty-icon">📅</div>
+        <div>本月没有记录</div>
+      </div>
+
+      <!-- M3: + 打卡按钮 (RFC §5.3 续接 UX 入口) -->
+      <button id="health-checkin-btn" class="btn btn-primary health-checkin-btn" type="button">
+        + 打卡
+      </button>
+    </section>
+
     <section class="section events-section" aria-label="操作日志">
       <h2 class="section-title">📋 操作日志 <span class="count" id="event-count">0</span></h2>
       <div id="event-list" class="event-list"></div>
@@ -144,12 +176,58 @@
     </section>
   </main>
 
+  <!-- M3: 续接 UX 弹窗 (RFC §5.3) — 当 active event 存在时显示 -->
+  <div id="health-resume-modal" class="modal-back" hidden>
+    <div class="modal">
+      <h2 class="modal-title" id="health-resume-title">上次怎么样了？</h2>
+      <p class="modal-hint" id="health-resume-hint">// 标记已愈 / 继续 / 新起</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" data-resume-action="resolve">已愈</button>
+        <button type="button" class="btn btn-secondary" data-resume-action="continue">还在继续</button>
+        <button type="button" class="btn btn-primary" data-resume-action="new">又起新的</button>
+      </div>
+      <!-- resolve 日期选择器 (inline, 默认隐藏) -->
+      <div id="health-resolve-date-row" class="field" hidden>
+        <label for="health-resolve-date">已愈日期</label>
+        <input id="health-resolve-date" type="date" required>
+        <div class="modal-actions" style="margin-top:12px">
+          <button type="button" class="btn btn-secondary" id="health-resolve-cancel">取消</button>
+          <button type="button" class="btn btn-primary" id="health-resolve-confirm">确认</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- M3: 新建事件表单 (RFC §5.3) — 无 active event 时显示 -->
+  <div id="health-new-modal" class="modal-back" hidden>
+    <div class="modal">
+      <h2 class="modal-title" id="health-new-title">📝 新建打卡</h2>
+      <p class="modal-hint" id="health-new-hint">// 记录今天的健康状况</p>
+      <form id="health-new-form" class="form">
+        <div class="field">
+          <label for="health-new-date">开始日期</label>
+          <input id="health-new-date" type="date" required>
+        </div>
+        <div class="field">
+          <label for="health-new-note">备注 (可选)</label>
+          <textarea id="health-new-note" rows="2" maxlength="200"
+                    placeholder="比如：今天开始咳嗽，有点痰"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="health-new-cancel">取消</button>
+          <button type="submit" class="btn btn-primary">打卡</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- ====== Toast ====== -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <!-- ====== Confetti canvas ====== -->
   <canvas id="confetti" class="confetti-canvas" aria-hidden="true"></canvas>
 
+  <script src="/shared/emoji-presets.js" defer></script>
   <script src="/app.js?v=6" defer></script>
 </body>
 </html>

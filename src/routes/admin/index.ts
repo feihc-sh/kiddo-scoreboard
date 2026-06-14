@@ -12,6 +12,7 @@ import exchange from './exchange.ts';
 import weeklyGrant from './weekly-grant.ts';
 import tasksConfig from './tasks.ts';
 import deletedRecordsRoute from './deleted-records.ts';
+import adminHealth from './health.ts';
 import type { Env } from '../../worker.ts';
 
 const admin = new Hono<{ Bindings: Env }>();
@@ -29,5 +30,6 @@ admin.route('/exchange', exchange);
 admin.route('/weekly-grant', weeklyGrant);
 admin.route('/tasks', tasksConfig);
 admin.route('/deleted-records', deletedRecordsRoute);
+admin.route('/health', adminHealth);
 
 export default admin;

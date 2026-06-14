@@ -1,3 +1,6 @@
+// Single source of truth for fallback task icon. See /shared/emoji-presets.js.
+const DEFAULT_TASK_ICON = (typeof window !== 'undefined' && window.DEFAULT_TASK_ICON) || '⭐';
+
 // public/app.js — kiddo-scoreboard child UI logic
 // Vanilla JS, no framework. Calls real backend APIs (M1-M7).
 // CHILD_USER_ID = 2 (hardcoded; auth swap is M5-later).
@@ -18,7 +21,39 @@ const state = {
   events: [],                     // ScoreEvent[] (last 10)
   progress: null,                 // { daily:{completed,total}, monthly:{completed,target}, yearly:{completed,target} }
   selectedDir: 1,                 // for submit modal
+  health: { activeType: 'cough', currentMonth: null, events: [] },
 };
+
+// ---------- Health Checkin (M2 — RFC §6.2) ----------
+const HEALTH_EVENT_TYPES = [
+  { type: 'ulcer',   label: '溃疡', emoji: '🤕' },
+  { type: 'fever',   label: '发烧', emoji: '🤒' },
+  { type: 'cough',   label: '咳嗽', emoji: '😷' },
+  { type: 'injury',  label: '受伤', emoji: '🩹' },
+  { type: 'allergy', label: '过敏', emoji: '🤧' },
+  { type: 'dizzy',   label: '头晕', emoji: '😵' },
+  { type: 'vomit',   label: '呕吐', emoji: '🤮' },
+  { type: 'other',   label: '其他', emoji: '🌀' },
+];
+const HEALTH_WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
+
+// Current Shanghai YYYY-MM (computed at module load — refreshes on renderHealthCalendar).
+function shanghaiTodayStr() {
+  const d = new Date();
+  // Use Asia/Shanghai via Intl so client matches server (RFC §1.4 timezone rule).
+  const sh = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(d);
+  return sh;  // en-CA gives 'YYYY-MM-DD'
+}
+function shanghaiYearMonth(d = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit'
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === 'year').value;
+  const m = parts.find((p) => p.type === 'month').value;
+  return { year: Number(y), month: Number(m) };
+}
 
 // ---------- Toast ----------
 let toastTimer = null;
@@ -89,7 +124,7 @@ async function loadProgress() {
 async function refreshAll() {
   clearError();
   try {
-    await Promise.all([loadBalance(), loadTasks(), loadEvents(), loadProgress()]);
+    await Promise.all([loadBalance(), loadTasks(), loadEvents(), loadProgress(), loadHealthEvents()]);
     renderAll();
   } catch (e) {
     showError('系统错误：' + e.message, refreshAll);
@@ -103,6 +138,8 @@ function renderAll() {
   renderProgress();
   renderTasks();
   renderEvents();
+  renderHealthSubtabs();
+  renderHealthCalendar();
 }
 function renderGreeting() {
   const u = state.user;
@@ -131,6 +168,250 @@ function setBar(fillSel, textSel, done, total, label) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   fill.style.width = pct + '%';
   text.textContent = `${label} ${done} / ${total} (${pct}%)`;
+}
+
+// ---------- Health Checkin (M2) ----------
+function renderHealthSubtabs() {
+  const bar = $('#health-subtab-bar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  HEALTH_EVENT_TYPES.forEach((t) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'health-subtab' + (t.type === state.health.activeType ? ' health-subtab-active' : '');
+    btn.dataset.type = t.type;
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', t.type === state.health.activeType ? 'true' : 'false');
+    btn.innerHTML = `<span class="health-subtab-emoji">${t.emoji}</span><span>${t.label}</span>`;
+    btn.addEventListener('click', () => switchHealthType(t.type));
+    bar.appendChild(btn);
+  });
+}
+
+function switchHealthType(type) {
+  if (!HEALTH_EVENT_TYPES.some((t) => t.type === type)) return;
+  state.health.activeType = type;
+  renderHealthSubtabs();
+  loadHealthEvents();
+}
+
+function renderHealthCalendar() {
+  const grid = $('#health-calendar');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  // Header row: 7 weekday labels (Mon first per RFC §2.1 — ISO 8601)
+  HEALTH_WEEKDAYS.forEach((wd) => {
+    const cell = document.createElement('div');
+    cell.className = 'health-cal-weekday';
+    cell.textContent = wd;
+    grid.appendChild(cell);
+  });
+
+  const { year, month } = state.health.currentMonth || shanghaiYearMonth();
+  $('#health-month-label').textContent = `${year}-${String(month).padStart(2, '0')}`;
+
+  // First day of month (Shanghai) — find weekday (Mon=1, Sun=7)
+  const firstDay = new Date(Date.UTC(year, month - 1, 1));
+  const firstWeekday = (firstDay.getUTCDay() + 6) % 7 + 1;  // 0=Sun → 7, 1=Mon → 1
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const todayStr = shanghaiTodayStr();
+
+  // Index events by start_date (YYYY-MM-DD) for fast cell lookup.
+  // For cross-month events (start < month AND end >= month), show emoji on
+  // every day in the month the event covers. RFC §4.2.1 calendar rule.
+  const cellsToFill = daysInMonth + (firstWeekday - 1);
+  const totalCells = Math.ceil(cellsToFill / 7) * 7;
+  for (let i = 0; i < totalCells; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'health-cal-cell';
+    const dayNum = i - (firstWeekday - 1) + 1;
+    if (dayNum < 1 || dayNum > daysInMonth) {
+      cell.classList.add('health-cal-empty');
+      grid.appendChild(cell);
+      continue;
+    }
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    if (dateStr === todayStr) cell.classList.add('health-cal-today');
+
+    // Day number (top-left corner)
+    const dayLabel = document.createElement('span');
+    dayLabel.className = 'health-cal-day';
+    dayLabel.textContent = dayNum;
+    cell.appendChild(dayLabel);
+
+    // Find events for this day (start_date == dateStr OR [start..end] covers dateStr)
+    const dayEvents = state.health.events.filter((ev) =>
+      ev.start_date <= dateStr && (ev.end_date === null || ev.end_date >= dateStr)
+      && ev.event_type === state.health.activeType
+    );
+    if (dayEvents.length > 0) {
+      const emojis = document.createElement('div');
+      emojis.className = 'health-cal-emojis';
+      // For M2: show first event's emoji. If resolved, dim it. M3 will add
+      // resume modal click for active events.
+      dayEvents.forEach((ev) => {
+        const span = document.createElement('span');
+        span.textContent = HEALTH_EVENT_TYPES.find((t) => t.type === ev.event_type)?.emoji ?? '•';
+        if (ev.is_resolved) span.classList.add('health-cal-resolved');
+        emojis.appendChild(span);
+      });
+      cell.appendChild(emojis);
+    }
+    grid.appendChild(cell);
+  }
+
+  // Show / hide empty state
+  const monthEvents = state.health.events.filter((ev) =>
+    ev.event_type === state.health.activeType
+    && ev.start_date.startsWith(`${year}-${String(month).padStart(2, '0')}`)
+  );
+  $('#health-empty').hidden = monthEvents.length > 0;
+}
+
+// ---------- Health Checkin (M3 — RFC §6.3) ----------
+// 续接 UX 弹窗 + 打卡流程
+
+let healthActiveEvent = null;  // M3 临时状态: 当前 resume 弹窗的 active event
+
+async function onCheckinClick() {
+  const btn = $('#health-checkin-btn');
+  btn.disabled = true;
+  try {
+    const r = await api('GET',
+      `/api/public/health/events?user_id=${CHILD_USER_ID}` +
+      `&event_type=${state.health.activeType}&active_only=true`
+    );
+    const actives = (r.events ?? []).filter((ev) => ev.end_date === null);
+    if (actives.length > 0) {
+      healthActiveEvent = actives[0];
+      showResumeDialog(healthActiveEvent);
+    } else {
+      showNewEventForm(state.health.activeType);
+    }
+  } catch (e) {
+    toast('打卡准备失败：' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showResumeDialog(activeEvent) {
+  const t = HEALTH_EVENT_TYPES.find((x) => x.type === activeEvent.event_type);
+  $('#health-resume-title').textContent = `上次${t?.label ?? ''} (${activeEvent.start_date} 起) 现在怎么样？`;
+  $('#health-resume-modal').hidden = false;
+  $('#health-resolve-date-row').hidden = true;
+}
+
+function closeResumeDialog() {
+  $('#health-resume-modal').hidden = true;
+  healthActiveEvent = null;
+}
+
+function showNewEventForm(type) {
+  const t = HEALTH_EVENT_TYPES.find((x) => x.type === type);
+  $('#health-new-title').textContent = `📝 新建 ${t?.emoji ?? ''} ${t?.label ?? '打卡'}`;
+  $('#health-new-hint').textContent = `// ${t?.label ?? '记录'}打卡 — 记录今天的健康状况`;
+  $('#health-new-date').value = shanghaiTodayStr();
+  $('#health-new-date').max = shanghaiTodayStr();  // 不能选未来
+  $('#health-new-date').min = '';  // 不限过去 (溃疡可能追溯)
+  $('#health-new-note').value = '';
+  $('#health-new-modal').hidden = false;
+}
+
+function closeNewModal() {
+  $('#health-new-modal').hidden = true;
+}
+
+async function doResolve(eventId, endDate) {
+  try {
+    await api('PATCH', `/api/admin/health/events/${eventId}/resolve`, { end_date: endDate });
+    toast('已记录', 'success');
+    closeResumeDialog();
+    await loadHealthEvents();
+  } catch (e) {
+    toast('已愈失败：' + e.message, 'error');
+  }
+}
+
+async function doCreate(type, startDate, note) {
+  try {
+    await api('POST', '/api/me/health/events', {
+      user_id: CHILD_USER_ID,
+      event_type: type,
+      start_date: startDate,
+      note: note || null,
+    });
+    toast('打卡成功', 'success');
+    closeNewModal();
+    await loadHealthEvents();
+  } catch (e) {
+    toast('打卡失败：' + e.message, 'error');
+  }
+}
+
+async function doStartNew(oldEventId) {
+  const today = shanghaiTodayStr();
+  try {
+    // 1. resolve 旧
+    await api('PATCH', `/api/admin/health/events/${oldEventId}/resolve`, { end_date: today });
+    // 2. create 新
+    await api('POST', '/api/me/health/events', {
+      user_id: CHILD_USER_ID,
+      event_type: state.health.activeType,
+      start_date: today,
+      note: null,
+    });
+    toast('新事件已起', 'success');
+    closeResumeDialog();
+    await loadHealthEvents();
+  } catch (e) {
+    toast('操作失败：' + e.message + ' (旧可能已结束, 请刷新查看)', 'error');
+    // best-effort 刷新, 让用户看到当前状态
+    await loadHealthEvents();
+  }
+}
+
+async function loadHealthEvents() {
+  const { year, month } = state.health.currentMonth || shanghaiYearMonth();
+  const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+  try {
+    const r = await api('GET',
+      `/api/public/health/events?user_id=${CHILD_USER_ID}` +
+      `&event_type=${state.health.activeType}&month=${monthStr}`
+    );
+    state.health.events = r.events ?? [];
+  } catch (e) {
+    state.health.events = [];
+    toast('健康数据加载失败：' + e.message, 'error');
+  }
+  renderHealthActiveBanner();
+  renderHealthCalendar();
+}
+
+function renderHealthActiveBanner() {
+  const banner = $('#health-active-banner');
+  if (!banner) return;
+  const active = state.health.events.find(
+    (ev) => ev.event_type === state.health.activeType && ev.end_date === null
+  );
+  if (!active) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  const t = HEALTH_EVENT_TYPES.find((x) => x.type === active.event_type);
+  banner.textContent = `${t?.emoji ?? '•'} 进行中：${active.start_date} 起`;
+}
+
+function shiftHealthMonth(delta) {
+  const { year, month } = state.health.currentMonth || shanghaiYearMonth();
+  let newY = year;
+  let newM = month + delta;
+  if (newM < 1) { newM = 12; newY -= 1; }
+  if (newM > 12) { newM = 1; newY += 1; }
+  state.health.currentMonth = { year: newY, month: newM };
+  loadHealthEvents();
 }
 
 function pulseBalanceCards() {
@@ -163,15 +444,15 @@ function renderTasks() {
     if (revoked) {
       btn.disabled = true;
       btn.innerHTML = `
-        <span class="task-icon">${t.icon || '⭐'}</span>
+        <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
         <span class="task-done-badge">系统休眠中</span>
       `;
     } else if (done) {
       btn.innerHTML = `
-        <span class="task-icon">${t.icon || '⭐'}</span>
+        <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
-        <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '⚡' : '⚙️'}</span>
+        <span class="task-reward">+${t.token_reward} ${taskRewardIcon(t.target_account)}</span>
         <span class="task-done-badge">✓ 任务完成</span>
       `;
     } else if (isSleepLocked) {
@@ -181,13 +462,13 @@ function renderTasks() {
         btn.classList.add('task-btn-locked-out');
         btn.disabled = true;
         btn.innerHTML = `
-          <span class="task-icon">${t.icon || '⭐'}</span>
+          <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
           <span class="task-name">${escapeHtml(t.name)}</span>
           <span class="task-done-badge">已过打卡时间 ${t.cutoff_time} (明天再来)</span>
         `;
       } else {
         btn.innerHTML = `
-          <span class="task-icon">${t.icon || '⭐'}</span>
+          <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
           <span class="task-name">${escapeHtml(t.name)}</span>
           <span class="task-cutoff-label">· 距离时限还剩</span>
           <span class="task-countdown-text" data-cutoff="${t.cutoff_time}">${formatHHMMSS(diff)}</span>
@@ -195,9 +476,9 @@ function renderTasks() {
       }
     } else {
       btn.innerHTML = `
-        <span class="task-icon">${t.icon || '⭐'}</span>
+        <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
-        <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '⚡' : '⚙️'}</span>
+        <span class="task-reward">+${t.token_reward} ${taskRewardIcon(t.target_account)}</span>
       `;
     }
     if (revoked) {
@@ -253,7 +534,7 @@ function updateCountdowns() {
       // Also detach the click handler: easiest is to clone-replace the node.
       const fresh = btn.cloneNode(true);
       fresh.innerHTML = `
-        <span class="task-icon">${btn.querySelector('.task-icon')?.textContent || '⭐'}</span>
+        <span class="task-icon">${btn.querySelector('.task-icon')?.textContent || DEFAULT_TASK_ICON}</span>
         <span class="task-name">${btn.querySelector('.task-name')?.textContent || ''}</span>
           <span class="task-done-badge">超出时限 · 明日再来</span>
       `;
@@ -277,8 +558,8 @@ function renderEvents() {
     const el = document.createElement('div');
     el.className = 'event-item event-status-' + ev.status;
     const sign = ev.change_value > 0 ? '+' : '';
-    const icon = ev.type === 'game_time' ? '⚡' : '⚙️';
-    const unit = ev.type === 'game_time' ? '分钟' : '元';
+    const icon = eventIcon(ev.type);
+    const unit = eventUnit(ev.type);
     el.innerHTML = `
       <span class="event-icon">${icon}</span>
       <span class="event-text">
@@ -296,6 +577,28 @@ function statusLabel(s) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
+// ---------- Reward / event icon helpers (2026-06-14: 任务实际入账是 🪙 coin, 0007 schema drift) ----------
+// task.target_account schema only allows 'game_time' | 'pocket_money', but task completion
+// actually grants 'coins' (writeTaskCoinGrant in src/utils/coin.ts hardcodes type='coins').
+// For UI consistency, show 🪙 for ALL task rewards today. The 'game_time' / 'pocket_money'
+// branches are kept only for the visual fallback in score_event list (events with those
+// types do exist historically — see eventIcon / eventUnit). taskRewardIcon hardcodes 🪙
+// because the actual grant path is coins regardless of tasks.target_account.
+function taskRewardIcon(_targetAccount) {  // targetAccount ignored — see comment
+  return '🪙';
+}
+function eventIcon(type) {
+  if (type === 'game_time') return '⚡';
+  if (type === 'pocket_money') return '⚙️';
+  if (type === 'coins') return '🪙';
+  return '•';
+}
+function eventUnit(type) {
+  if (type === 'game_time') return '分钟';
+  if (type === 'pocket_money') return '元';
+  if (type === 'coins') return '枚';
+  return '';
+}
 
 // ---------- Actions ----------
 async function completeTask(taskId) {
@@ -305,7 +608,7 @@ async function completeTask(taskId) {
     state.balance = r.new_balance;
     renderBalance();
     renderTasks();
-    toast(`+${r.token_awarded} ${r.target_account === 'game_time' ? '⚡' : '⚙️'} 能量到账`, 'success');
+    toast(`+${r.token_awarded} ${taskRewardIcon(r.target_account)} 到账`, 'success');
     // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
     loadProgress().then(() => {
@@ -345,7 +648,7 @@ async function uncompleteTask(taskId) {
     state.balance = r.new_balance;
     renderBalance();
     renderTasks();
-    toast(`-${r.token_revoked} ${r.target_account === 'game_time' ? '⚡' : r.target_account === 'pocket_money' ? '⚙️' : '🪙'} 已回收`, 'success');
+    toast(`-${r.token_revoked} ${taskRewardIcon(r.target_account)} 已回收`, 'success');
     // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
     loadProgress().then(renderProgress).catch(() => {});  // §5.2 fix: revoke must refresh progress
@@ -503,6 +806,47 @@ function bindEvents() {
   });
   $('#submit-modal').addEventListener('click', (e) => {
     if (e.target.id === 'submit-modal') closeSubmitModal();
+  });
+  // Health checkin — month nav
+  $('#health-prev-month')?.addEventListener('click', () => shiftHealthMonth(-1));
+  $('#health-next-month')?.addEventListener('click', () => shiftHealthMonth(1));
+  // Health checkin — M3 按钮 + 弹窗
+  $('#health-checkin-btn')?.addEventListener('click', onCheckinClick);
+  $$('[data-resume-action]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const action = b.dataset.resumeAction;
+      if (action === 'resolve') {
+        $('#health-resolve-date-row').hidden = false;
+        $('#health-resolve-date').value = shanghaiTodayStr();
+        $('#health-resolve-date').max = shanghaiTodayStr();
+        $('#health-resolve-date').min = healthActiveEvent?.start_date ?? '';
+      } else if (action === 'continue') {
+        toast('已记一笔', 'info');
+        closeResumeDialog();
+      } else if (action === 'new') {
+        doStartNew(healthActiveEvent.id);
+      }
+    });
+  });
+  $('#health-resolve-confirm')?.addEventListener('click', () => {
+    const d = $('#health-resolve-date').value;
+    if (!d) return toast('请选择日期', 'error');
+    doResolve(healthActiveEvent.id, d);
+  });
+  $('#health-resolve-cancel')?.addEventListener('click', () => {
+    $('#health-resolve-date-row').hidden = true;
+  });
+  $('#health-new-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    doCreate(state.health.activeType, $('#health-new-date').value, $('#health-new-note').value.trim());
+  });
+  $('#health-new-cancel')?.addEventListener('click', closeNewModal);
+  // Click on modal backdrop closes it (跟 submit-modal 一致)
+  $('#health-resume-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'health-resume-modal') closeResumeDialog();
+  });
+  $('#health-new-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'health-new-modal') closeNewModal();
   });
 }
 

@@ -27,6 +27,16 @@ export type ShopRewardType = 'game_time' | 'pocket_money' | 'none';
 // 'revoked' reserved for future PM-side undo (M3+).
 export type ShopRedemptionStatus = 'consumed' | 'revoked';
 
+// Module 8 (Health Check-in, RFC §2.2): 8 hardcoded event types. v1 hardcodes these;
+// PM backend config UI for additional types is v2+. Emoji is decided per type in
+// frontend HEALTH_EVENT_TYPES constant; backend stays type-safe via CHECK constraint.
+export type HealthEventType =
+  | 'ulcer' | 'fever' | 'cough' | 'injury'
+  | 'allergy' | 'dizzy' | 'vomit' | 'other';
+// health_events.submitted_by CHECK IN ('child', 'pm') — no 'system' (system-triggered
+// events don't apply to health; only the user themselves or PM can check-in).
+export type HealthSubmittedBy = 'child' | 'pm';
+
 // Audit actions: covers all write operations across the app
 export type AuditAction =
   | 'login' | 'logout' | 'login_failed'
@@ -37,7 +47,10 @@ export type AuditAction =
   | 'set_name'            // v2 首次填名字
   | 'task_complete' | 'task_revoke'
   | 'task_create' | 'task_update' | 'task_delete'
-  | 'event_hard_deleted' | 'completion_hard_deleted';
+  | 'event_hard_deleted' | 'completion_hard_deleted'
+  // Module 8 (Health Check-in, RFC §3.3): health_events write actions. create/resolve
+  // ship in M1; delete is reserved for v2 PM hard-delete UI (RFC §4.4 — not in v1).
+  | 'health_event_create' | 'health_event_resolve' | 'health_event_delete';
 
 // =============================================================
 // Row types (mirror SQL columns exactly)
@@ -106,6 +119,24 @@ export interface AuditLog {
   target_user_id: number | null;
   details: string;               // JSON string
   created_at: number;
+}
+
+// Module 8 (Health Check-in, RFC §3.1): row interface for health_events.
+// Field shape mirrors the RFC §4.2.1 API response (snake_case + boolean
+// is_resolved) — used both as the raw row type and the API response shape.
+// SQL stores is_resolved as 0|1 INTEGER; helpers in src/utils/health-events.ts
+// convert to boolean at the row-read layer so the route layer doesn't have to.
+export interface HealthEvent {
+  id: number;
+  user_id: number;
+  event_type: HealthEventType;
+  start_date: string;            // 'YYYY-MM-DD' (Asia/Shanghai)
+  end_date: string | null;       // NULL = 进行中
+  is_resolved: boolean;
+  note: string | null;
+  submitted_by: HealthSubmittedBy;
+  created_at: number;            // Unix seconds
+  resolved_at: number | null;    // Unix seconds, set when end_date written
 }
 
 // =============================================================
