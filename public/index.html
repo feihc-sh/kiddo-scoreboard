@@ -134,15 +134,6 @@
       <button id="btn-refresh" class="btn btn-secondary action-btn">🔄 刷新</button>
     </section>
 
-    <section class="section events-section" aria-label="操作日志">
-      <h2 class="section-title">📋 操作日志 <span class="count" id="event-count">0</span></h2>
-      <div id="event-list" class="event-list"></div>
-      <div id="event-empty" class="empty" hidden>
-        <div class="empty-icon">📭</div>
-        <div>暂无操作记录</div>
-      </div>
-    </section>
-
     <!-- ====== M2: Health Checkin (RFC §6.2) — 主 tab「健康」+ 8 子 tab + 月历 ====== -->
     <section class="section health-section" id="tab-health" aria-label="健康打卡">
       <h2 class="section-title">🩺 健康打卡 <span class="section-hint">// 8 子 tab + 月历</span></h2>
@@ -167,6 +158,15 @@
       <div id="health-empty" class="empty" hidden>
         <div class="empty-icon">📅</div>
         <div>本月没有记录</div>
+      </div>
+    </section>
+
+    <section class="section events-section" aria-label="操作日志">
+      <h2 class="section-title">📋 操作日志 <span class="count" id="event-count">0</span></h2>
+      <div id="event-list" class="event-list"></div>
+      <div id="event-empty" class="empty" hidden>
+        <div class="empty-icon">📭</div>
+        <div>暂无操作记录</div>
       </div>
     </section>
   </main>
