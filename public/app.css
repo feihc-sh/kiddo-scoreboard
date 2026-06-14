@@ -2158,3 +2158,16 @@ body {
   font-size: 18px;
   opacity: 0.55;
 }
+
+/* M3: Health checkin button (RFC §5.3) */
+.health-checkin-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  font-size: 1.05em;
+  font-weight: 600;
+}
+.health-checkin-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -269,6 +269,109 @@ function renderHealthCalendar() {
   $('#health-empty').hidden = monthEvents.length > 0;
 }
 
+// ---------- Health Checkin (M3 — RFC §6.3) ----------
+// 续接 UX 弹窗 + 打卡流程
+
+let healthActiveEvent = null;  // M3 临时状态: 当前 resume 弹窗的 active event
+
+async function onCheckinClick() {
+  const btn = $('#health-checkin-btn');
+  btn.disabled = true;
+  try {
+    const r = await api('GET',
+      `/api/public/health/events?user_id=${CHILD_USER_ID}` +
+      `&event_type=${state.health.activeType}&active_only=true`
+    );
+    const actives = (r.events ?? []).filter((ev) => ev.end_date === null);
+    if (actives.length > 0) {
+      healthActiveEvent = actives[0];
+      showResumeDialog(healthActiveEvent);
+    } else {
+      showNewEventForm(state.health.activeType);
+    }
+  } catch (e) {
+    toast('打卡准备失败：' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showResumeDialog(activeEvent) {
+  const t = HEALTH_EVENT_TYPES.find((x) => x.type === activeEvent.event_type);
+  $('#health-resume-title').textContent = `上次${t?.label ?? ''} (${activeEvent.start_date} 起) 现在怎么样？`;
+  $('#health-resume-modal').hidden = false;
+  $('#health-resolve-date-row').hidden = true;
+}
+
+function closeResumeDialog() {
+  $('#health-resume-modal').hidden = true;
+  healthActiveEvent = null;
+}
+
+function showNewEventForm(type) {
+  const t = HEALTH_EVENT_TYPES.find((x) => x.type === type);
+  $('#health-new-title').textContent = `📝 新建 ${t?.emoji ?? ''} ${t?.label ?? '打卡'}`;
+  $('#health-new-hint').textContent = `// ${t?.label ?? '记录'}打卡 — 记录今天的健康状况`;
+  $('#health-new-date').value = shanghaiTodayStr();
+  $('#health-new-date').max = shanghaiTodayStr();  // 不能选未来
+  $('#health-new-date').min = '';  // 不限过去 (溃疡可能追溯)
+  $('#health-new-note').value = '';
+  $('#health-new-modal').hidden = false;
+}
+
+function closeNewModal() {
+  $('#health-new-modal').hidden = true;
+}
+
+async function doResolve(eventId, endDate) {
+  try {
+    await api('PATCH', `/api/admin/health/events/${eventId}/resolve`, { end_date: endDate });
+    toast('已记录', 'success');
+    closeResumeDialog();
+    await loadHealthEvents();
+  } catch (e) {
+    toast('已愈失败：' + e.message, 'error');
+  }
+}
+
+async function doCreate(type, startDate, note) {
+  try {
+    await api('POST', '/api/me/health/events', {
+      user_id: CHILD_USER_ID,
+      event_type: type,
+      start_date: startDate,
+      note: note || null,
+    });
+    toast('打卡成功', 'success');
+    closeNewModal();
+    await loadHealthEvents();
+  } catch (e) {
+    toast('打卡失败：' + e.message, 'error');
+  }
+}
+
+async function doStartNew(oldEventId) {
+  const today = shanghaiTodayStr();
+  try {
+    // 1. resolve 旧
+    await api('PATCH', `/api/admin/health/events/${oldEventId}/resolve`, { end_date: today });
+    // 2. create 新
+    await api('POST', '/api/me/health/events', {
+      user_id: CHILD_USER_ID,
+      event_type: state.health.activeType,
+      start_date: today,
+      note: null,
+    });
+    toast('新事件已起', 'success');
+    closeResumeDialog();
+    await loadHealthEvents();
+  } catch (e) {
+    toast('操作失败：' + e.message + ' (旧可能已结束, 请刷新查看)', 'error');
+    // best-effort 刷新, 让用户看到当前状态
+    await loadHealthEvents();
+  }
+}
+
 async function loadHealthEvents() {
   const { year, month } = state.health.currentMonth || shanghaiYearMonth();
   const monthStr = `${year}-${String(month).padStart(2, '0')}`;
@@ -707,6 +810,44 @@ function bindEvents() {
   // Health checkin — month nav
   $('#health-prev-month')?.addEventListener('click', () => shiftHealthMonth(-1));
   $('#health-next-month')?.addEventListener('click', () => shiftHealthMonth(1));
+  // Health checkin — M3 按钮 + 弹窗
+  $('#health-checkin-btn')?.addEventListener('click', onCheckinClick);
+  $$('[data-resume-action]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const action = b.dataset.resumeAction;
+      if (action === 'resolve') {
+        $('#health-resolve-date-row').hidden = false;
+        $('#health-resolve-date').value = shanghaiTodayStr();
+        $('#health-resolve-date').max = shanghaiTodayStr();
+        $('#health-resolve-date').min = healthActiveEvent?.start_date ?? '';
+      } else if (action === 'continue') {
+        toast('已记一笔', 'info');
+        closeResumeDialog();
+      } else if (action === 'new') {
+        doStartNew(healthActiveEvent.id);
+      }
+    });
+  });
+  $('#health-resolve-confirm')?.addEventListener('click', () => {
+    const d = $('#health-resolve-date').value;
+    if (!d) return toast('请选择日期', 'error');
+    doResolve(healthActiveEvent.id, d);
+  });
+  $('#health-resolve-cancel')?.addEventListener('click', () => {
+    $('#health-resolve-date-row').hidden = true;
+  });
+  $('#health-new-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    doCreate(state.health.activeType, $('#health-new-date').value, $('#health-new-note').value.trim());
+  });
+  $('#health-new-cancel')?.addEventListener('click', closeNewModal);
+  // Click on modal backdrop closes it (跟 submit-modal 一致)
+  $('#health-resume-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'health-resume-modal') closeResumeDialog();
+  });
+  $('#health-new-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'health-new-modal') closeNewModal();
+  });
 }
 
 async function boot() {
