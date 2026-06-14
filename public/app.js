@@ -240,11 +240,17 @@ function renderHealthCalendar() {
     dayLabel.textContent = dayNum;
     cell.appendChild(dayLabel);
 
-    // Find events for this day (start_date == dateStr OR [start..end] covers dateStr)
-    const dayEvents = state.health.events.filter((ev) =>
-      ev.start_date <= dateStr && (ev.end_date === null || ev.end_date >= dateStr)
-      && ev.event_type === state.health.activeType
-    );
+    // Find events for this day:
+    //   - Active (end_date IS NULL): only mark start_date (not all subsequent dates)
+    //   - Resolved (end_date set): mark every day in [start, end]
+    // Fix: prior version had `(end_date === null || end_date >= dateStr)` which
+    // short-circuited to true for any date >= start_date, marking the whole
+    // remaining month as "having the event" when only the start day was checked in.
+    const dayEvents = state.health.events.filter((ev) => {
+      if (ev.event_type !== state.health.activeType) return false;
+      if (ev.end_date === null) return ev.start_date === dateStr;
+      return ev.start_date <= dateStr && ev.end_date >= dateStr;
+    });
     if (dayEvents.length > 0) {
       const emojis = document.createElement('div');
       emojis.className = 'health-cal-emojis';
@@ -452,7 +458,7 @@ function renderTasks() {
       btn.innerHTML = `
         <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
-        <span class="task-reward">+${t.token_reward} ${taskRewardIcon(t.target_account)}</span>
+        <span class="task-reward">${taskRewardIcon(t.target_account)}</span>
         <span class="task-done-badge">✓ 任务完成</span>
       `;
     } else if (isSleepLocked) {
@@ -478,7 +484,7 @@ function renderTasks() {
       btn.innerHTML = `
         <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
-        <span class="task-reward">+${t.token_reward} ${taskRewardIcon(t.target_account)}</span>
+        <span class="task-reward">${taskRewardIcon(t.target_account)}</span>
       `;
     }
     if (revoked) {
@@ -497,6 +503,22 @@ function renderTasks() {
   });
   // Start the per-second countdown loop. Idempotent.
   startCountdownLoop();
+  // Update the "全部完成 +3" hint below the section title (separate from per-task reward).
+  renderTaskBonusHint();
+}
+
+// Bug #1 (feihao 2026-06-14): The per-task reward display is now just the coin icon
+// (the actual grant is uniform +1 coin per task, regardless of `token_reward`).
+// The "all complete +3" daily bonus is shown separately below the section title.
+function renderTaskBonusHint() {
+  const hint = $('#task-bonus-hint');
+  if (!hint) return;
+  if (state.tasks.length === 0) { hint.hidden = true; return; }
+  const allDone = state.tasks.every((t) =>
+    state.completedTaskIds.has(t.id) && !state.uncompletedTodayIds.has(t.id)
+  );
+  hint.hidden = false;
+  hint.classList.toggle('achieved', allDone);
 }
 
 // ---------- §3.12 sleep task countdown helpers ----------
