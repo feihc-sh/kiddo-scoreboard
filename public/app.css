@@ -2171,3 +2171,28 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Bug #1 (feihao 2026-06-14): "全部完成 +3" daily-bonus hint below tasks section title. */
+.task-bonus-hint {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.88em;
+  color: var(--text-dim, #8a8f9a);
+  letter-spacing: 0.02em;
+  transition: all 0.3s ease;
+}
+.task-bonus-hint strong {
+  color: var(--text, #d4d8e0);
+  font-weight: 700;
+}
+.task-bonus-hint.achieved {
+  border-color: var(--cyan, #00F5FF);
+  background: rgba(0, 245, 255, 0.08);
+  color: var(--cyan, #00F5FF);
+}
+.task-bonus-hint.achieved strong {
+  color: var(--cyan, #00F5FF);
+}
