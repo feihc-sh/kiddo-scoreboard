@@ -18,7 +18,39 @@ const state = {
   events: [],                     // ScoreEvent[] (last 10)
   progress: null,                 // { daily:{completed,total}, monthly:{completed,target}, yearly:{completed,target} }
   selectedDir: 1,                 // for submit modal
+  health: { activeType: 'cough', currentMonth: null, events: [] },
 };
+
+// ---------- Health Checkin (M2 — RFC §6.2) ----------
+const HEALTH_EVENT_TYPES = [
+  { type: 'ulcer',   label: '溃疡', emoji: '🤕' },
+  { type: 'fever',   label: '发烧', emoji: '🤒' },
+  { type: 'cough',   label: '咳嗽', emoji: '😷' },
+  { type: 'injury',  label: '受伤', emoji: '🩹' },
+  { type: 'allergy', label: '过敏', emoji: '🤧' },
+  { type: 'dizzy',   label: '头晕', emoji: '😵' },
+  { type: 'vomit',   label: '呕吐', emoji: '🤮' },
+  { type: 'other',   label: '其他', emoji: '🌀' },
+];
+const HEALTH_WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
+
+// Current Shanghai YYYY-MM (computed at module load — refreshes on renderHealthCalendar).
+function shanghaiTodayStr() {
+  const d = new Date();
+  // Use Asia/Shanghai via Intl so client matches server (RFC §1.4 timezone rule).
+  const sh = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(d);
+  return sh;  // en-CA gives 'YYYY-MM-DD'
+}
+function shanghaiYearMonth(d = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit'
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === 'year').value;
+  const m = parts.find((p) => p.type === 'month').value;
+  return { year: Number(y), month: Number(m) };
+}
 
 // ---------- Toast ----------
 let toastTimer = null;
@@ -89,7 +121,7 @@ async function loadProgress() {
 async function refreshAll() {
   clearError();
   try {
-    await Promise.all([loadBalance(), loadTasks(), loadEvents(), loadProgress()]);
+    await Promise.all([loadBalance(), loadTasks(), loadEvents(), loadProgress(), loadHealthEvents()]);
     renderAll();
   } catch (e) {
     showError('系统错误：' + e.message, refreshAll);
@@ -103,6 +135,8 @@ function renderAll() {
   renderProgress();
   renderTasks();
   renderEvents();
+  renderHealthSubtabs();
+  renderHealthCalendar();
 }
 function renderGreeting() {
   const u = state.user;
@@ -131,6 +165,147 @@ function setBar(fillSel, textSel, done, total, label) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   fill.style.width = pct + '%';
   text.textContent = `${label} ${done} / ${total} (${pct}%)`;
+}
+
+// ---------- Health Checkin (M2) ----------
+function renderHealthSubtabs() {
+  const bar = $('#health-subtab-bar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  HEALTH_EVENT_TYPES.forEach((t) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'health-subtab' + (t.type === state.health.activeType ? ' health-subtab-active' : '');
+    btn.dataset.type = t.type;
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', t.type === state.health.activeType ? 'true' : 'false');
+    btn.innerHTML = `<span class="health-subtab-emoji">${t.emoji}</span><span>${t.label}</span>`;
+    btn.addEventListener('click', () => switchHealthType(t.type));
+    bar.appendChild(btn);
+  });
+}
+
+function switchHealthType(type) {
+  if (!HEALTH_EVENT_TYPES.some((t) => t.type === type)) return;
+  state.health.activeType = type;
+  renderHealthSubtabs();
+  loadHealthEvents();
+}
+
+function renderHealthCalendar() {
+  const grid = $('#health-calendar');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  // Header row: 7 weekday labels (Mon first per RFC §2.1 — ISO 8601)
+  HEALTH_WEEKDAYS.forEach((wd) => {
+    const cell = document.createElement('div');
+    cell.className = 'health-cal-weekday';
+    cell.textContent = wd;
+    grid.appendChild(cell);
+  });
+
+  const { year, month } = state.health.currentMonth || shanghaiYearMonth();
+  $('#health-month-label').textContent = `${year}-${String(month).padStart(2, '0')}`;
+
+  // First day of month (Shanghai) — find weekday (Mon=1, Sun=7)
+  const firstDay = new Date(Date.UTC(year, month - 1, 1));
+  const firstWeekday = (firstDay.getUTCDay() + 6) % 7 + 1;  // 0=Sun → 7, 1=Mon → 1
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const todayStr = shanghaiTodayStr();
+
+  // Index events by start_date (YYYY-MM-DD) for fast cell lookup.
+  // For cross-month events (start < month AND end >= month), show emoji on
+  // every day in the month the event covers. RFC §4.2.1 calendar rule.
+  const cellsToFill = daysInMonth + (firstWeekday - 1);
+  const totalCells = Math.ceil(cellsToFill / 7) * 7;
+  for (let i = 0; i < totalCells; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'health-cal-cell';
+    const dayNum = i - (firstWeekday - 1) + 1;
+    if (dayNum < 1 || dayNum > daysInMonth) {
+      cell.classList.add('health-cal-empty');
+      grid.appendChild(cell);
+      continue;
+    }
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    if (dateStr === todayStr) cell.classList.add('health-cal-today');
+
+    // Day number (top-left corner)
+    const dayLabel = document.createElement('span');
+    dayLabel.className = 'health-cal-day';
+    dayLabel.textContent = dayNum;
+    cell.appendChild(dayLabel);
+
+    // Find events for this day (start_date == dateStr OR [start..end] covers dateStr)
+    const dayEvents = state.health.events.filter((ev) =>
+      ev.start_date <= dateStr && (ev.end_date === null || ev.end_date >= dateStr)
+      && ev.event_type === state.health.activeType
+    );
+    if (dayEvents.length > 0) {
+      const emojis = document.createElement('div');
+      emojis.className = 'health-cal-emojis';
+      // For M2: show first event's emoji. If resolved, dim it. M3 will add
+      // resume modal click for active events.
+      dayEvents.forEach((ev) => {
+        const span = document.createElement('span');
+        span.textContent = HEALTH_EVENT_TYPES.find((t) => t.type === ev.event_type)?.emoji ?? '•';
+        if (ev.is_resolved) span.classList.add('health-cal-resolved');
+        emojis.appendChild(span);
+      });
+      cell.appendChild(emojis);
+    }
+    grid.appendChild(cell);
+  }
+
+  // Show / hide empty state
+  const monthEvents = state.health.events.filter((ev) =>
+    ev.event_type === state.health.activeType
+    && ev.start_date.startsWith(`${year}-${String(month).padStart(2, '0')}`)
+  );
+  $('#health-empty').hidden = monthEvents.length > 0;
+}
+
+async function loadHealthEvents() {
+  const { year, month } = state.health.currentMonth || shanghaiYearMonth();
+  const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+  try {
+    const r = await api('GET',
+      `/api/public/health/events?user_id=${CHILD_USER_ID}` +
+      `&event_type=${state.health.activeType}&month=${monthStr}`
+    );
+    state.health.events = r.events ?? [];
+  } catch (e) {
+    state.health.events = [];
+    toast('健康数据加载失败：' + e.message, 'error');
+  }
+  renderHealthActiveBanner();
+  renderHealthCalendar();
+}
+
+function renderHealthActiveBanner() {
+  const banner = $('#health-active-banner');
+  if (!banner) return;
+  const active = state.health.events.find(
+    (ev) => ev.event_type === state.health.activeType && ev.end_date === null
+  );
+  if (!active) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  const t = HEALTH_EVENT_TYPES.find((x) => x.type === active.event_type);
+  banner.textContent = `${t?.emoji ?? '•'} 进行中：${active.start_date} 起`;
+}
+
+function shiftHealthMonth(delta) {
+  const { year, month } = state.health.currentMonth || shanghaiYearMonth();
+  let newY = year;
+  let newM = month + delta;
+  if (newM < 1) { newM = 12; newY -= 1; }
+  if (newM > 12) { newM = 1; newY += 1; }
+  state.health.currentMonth = { year: newY, month: newM };
+  loadHealthEvents();
 }
 
 function pulseBalanceCards() {
@@ -504,6 +679,9 @@ function bindEvents() {
   $('#submit-modal').addEventListener('click', (e) => {
     if (e.target.id === 'submit-modal') closeSubmitModal();
   });
+  // Health checkin — month nav
+  $('#health-prev-month')?.addEventListener('click', () => shiftHealthMonth(-1));
+  $('#health-next-month')?.addEventListener('click', () => shiftHealthMonth(1));
 }
 
 async function boot() {

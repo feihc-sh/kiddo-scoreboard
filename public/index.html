@@ -142,6 +142,33 @@
         <div>暂无操作记录</div>
       </div>
     </section>
+
+    <!-- ====== M2: Health Checkin (RFC §6.2) — 主 tab「健康」+ 8 子 tab + 月历 ====== -->
+    <section class="section health-section" id="tab-health" aria-label="健康打卡">
+      <h2 class="section-title">🩺 健康打卡 <span class="section-hint">// 8 子 tab + 月历</span></h2>
+
+      <!-- 8 sub-tab bar (horizontal scroll on mobile) -->
+      <div id="health-subtab-bar" class="health-subtab-bar" role="tablist"></div>
+
+      <!-- Active event banner (shown when current type has an active event) -->
+      <div id="health-active-banner" class="health-active-banner" hidden></div>
+
+      <!-- Month calendar header (prev / label / next) -->
+      <div class="health-cal-header">
+        <button id="health-prev-month" class="health-month-nav" type="button" aria-label="上一月">◀</button>
+        <span id="health-month-label" class="health-month-label">2026-06</span>
+        <button id="health-next-month" class="health-month-nav" type="button" aria-label="下一月">▶</button>
+      </div>
+
+      <!-- 7×6 calendar grid (max 6 weeks to cover any month) -->
+      <div id="health-calendar" class="health-calendar" role="grid"></div>
+
+      <!-- Empty / loading state -->
+      <div id="health-empty" class="empty" hidden>
+        <div class="empty-icon">📅</div>
+        <div>本月没有记录</div>
+      </div>
+    </section>
   </main>
 
   <!-- ====== Toast ====== -->
