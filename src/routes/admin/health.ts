@@ -199,7 +199,6 @@ adminHealth.patch('/events/:id/resolve', async (c) => {
       404,
     );
   }
-  console.log('DEBUG PATCH existing:', JSON.stringify(existing));
   if (existing.is_resolved === 1) {
     return c.json(
       {
@@ -211,7 +210,6 @@ adminHealth.patch('/events/:id/resolve', async (c) => {
       409,
     );
   }
-  console.log('DEBUG endDateNotBeforeStart:', endDate, '>=', existing.start_date);
   if (!endDateNotBeforeStart(endDate, existing.start_date)) {
     return c.json(
       {
@@ -235,7 +233,6 @@ adminHealth.patch('/events/:id/resolve', async (c) => {
   // resolveEvent returns null only if the WHERE clause matched 0 rows —
   // i.e. someone else resolved it between our SELECT and the UPDATE.
   // Treat as 409 (concurrent resolve) — caller can retry.
-  console.log('DEBUG updated:', JSON.stringify(updated));
   if (!updated) {
     return c.json(
       {
