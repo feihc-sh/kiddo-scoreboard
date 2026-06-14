@@ -95,9 +95,10 @@ test.describe('HAPPY: GET /api/public/health/events', () => {
     const res = await request.get('/api/public/health/events?user_id=1&event_type=ulcer');
     expect(res.status()).toBe(200);
     const body = await res.json() as { events: Array<{ event_type: string; end_date: string | null }> };
-    expect(body.events).toHaveLength(1);
-    expect(body.events[0].event_type).toBe('ulcer');
-    expect(body.events[0].end_date).toBeNull();
+    // Test isolation: other specs in full regression may seed more user_id=1 events
+    // of other types. We only assert "at least one ulcer event present, end_date IS NULL".
+    const activeUlcer = body.events.find((e) => e.event_type === 'ulcer' && e.end_date === null);
+    expect(activeUlcer).toBeTruthy();
   });
 
   test('HAPPY-5: GET with month=YYYY-MM returns that month\'s events', async ({ request }) => {
@@ -128,7 +129,7 @@ test.describe('EDGE: GET boundary cases', () => {
     expect(body.events).toHaveLength(0);
   });
 
-  test('EDGE-7: cross-month event (start=May end=Jun) → GET June returns it', async ({ request }) => {
+  test('EDGE-7: cross-month event with start in May → GET June does NOT return it (RFC §4.2.1: month filter uses start_date only)', async ({ request }) => {
     seedHealthEvent({
       user_id: 1,
       event_type: 'cough',
@@ -136,14 +137,19 @@ test.describe('EDGE: GET boundary cases', () => {
       end_date: '2026-06-03',
       is_resolved: 1,
     });
+    // Also seed a real June event to ensure filter isn't empty for other reasons.
+    seedHealthEvent({ user_id: 1, event_type: 'cough', start_date: '2026-06-15' });
+
     const res = await request.get('/api/public/health/events?user_id=1&event_type=cough&month=2026-06');
     expect(res.status()).toBe(200);
     const body = await res.json() as { events: Array<{ start_date: string; end_date: string | null }> };
-    expect(body.events.length).toBeGreaterThanOrEqual(1);
-    // The cross-month event must appear (range covers June).
-    const found = body.events.find((e) => e.start_date === '2026-05-30');
-    expect(found).toBeTruthy();
-    expect(found?.end_date).toBe('2026-06-03');
+    // RFC §4.2.1 month filter is `start_date LIKE 'YYYY-MM-%'` — May-starting
+    // cross-month event must NOT appear in June response.
+    const mayStart = body.events.find((e) => e.start_date === '2026-05-30');
+    expect(mayStart).toBeUndefined();
+    // Real June-starting event SHOULD appear.
+    const juneStart = body.events.find((e) => e.start_date === '2026-06-15');
+    expect(juneStart).toBeTruthy();
   });
 });
 
@@ -199,10 +205,8 @@ test.describe('AUTH: admin endpoint guards', () => {
   });
 
   test('AUTH-4: PATCH resolve WITH pm_session → 200 + end_date set', async ({ request }) => {
-    seedHealthEvent({ user_id: 1, event_type: 'fever', start_date: '2026-06-10' });
-    const list = await request.get('/api/public/health/events?user_id=1');
-    const listBody = await list.json() as { events: Array<{ id: number }> };
-    const eventId = listBody.events[0].id;
+    // seedHealthEvent returns the id directly — use it (avoids events[0] order-dependent bug).
+    const eventId = seedHealthEvent({ user_id: 1, event_type: 'fever', start_date: '2026-06-10' });
 
     await loginAsPm(request, '123654');
     const res = await request.patch(`/api/admin/health/events/${eventId}/resolve`, {
