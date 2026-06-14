@@ -76,7 +76,7 @@ adminHealth.post('/events', async (c) => {
     return c.json(
       {
         error: {
-          code: 'BAD_REQUEST',
+          code: 'MISSING_USER_ID',
           message: 'user_id is required and must be a positive integer',
         },
       },
