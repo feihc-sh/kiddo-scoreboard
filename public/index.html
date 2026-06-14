@@ -248,8 +248,43 @@
     </div>
   </div>
 
+  <!-- ====== M1: Sprint modal (Item #010) — task click opens focus modal ====== -->
+  <div id="sprint-modal" class="modal-back sprint-modal-back" hidden>
+    <div class="modal sprint-modal">
+      <button type="button" id="sprint-close" class="sprint-close" aria-label="关闭冲刺弹窗">×</button>
+      <h2 class="sprint-title">冲刺中…</h2>
+      <div class="sprint-detail">
+        <div class="sprint-icon" id="sprint-icon" aria-hidden="true">⚡</div>
+        <div class="sprint-name" id="sprint-name">任务</div>
+      </div>
+      <div class="sprint-countdown" id="sprint-countdown" data-urgency="ok" hidden>
+        <span class="sprint-countdown-text" id="sprint-countdown-text">00:00:00</span>
+        <div class="sprint-countdown-label">距离时限还剩</div>
+      </div>
+      <button type="button" id="sprint-checkin" class="btn btn-primary sprint-checkin">✓ 打卡</button>
+    </div>
+  </div>
+
   <!-- ====== Toast ====== -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- ====== Sprint modal (Item #010: 任务点击 → 冲刺专注模态) ====== -->
+  <div id="sprint-modal" class="modal-back sprint-modal-back" hidden>
+    <div class="modal sprint-modal" role="dialog" aria-modal="true" aria-labelledby="sprint-title">
+      <button type="button" class="sprint-close" id="sprint-close" aria-label="关闭">×</button>
+      <h2 class="modal-title sprint-title" id="sprint-title">⚡ 冲刺中…</h2>
+      <div class="sprint-detail">
+        <span class="sprint-icon" id="sprint-icon" aria-hidden="true">⚡</span>
+        <span class="sprint-name" id="sprint-name"></span>
+      </div>
+      <div class="sprint-countdown" id="sprint-countdown" data-urgency="ok" hidden>
+        <span class="sprint-countdown-text" id="sprint-countdown-text">00:00:00</span>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary sprint-checkin" id="sprint-checkin">✓ 打卡</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ====== Confetti canvas ====== -->
   <canvas id="confetti" class="confetti-canvas" aria-hidden="true"></canvas>

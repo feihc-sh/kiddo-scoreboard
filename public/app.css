@@ -914,6 +914,98 @@ body {
   color: var(--cyan);
   margin: 0 0 4px;
 }
+/* ==========================================================================
+ * SPRINT MODAL — Item #010 (游戏化专注感)
+ * 比普通 modal 大, 居中, 倒计时大字号 + 紧迫度色阶
+ * ========================================================================== */
+.sprint-modal {
+  max-width: 480px;
+  padding: 32px 28px;
+  text-align: center;
+}
+.sprint-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+}
+.sprint-close:hover {
+  color: var(--cyan);
+  background: rgba(0, 245, 255, 0.06);
+}
+.sprint-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--cyan);
+  letter-spacing: 0.05em;
+  margin: 0 0 24px;
+  text-transform: uppercase;
+}
+.sprint-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.sprint-icon {
+  font-size: 72px;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px var(--cyan-glow));
+}
+.sprint-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+}
+.sprint-countdown {
+  margin: 8px 0 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border-glow);
+  border-bottom: 1px solid var(--border-glow);
+}
+.sprint-countdown[hidden] { display: none; }
+.sprint-countdown-text {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 64px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--text-secondary);
+  text-shadow: 0 0 16px currentColor;
+}
+.sprint-countdown-label {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.sprint-countdown[data-urgency="ok"]       .sprint-countdown-text { color: var(--text-secondary); }
+.sprint-countdown[data-urgency="warning"]  .sprint-countdown-text { color: #FFB800; }
+.sprint-countdown[data-urgency="danger"]   .sprint-countdown-text { color: var(--orange); }
+.sprint-countdown[data-urgency="critical"] .sprint-countdown-text { color: var(--red); animation: sprint-pulse 1s infinite; }
+@keyframes sprint-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+.sprint-checkin {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+}
+
 .modal-hint {
   font-family: var(--font-mono);
   font-size: 13px;
@@ -927,6 +1019,79 @@ body {
   margin-top: 22px;
 }
 .modal-actions .btn { flex: 1; }
+
+/* ===========================================================================
+ * SPRINT MODAL — 任务冲刺专注模态 (Item #010, child UI)
+ * 复用 .modal-back / .modal / .modal-title / .modal-actions 样式, 这里只覆盖差异.
+ * ========================================================================== */
+.sprint-modal .modal {
+  max-width: 480px;
+  padding: 32px;
+  position: relative;
+}
+.sprint-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+  z-index: 1;
+}
+.sprint-close:hover {
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+.sprint-title {
+  font-size: 24px;
+  margin-right: 40px; /* avoid overlap with close X */
+}
+.sprint-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 12px;
+}
+.sprint-icon {
+  font-size: 72px;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(0,229,255,0.4));
+}
+.sprint-name {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+  letter-spacing: 0.05em;
+}
+.sprint-countdown {
+  font-family: var(--font-display);
+  font-size: 96px;
+  font-weight: 700;
+  text-align: center;
+  margin: 20px 0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  transition: color 0.3s var(--ease);
+}
+.sprint-countdown[data-urgency="ok"] { color: var(--text-secondary); }
+.sprint-countdown[data-urgency="warning"] { color: var(--yellow, #f7c948); }
+.sprint-countdown[data-urgency="danger"] { color: var(--orange, #ff8c42); }
+.sprint-countdown[data-urgency="critical"] { color: var(--red, #ff5757); animation: pulse 1s ease-in-out infinite; }
+.sprint-countdown[hidden] { display: none; }
+.sprint-checkin { font-size: 18px; padding: 14px 24px; }
 
 /* ===========================================================================
  * WELCOME MODAL — 机甲启动界面

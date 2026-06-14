@@ -715,9 +715,6 @@ function renderEvents() {
 function statusLabel(s) {
   return ({ pending: '◷ 待确认', approved: '✓ 已通过', rejected: '✕ 已拒绝', revoked: '↩ 已回收' })[s] || s;
 }
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-}
 // ---------- Reward / event icon helpers (2026-06-14: 任务实际入账是 🪙 coin, 0007 schema drift) ----------
 // task.target_account schema only allows 'game_time' | 'pocket_money', but task completion
 // actually grants 'coins' (writeTaskCoinGrant in src/utils/coin.ts hardcodes type='coins').
@@ -862,6 +859,57 @@ function showWelcomeError(msg) {
   e.textContent = msg;
   e.hidden = false;
 }
+
+// ---------- Sprint modal (Item #010: 任务点击 → 冲刺专注模态) ----------
+// 任务详情弹窗. 显示任务图标 + 名称, 若有 cutoff_time 则显示倒计时大数字.
+// 关闭: X 角 + 点空白 + Esc (Section 2 会挂载, 这里先提供 show/hide + 数据绑定).
+// 复用现有 computeCutoffDiffSec + formatHHMMSS (§3.12 helpers).
+let _sprintCurrentTask = null;        // 当前弹窗任务 (用于"打卡"按钮触发 completeTask)
+let _sprintCountdownTimer = null;     // 独立计时器, 与主 setCountdownLoop 隔离
+function showSprintModal(task) {
+  _sprintCurrentTask = task;
+  const iconEl = $('#sprint-icon');
+  const nameEl = $('#sprint-name');
+  const countdownEl = $('#sprint-countdown');
+  const countdownTextEl = $('#sprint-countdown-text');
+  iconEl.textContent = task.icon || '⚡';
+  nameEl.textContent = task.name || '';
+  // 倒计时区: 有 cutoff_time 才显示
+  if (task.cutoff_time) {
+    countdownEl.hidden = false;
+    updateSprintCountdown();
+    if (_sprintCountdownTimer) clearInterval(_sprintCountdownTimer);
+    _sprintCountdownTimer = setInterval(updateSprintCountdown, 1000);
+  } else {
+    countdownEl.hidden = true;
+    if (_sprintCountdownTimer) { clearInterval(_sprintCountdownTimer); _sprintCountdownTimer = null; }
+  }
+  $('#sprint-modal').hidden = false;
+}
+function hideSprintModal() {
+  $('#sprint-modal').hidden = true;
+  _sprintCurrentTask = null;
+  if (_sprintCountdownTimer) { clearInterval(_sprintCountdownTimer); _sprintCountdownTimer = null; }
+}
+function updateSprintCountdown() {
+  const task = _sprintCurrentTask;
+  if (!task || !task.cutoff_time) return;
+  const countdownEl = $('#sprint-countdown');
+  const countdownTextEl = $('#sprint-countdown-text');
+  const diff = computeCutoffDiffSec(task.cutoff_time);
+  countdownTextEl.textContent = formatHHMMSS(diff);
+  // urgency 分级 (Section 3 实现配色, 这里先写分级逻辑)
+  // diff > 3600 → "ok" (灰)
+  // diff ≤ 3600 → "warning" (黄)
+  // diff ≤ 600  → "danger" (橙)
+  // diff ≤ 60   → "critical" (红)
+  let urgency = 'ok';
+  if (diff <= 60) urgency = 'critical';
+  else if (diff <= 600) urgency = 'danger';
+  else if (diff <= 3600) urgency = 'warning';
+  countdownEl.dataset.urgency = urgency;
+}
+
 function openSubmitModal() {
   $('#submit-modal').hidden = false;
   // Reset to "想要" (+) as the default direction every time modal opens,
