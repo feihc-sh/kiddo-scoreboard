@@ -474,12 +474,12 @@ function escapeHtml(s) {
 // ---------- Reward / event icon helpers (2026-06-14: 任务实际入账是 🪙 coin, 0007 schema drift) ----------
 // task.target_account schema only allows 'game_time' | 'pocket_money', but task completion
 // actually grants 'coins' (writeTaskCoinGrant in src/utils/coin.ts hardcodes type='coins').
-// For UI consistency, show 🪙 for all task rewards; keep target_account branch for future
-// non-coin tasks (e.g. a future 'game_time'-granting task).
-function taskRewardIcon(targetAccount) {
-  if (targetAccount === 'game_time') return '⚡';
-  if (targetAccount === 'pocket_money') return '⚙️';
-  return '🪙';  // default — actual M1/M2 path grants coins regardless of schema
+// For UI consistency, show 🪙 for ALL task rewards today. The 'game_time' / 'pocket_money'
+// branches are kept only for the visual fallback in score_event list (events with those
+// types do exist historically — see eventIcon / eventUnit). taskRewardIcon hardcodes 🪙
+// because the actual grant path is coins regardless of tasks.target_account.
+function taskRewardIcon(_targetAccount) {  // targetAccount ignored — see comment
+  return '🪙';
 }
 function eventIcon(type) {
   if (type === 'game_time') return '⚡';
