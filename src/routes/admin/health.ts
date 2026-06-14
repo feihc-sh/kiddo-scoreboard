@@ -199,6 +199,7 @@ adminHealth.patch('/events/:id/resolve', async (c) => {
       404,
     );
   }
+  console.log('DEBUG PATCH existing:', JSON.stringify(existing));
   if (existing.is_resolved === 1) {
     return c.json(
       {
