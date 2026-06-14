@@ -1,3 +1,6 @@
+// Single source of truth for fallback task icon. See /shared/emoji-presets.js.
+const DEFAULT_TASK_ICON = (typeof window !== 'undefined' && window.DEFAULT_TASK_ICON) || '⭐';
+
 // public/app.js — kiddo-scoreboard child UI logic
 // Vanilla JS, no framework. Calls real backend APIs (M1-M7).
 // CHILD_USER_ID = 2 (hardcoded; auth swap is M5-later).
@@ -338,13 +341,13 @@ function renderTasks() {
     if (revoked) {
       btn.disabled = true;
       btn.innerHTML = `
-        <span class="task-icon">${t.icon || '⭐'}</span>
+        <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
         <span class="task-done-badge">系统休眠中</span>
       `;
     } else if (done) {
       btn.innerHTML = `
-        <span class="task-icon">${t.icon || '⭐'}</span>
+        <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
         <span class="task-reward">+${t.token_reward} ${taskRewardIcon(t.target_account)}</span>
         <span class="task-done-badge">✓ 任务完成</span>
@@ -356,13 +359,13 @@ function renderTasks() {
         btn.classList.add('task-btn-locked-out');
         btn.disabled = true;
         btn.innerHTML = `
-          <span class="task-icon">${t.icon || '⭐'}</span>
+          <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
           <span class="task-name">${escapeHtml(t.name)}</span>
           <span class="task-done-badge">已过打卡时间 ${t.cutoff_time} (明天再来)</span>
         `;
       } else {
         btn.innerHTML = `
-          <span class="task-icon">${t.icon || '⭐'}</span>
+          <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
           <span class="task-name">${escapeHtml(t.name)}</span>
           <span class="task-cutoff-label">· 距离时限还剩</span>
           <span class="task-countdown-text" data-cutoff="${t.cutoff_time}">${formatHHMMSS(diff)}</span>
@@ -370,7 +373,7 @@ function renderTasks() {
       }
     } else {
       btn.innerHTML = `
-        <span class="task-icon">${t.icon || '⭐'}</span>
+        <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
         <span class="task-reward">+${t.token_reward} ${taskRewardIcon(t.target_account)}</span>
       `;
@@ -428,7 +431,7 @@ function updateCountdowns() {
       // Also detach the click handler: easiest is to clone-replace the node.
       const fresh = btn.cloneNode(true);
       fresh.innerHTML = `
-        <span class="task-icon">${btn.querySelector('.task-icon')?.textContent || '⭐'}</span>
+        <span class="task-icon">${btn.querySelector('.task-icon')?.textContent || DEFAULT_TASK_ICON}</span>
         <span class="task-name">${btn.querySelector('.task-name')?.textContent || ''}</span>
           <span class="task-done-badge">超出时限 · 明日再来</span>
       `;

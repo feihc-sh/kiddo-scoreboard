@@ -2,6 +2,11 @@
 // Vanilla JS, no framework. Calls real backend APIs (M1-M7 + admin).
 // Single page with all sections visible (collapsible <details>).
 
+// Single source of truth for fallback task icon. See /shared/emoji-presets.js.
+// (If the shared script fails to load, we fall back to the hardcoded literal
+//  so the UI is never blank — matches the previous behaviour exactly.)
+const DEFAULT_TASK_ICON = (typeof window !== 'undefined' && window.DEFAULT_TASK_ICON) || '⭐';
+
 const API = '';                  // same origin
 const CHILD_USER_ID = 2;         // kiddo user (hardcoded; matches seeds/local.sql)
 
@@ -254,6 +259,39 @@ function renderAllEvents() {
 // ---------- C. Tasks ----------
 // Item #001: 20-preset emoji picker — click button → fill icon input, sync highlight.
 // Manual typing in the icon input also syncs highlight (cleared if no match).
+//
+// Source of truth: /shared/emoji-presets.js (window.EMOJI_PRESETS, window.DEFAULT_TASK_ICON).
+// This function renders the buttons dynamically so the picker is always in sync with
+// the shared file (no more drift between HTML and tests/seed data).
+function renderEmojiPicker() {
+  const picker = $('#emoji-picker');
+  if (!picker) return;
+  const presets = window.EMOJI_PRESETS;
+  const categories = window.EMOJI_CATEGORIES;
+  if (!presets || !categories) {
+    console.error('emoji-presets.js not loaded; picker will be empty');
+    return;
+  }
+  picker.innerHTML = '';
+  for (const cat of categories) {
+    const row = document.createElement('div');
+    row.className = 'emoji-pick-row';
+    const label = document.createElement('span');
+    label.className = 'emoji-pick-cat';
+    label.textContent = cat;
+    row.appendChild(label);
+    for (const glyph of presets[cat]) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'emoji-pick';
+      btn.dataset.emoji = glyph;
+      btn.textContent = glyph;
+      row.appendChild(btn);
+    }
+    picker.appendChild(row);
+  }
+}
+
 function bindEmojiPicker() {
   const form = $('#new-task-form');
   if (!form) return;
@@ -291,7 +329,7 @@ function renderTasks() {
     root.appendChild(rowEl(`
       <div class="pm-row-main">
         <div class="pm-row-title">
-          ${t.icon || '⭐'} ${escapeHtml(t.name)}
+          ${t.icon || DEFAULT_TASK_ICON} ${escapeHtml(t.name)}
           ${active ? '' : '<span class="pm-badge revoked">已停用</span>'}
         </div>
         <div class="pm-row-meta">
@@ -347,7 +385,7 @@ function renderCompletions() {
   state.completions.forEach((c) => {
     const task = state.tasks.find((t) => t.id === c.task_id);
     const tName = task ? task.name : `task #${c.task_id}`;
-    const tIcon = task?.icon || '⭐';
+    const tIcon = task?.icon || DEFAULT_TASK_ICON;
     const isRevoked = c.status === 'revoked';
     const isDeleted = !!state.deletedRecords[`task_completion:${c.id}`];
     root.appendChild(rowEl(`
@@ -688,6 +726,7 @@ async function boot() {
   bindForms();
   bindFilters();
   bindDelegatedActions();
+  renderEmojiPicker();  // Item #001 — populate from window.EMOJI_PRESETS (shared/emoji-presets.js)
   bindEmojiPicker();   // Item #001
   try {
     await loadMe();
