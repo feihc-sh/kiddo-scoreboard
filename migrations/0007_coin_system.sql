@@ -41,8 +41,15 @@ INSERT INTO score_events_new
   FROM score_events;
 
 -- 替换旧表
+-- 临时关闭外键检查,避免 DROP TABLE score_events 触发
+--   task_completions.awarded_event_id → score_events.id 的 FK 约束
+-- 治本: INCIDENTS 2026-06-11 (4 次 deploy 翻车根因,见 docs/INCIDENTS.md)
+-- 模式: SQLite/D1 的 PRAGMA foreign_keys = OFF 仅当前 connection 有效,
+--   同一 migration 文件内语句顺序执行,OFF/ON 包裹安全可靠。
+PRAGMA foreign_keys = OFF;
 DROP TABLE score_events;
 ALTER TABLE score_events_new RENAME TO score_events;
+PRAGMA foreign_keys = ON;
 
 -- 重建所有索引 (与 0001_initial.sql 一致)
 CREATE INDEX IF NOT EXISTS idx_score_events_user_status ON score_events(user_id, status);
