@@ -285,23 +285,17 @@ function makeMockDb(): D1Database {
           const id = nextAuditId++;
           // Bound params differ by action:
           //   create:  params = [actor, target_user_id, details]   (CC writes 'child' or 'pm' as bound ?)
-          //   resolve: params = [target_user_id, details]            (CC writes 'pm' as SQL literal)
-          // We can detect which by checking for the action literal in the query.
+          //   resolve: params = [actor, target_user_id, details]  (§4.2.4 + §4.2.5 — both bind actor)
+          // Actor can be 'child' (self-resolve) or 'pm' (admin resolve).
           const actionMatch = q.match(/'(health_event_create|health_event_resolve|health_event_delete)'/i);
           const action = actionMatch ? actionMatch[1] : 'unknown';
-          let actor: 'child' | 'pm' | 'system';
-          let targetUserId: number | null;
-          let details: string;
-          if (action === 'health_event_resolve') {
-            actor = 'pm';
-            targetUserId = (p[0] as number | null) ?? null;
-            details = typeof p[1] === 'string' ? p[1] : JSON.stringify(p[1] ?? {});
-          } else {
-            // create: p[0] is actor ('child' or 'pm'), p[1] is target_user_id, p[2] is details
-            actor = (typeof p[0] === 'string' ? p[0] : 'pm') as 'child' | 'pm';
-            targetUserId = (p[1] as number | null) ?? null;
-            details = typeof p[2] === 'string' ? p[2] : JSON.stringify(p[2] ?? {});
-          }
+          // Read actor from p[0] (works for both create and resolve).
+          const actor: 'child' | 'pm' | 'system' = (typeof p[0] === 'string' ? p[0] : 'pm') as
+            | 'child'
+            | 'pm'
+            | 'system';
+          const targetUserId = (p[1] as number | null) ?? null;
+          const details = typeof p[2] === 'string' ? p[2] : JSON.stringify(p[2] ?? {});
           auditLog.push({
             id,
             actor,
@@ -313,8 +307,8 @@ function makeMockDb(): D1Database {
           });
           results.push({ success: true, meta: { changes: 1, last_row_id: id, duration: 0 } } as D1Result<T>);
         } else if (/^UPDATE\s+health_events/i.test(q)) {
-          // Mock for resolveEvent's UPDATE. Params (in order per CC resolveEvent):
-          //   [endDate, now, pmUserId, now, id]
+          // Mock for resolveEvent's UPDATE. Params (in order after refactor §4.2.5):
+          //   [endDate, now, resolvedBy, now, id]
           // SET clause: end_date = ?, is_resolved = 1, resolved_at = ?, resolved_by = ?, updated_at = ?
           // (is_resolved is a SQL literal '1', not a bound ?).
           const id = (p[p.length - 1] as number);
@@ -516,6 +510,86 @@ describe('EDGE — boundary cases', () => {
     // Verify event unchanged.
     const after = healthEvents.find((h) => h.id === existing.id);
     expect(after?.is_resolved).toBe(0);
+  });
+
+  it('EDGE-14: child PATCH /api/me/health/events/:id/resolve → 200 + actor=child (RFC §4.2.5)', async () => {
+    // Seed an active event for child (user_id=2, the CHILD_USER_ID hardcode).
+    const existing = seedHealthEvent({
+      user_id: CHILD_USER_ID,
+      event_type: 'cough',
+      start_date: '2026-06-14',
+    });
+    const res = await call(`/api/me/health/events/${existing.id}/resolve`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ end_date: '2026-06-20' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { id: number; end_date: string; is_resolved: boolean; resolved_by: number | null };
+    expect(body.end_date).toBe('2026-06-20');
+    expect(body.is_resolved).toBe(true);
+    expect(body.resolved_by).toBe(CHILD_USER_ID);
+
+    // Verify audit_log got actor='child' (not 'pm').
+    const resolves = auditLog.filter((a) => a.action === 'health_event_resolve' && a.target_user_id === CHILD_USER_ID);
+    expect(resolves).toHaveLength(1);
+    expect(resolves[0].actor).toBe('child');
+  });
+
+  it('EDGE-15: child PATCH /api/me/.../resolve for other user\'s event → 403 FORBIDDEN', async () => {
+    // PM creates an event for user_id=99 (not the child). Child should NOT be able to resolve it.
+    const existing = seedHealthEvent({ user_id: 99, event_type: 'ulcer', start_date: '2026-06-14' });
+    const res = await call(`/api/me/health/events/${existing.id}/resolve`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ end_date: '2026-06-20' }),
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json() as { error: { code: string } };
+    expect(body.error.code).toBe('FORBIDDEN');
+
+    // Event unchanged.
+    const after = healthEvents.find((h) => h.id === existing.id);
+    expect(after?.is_resolved).toBe(0);
+  });
+
+  it('EDGE-16: child PATCH /api/me/.../resolve with end_date < start_date → 400 INVALID_DATE', async () => {
+    const existing = seedHealthEvent({
+      user_id: CHILD_USER_ID,
+      event_type: 'cough',
+      start_date: '2026-06-14',
+    });
+    const res = await call(`/api/me/health/events/${existing.id}/resolve`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ end_date: '2026-06-10' }),  // before start_date
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { code: string } };
+    expect(body.error.code).toBe('INVALID_DATE');
+  });
+
+  it('EDGE-17: child PATCH /api/me/.../resolve for already-resolved event → 409 ALREADY_RESOLVED', async () => {
+    // Resolve once first.
+    const existing = seedHealthEvent({
+      user_id: CHILD_USER_ID,
+      event_type: 'cough',
+      start_date: '2026-06-14',
+    });
+    await call(`/api/me/health/events/${existing.id}/resolve`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ end_date: '2026-06-20' }),
+    });
+    // Second attempt.
+    const res = await call(`/api/me/health/events/${existing.id}/resolve`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ end_date: '2026-06-25' }),
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json() as { error: { code: string } };
+    expect(body.error.code).toBe('ALREADY_RESOLVED');
   });
 
   it('EDGE-5: POST invalid event_type "flu" → 400 INVALID_EVENT_TYPE', async () => {

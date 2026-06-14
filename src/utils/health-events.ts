@@ -82,6 +82,8 @@ interface HealthEventRow {
   submitted_by: HealthSubmittedBy;
   created_at: number;
   resolved_at: number | null;
+  resolved_by: number | null;
+  updated_at: number;
 }
 
 /** Convert a SQL row to the API response shape (RFC §4.2.1: is_resolved as boolean). */
@@ -97,6 +99,8 @@ export function rowToHealthEvent(row: HealthEventRow): HealthEvent {
     submitted_by: row.submitted_by,
     created_at: row.created_at,
     resolved_at: row.resolved_at,
+    resolved_by: row.resolved_by ?? null,
+    updated_at: row.updated_at,
   };
 }
 
@@ -106,7 +110,7 @@ export function rowToHealthEvent(row: HealthEventRow): HealthEvent {
 
 const SELECT_COLUMNS =
   'id, user_id, event_type, start_date, end_date, is_resolved, note, ' +
-  'submitted_by, created_at, resolved_at';
+  'submitted_by, created_at, resolved_at, resolved_by, updated_at';
 
 /**
  * Find the most recent active event for (user_id, event_type).
@@ -269,16 +273,21 @@ export async function createEvent(
 
 export interface ResolveEventParams {
   id: number;
-  userId: number;         // affected child (target_user_id in audit_log)
-  endDate: string;        // 'YYYY-MM-DD', must be >= existing start_date
-  pmUserId: number;       // resolved_by + actor='pm' in audit_log
+  userId: number;              // affected child (target_user_id in audit_log)
+  endDate: string;             // 'YYYY-MM-DD', must be >= existing start_date
+  resolvedBy: number;          // user id who performed the resolve (goes to health_events.resolved_by)
+  submittedBy: HealthSubmittedBy; // 'pm' or 'child' (goes to audit_log.actor)
 }
 
 /**
  * Resolve an existing health event (atomic UPDATE health_events +
  * INSERT audit_log). Sets end_date, is_resolved=1, resolved_at=now,
- * resolved_by=pmUserId, updated_at=now. `target_event_id` in audit_log
- * is NULL (health events are not score_events).
+ * resolved_by=params.resolvedBy, updated_at=now. `target_event_id` in
+ * audit_log is NULL (health events are not score_events).
+ *
+ * submittedBy controls the audit_log.actor — 'pm' for admin-driven
+ * resolves, 'child' for self-resolves (§4.2.5). resolvedBy is the
+ * actual user id who took the action (PM's id, or child id=2 for self).
  *
  * Returns the updated event in API response shape, or null if the event
  * does not exist OR is already resolved (caller should distinguish via
@@ -291,7 +300,8 @@ export async function resolveEvent(
   const now = nowUnix();
   const details = JSON.stringify({
     end_date: params.endDate,
-    resolved_by: params.pmUserId,
+    resolved_by: params.resolvedBy,
+    resolved_by_role: params.submittedBy,
   });
 
   const results = await db.batch([
@@ -302,14 +312,14 @@ export async function resolveEvent(
              resolved_by = ?, updated_at = ?
          WHERE id = ? AND end_date IS NULL`,
       )
-      .bind(params.endDate, now, params.pmUserId, now, params.id),
+      .bind(params.endDate, now, params.resolvedBy, now, params.id),
     db
       .prepare(
         `INSERT INTO audit_log
            (actor, action, target_event_id, target_user_id, details, created_at)
-         VALUES ('pm', 'health_event_resolve', NULL, ?, ?, unixepoch())`,
+         VALUES (?, 'health_event_resolve', NULL, ?, ?, unixepoch())`,
       )
-      .bind(params.userId, details),
+      .bind(params.submittedBy, params.userId, details),
   ]);
 
   // If the UPDATE affected 0 rows (event doesn't exist OR already resolved),
