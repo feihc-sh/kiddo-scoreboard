@@ -346,7 +346,7 @@ function renderTasks() {
       btn.innerHTML = `
         <span class="task-icon">${t.icon || '⭐'}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
-        <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '⚡' : '⚙️'}</span>
+        <span class="task-reward">+${t.token_reward} ${taskRewardIcon(t.target_account)}</span>
         <span class="task-done-badge">✓ 任务完成</span>
       `;
     } else if (isSleepLocked) {
@@ -372,7 +372,7 @@ function renderTasks() {
       btn.innerHTML = `
         <span class="task-icon">${t.icon || '⭐'}</span>
         <span class="task-name">${escapeHtml(t.name)}</span>
-        <span class="task-reward">+${t.token_reward} ${t.target_account === 'game_time' ? '⚡' : '⚙️'}</span>
+        <span class="task-reward">+${t.token_reward} ${taskRewardIcon(t.target_account)}</span>
       `;
     }
     if (revoked) {
@@ -452,8 +452,8 @@ function renderEvents() {
     const el = document.createElement('div');
     el.className = 'event-item event-status-' + ev.status;
     const sign = ev.change_value > 0 ? '+' : '';
-    const icon = ev.type === 'game_time' ? '⚡' : '⚙️';
-    const unit = ev.type === 'game_time' ? '分钟' : '元';
+    const icon = eventIcon(ev.type);
+    const unit = eventUnit(ev.type);
     el.innerHTML = `
       <span class="event-icon">${icon}</span>
       <span class="event-text">
@@ -471,6 +471,28 @@ function statusLabel(s) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
+// ---------- Reward / event icon helpers (2026-06-14: 任务实际入账是 🪙 coin, 0007 schema drift) ----------
+// task.target_account schema only allows 'game_time' | 'pocket_money', but task completion
+// actually grants 'coins' (writeTaskCoinGrant in src/utils/coin.ts hardcodes type='coins').
+// For UI consistency, show 🪙 for all task rewards; keep target_account branch for future
+// non-coin tasks (e.g. a future 'game_time'-granting task).
+function taskRewardIcon(targetAccount) {
+  if (targetAccount === 'game_time') return '⚡';
+  if (targetAccount === 'pocket_money') return '⚙️';
+  return '🪙';  // default — actual M1/M2 path grants coins regardless of schema
+}
+function eventIcon(type) {
+  if (type === 'game_time') return '⚡';
+  if (type === 'pocket_money') return '⚙️';
+  if (type === 'coins') return '🪙';
+  return '•';
+}
+function eventUnit(type) {
+  if (type === 'game_time') return '分钟';
+  if (type === 'pocket_money') return '元';
+  if (type === 'coins') return '枚';
+  return '';
+}
 
 // ---------- Actions ----------
 async function completeTask(taskId) {
@@ -480,7 +502,7 @@ async function completeTask(taskId) {
     state.balance = r.new_balance;
     renderBalance();
     renderTasks();
-    toast(`+${r.token_awarded} ${r.target_account === 'game_time' ? '⚡' : '⚙️'} 能量到账`, 'success');
+    toast(`+${r.token_awarded} ${taskRewardIcon(r.target_account)} 到账`, 'success');
     // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
     loadProgress().then(() => {
@@ -520,7 +542,7 @@ async function uncompleteTask(taskId) {
     state.balance = r.new_balance;
     renderBalance();
     renderTasks();
-    toast(`-${r.token_revoked} ${r.target_account === 'game_time' ? '⚡' : r.target_account === 'pocket_money' ? '⚙️' : '🪙'} 已回收`, 'success');
+    toast(`-${r.token_revoked} ${taskRewardIcon(r.target_account)} 已回收`, 'success');
     // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
     loadProgress().then(renderProgress).catch(() => {});  // §5.2 fix: revoke must refresh progress
