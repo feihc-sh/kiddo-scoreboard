@@ -28,6 +28,10 @@
 ### 📋 产品 & 需求
 - **[`docs/PRD.md`](./PRD.md)** — 产品需求文档 v2.0, 业务规则、用户故事、数据模型、3 个用户角色
 - **[`docs/PLAN.md`](./PLAN.md)** — 实施 Plan v2 (CC 审核后), 11 段模块分解、技术决策摘要
+- **[`docs/coin-system-rfc.md`](./coin-system-rfc.md)** — 金币系统 RFC (v3 主 spec, 1527 lines, 6 Module 实施分阶段)
+- **[`docs/coin-system-test-plan.md`](./coin-system-test-plan.md)** — 金币系统测试计划 (F1-F12 + TC-X1-X8 + visual regression)
+- **[`docs/coin-system-m2-test-regressions.md`](./coin-system-m2-test-regressions.md)** — M2 实施 4 个 fail 修复 + 2 clarification
+- **[`docs/coin-shop-requirements.md`](./coin-shop-requirements.md)** — M3-M6 实施需求 (feihao 拍板 + 冲突清单, 本 PR)
 
 ### 📊 项目进度
 - **[`docs/PROGRESS.md`](./PROGRESS.md)** — 11 段 Module 进度跟踪, 每段 commit 状态、产出、遗留

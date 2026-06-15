@@ -793,3 +793,83 @@ git log --oneline -5  # 看最新进度
 **Push 计划**: docs commit 完 → push 分支 (SSH) → 用户用 GitHub 仓库网页 1-click "Compare & pull request" 打开 PR (无 GitHub token 自动化) → merge → GH Action 自动 backup + deploy 到生产。
 
 ---
+
+## ✅ v2.3 — Coin System Init (M1 数据层 + 文档) — 2026-06-11
+
+**触发场景**: 任务完成奖励从双账户 (game_time / pocket_money) 扩到第 3 账户 coins, 引入"金币系统"作为 v3 主线。M1 只做数据层 (schema + utils + types + 文档), UI/API 留给 M2-M6。
+
+**PR**: `add-coin-system` (PR #32, merged 2026-06-11)
+
+**新增能力**:
+- **`score_events.type` 加 `'coins'` 值**: 复用现有 score_events 表, 不开新表 (避免多账户同步问题)
+- **`shop_items` 表**: 商品目录 (kind / cost_coins / reward_value / reward_type / weekly_limit / is_active)
+- **`shop_redemptions` 表**: 兑换历史 (user_id / item_id / status / week_of / cost_coins / reward_value)
+- **`utils/coin.ts`**: `getCoinBalance` + `writeTaskCoinGrant` + `buildRevokeTaskCoinSQL` + `getWeeklyRedemptionCount` 14 个 export
+- **`types/coin.ts`**: `CoinBalance` + `ShopItem` + `ShopRedemption` interfaces
+
+**业务影响**:
+- 孩子每完成 1 个任务获得 +1 金币 (写 `score_events type='coins' change_value=+1`)
+- 每日完成**所有**任务额外奖励 +3 金币 (写 `score_events type='coins' change_value=+3`, 每周每 user 最多 1 条)
+- 撤销任务回滚 -1 金币 (hook 到 task revoke endpoint)
+- UI 现有 main page 加第 3 个 balance card (🪙 金币, Mecha gold 风格, 实时余额)
+- RFC + Test Plan + PRD §12 文档就绪, M2-M6 实施明确
+
+**测试状态** (M1 baseline):
+- ✅ `migrations/0007_coin_system.sql` 在本地 + staging apply 成功
+- ✅ D1 local 初始化无 FK 错误
+- ⏳ e2e / unit test 留给 M2-M6 (本 commit 只做数据层)
+
+---
+
+## ✅ v3 — Coin System 金币系统 (M3-M6 完整闭环) — 2026-06-16
+
+**触发场景**: v2.3 加了数据层但 child 看不到商店, PM 看不到待发商品。本 PR (`feat/coin-shop`) 把 M3 API + M4 UI + M5 e2e + M6 docs 一次补完。
+
+**4 个 commit** (per feihao PR workflow style):
+- `272ea61` feat(coin): M3 商店 API + S2 schema 严格化 (v1.1 RFC §3.3) — `src/routes/me/coins.ts` + `src/routes/shop/items.ts` + `src/routes/shop/exchange.ts` + `src/routes/admin/shop-fulfill.ts` + `migrations/0008_coin_shop.sql`
+- `b8d0665` feat(coin-ui): M4 商店页 + 第 3 balance card 跳转 (Mecha 风格 follow main) — `public/shop.html` + `public/shop.js` + `public/app.js` (1 patch) + `public/admin/index.html` (待发 section) + `public/admin/admin.js` (已发 button)
+- `725ec36` test(coin): M5 e2e + visual regression (12 functional + 4 SQL invariant + 5 visual) — `tests/e2e/coin-system.spec.ts` + `tests/e2e/coin-invariants.spec.ts` + `tests/e2e/coin-visual-regression.spec.ts`
+- (本 commit `docs(coin): M6 docs 同步`) — `docs/FEATURE_MATRIX.md` + `docs/PROGRESS.md` (本 entry) + `docs/INDEX.md` + `docs/TEST_PLAN.md`
+
+**新增能力 (M3 API)**:
+- `GET /api/coins/balance` — 当前 child 金币余额
+- `GET /api/coins/redemptions` — child 兑换历史 (limit 50, desc by redeemed_at)
+- `GET /api/shop/items` — 列 is_active=1 商品 (含 weekly_limit_remaining / is_unlimited hint)
+- `POST /api/coins/exchange` body `{item_id}` — 3 步短路校验 (is_active → balance → weekly_limit) + 2 个 db.batch() 原子写
+- `POST /api/admin/shop/fulfill/:id` — PM 手动把 kind=custom 的 redemption 从 pending → approved
+- `GET /api/admin/shop/fulfill?status=pending` — PM 列待发 (M4 §6.5 必备, M3 漏了, M4 补)
+- **S2 schema 严格化**: migration 0008 enum 保留 4 个 (pending/approved/consumed/revoked) 兼容 v1 已有 data; code 层新业务严格只写 'pending'/'approved', query `IN ('pending','approved')` 严格化
+
+**新增能力 (M4 UI)**:
+- `public/shop.html` — Mecha 风格商店页 (顶部 hero 余额 + 2 列商品 grid + 本周兑换历史 + 历史兑换 + confirm modal + 复用 #toast)
+- `public/shop.js` — loadBalance / loadShopItems / loadRedemptions / renderShopItems (置灰: 余额不足 / 周次数用完) / onExchangeClick (confirm) / confirmExchange (POST + toast + 刷新)
+- `public/app.js` 1 处 patch — `#card-coins` click → `/shop.html` (Q5 06-11 拍板 (a))
+- `public/admin/index.html` — 新增 "📦 待发商品 (kind=custom)" section
+- `public/admin/admin.js` — `loadPendingRedemptions` + `renderPendingRedemptions` + `fulfillRedemption` + `bindDelegatedActions` 加 `fulfill-redemption` handler
+
+**2 个商品 (硬编码 seed, feihao 拍板)**:
+- id=1: 🎮 游戏时间 10 分钟 — game_time / 10 金币 / 周 3 次 / approved (自动)
+- id=2: 🧱 小乐高 — custom / 50 金币 / 周 1 次 / pending (PM 手动发货)
+
+**测试覆盖 (M5)**:
+- ✅ **12 个 functional e2e** (F1-F12): 任务金币 grant / 撤销 / 全任务 bonus / 兑换扣金币 / 周限额 / 跨周重置 / 按钮置灰 (余额不足 + 周次数用完) / 兑换历史 / 3rd balance card + 跳转
+- ✅ **4 个 SQL invariant** (INV-1-4): balance 一致性 / task_completion 唯一 coin grant / bonus 每周每 user ≤1 / week_of ISO 8601
+- ✅ **5 个 visual regression** (iPad 1180x820, maxDiffPixelRatio 0.01): shop-page-default / confirm-modal / insufficient-coins / weekly-limit-reached / redemption-success toast
+- ✅ **98 个测试文件** (24 unit + 53 e2e baseline + 21 coin = 98, +27% vs v2.2 baseline 77)
+
+**业务影响 (对 PM/孩子)**:
+- 孩子能在商店页看到 2 件商品, 余额够 + 周次数未达即可兑换
+- 余额不足 / 周次数用完时按钮自动置灰 + 文案提示 (无需查 FAQ)
+- 兑换 game_time → 自动 +10 分钟游戏时间, 立即到账
+- 兑换 custom (小乐高) → child 看到 "待发", PM 在 admin 收到待发列表 → 点 "✓ 已发" 标记发货
+- iPad 视图下体验: 2 列 grid + 大 emoji + Mecha 金光, 跟主 UI 视觉一致
+
+**已知风险** (per requirements doc §10):
+- 06-14 4 次 deploy failure: deploy 必带 `User-Agent: Mozilla/5.0` (per `kiddo-scoreboard-deploy` §9a); backup cron 必先跑通
+- 2 个 pre-existing flaky in `me-tasks-complete.test.ts` (M2 已知, 跟本 PR 无关)
+- Visual regression baseline 首次 capture 在 iPad 1180x820 viewport (Playwright config 已设)
+- `shop_redemptions.status` enum drift: M3 写 'pending'/'approved', migration 0007/0008 enum 含 4 个 (含 v1 'consumed'/'revoked'); child UI 历史显示兼容 (F11 通过 status==='approved' OR 'consumed' 判断)
+
+**Push 计划**: docs commit 完 → 等 PM 拍 → push 分支 → merge → GH Action auto backup + deploy。
+
+---
