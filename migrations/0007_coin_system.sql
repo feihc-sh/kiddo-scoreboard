@@ -41,15 +41,16 @@ INSERT INTO score_events_new
   FROM score_events;
 
 -- 替换旧表
--- 临时关闭外键检查,避免 DROP TABLE score_events 触发
---   task_completions.awarded_event_id → score_events.id 的 FK 约束
 -- 治本: INCIDENTS 2026-06-11 (4 次 deploy 翻车根因,见 docs/INCIDENTS.md)
--- 模式: SQLite/D1 的 PRAGMA foreign_keys = OFF 仅当前 connection 有效,
---   同一 migration 文件内语句顺序执行,OFF/ON 包裹安全可靠。
+-- D1 的 PRAGMA foreign_keys = OFF 仅当前 connection 有效,D1 migration apply
+--   跨 DDL statement 时新 connection,FK 检查仍触发 → Code 7500 FOREIGN KEY fail
+-- 推荐方案 B (INCIDENTS §治本): 显式清空 task_completions FK 引用 + DROP
+UPDATE task_completions SET awarded_event_id = NULL WHERE awarded_event_id IS NOT NULL;
 PRAGMA foreign_keys = OFF;
 DROP TABLE score_events;
 ALTER TABLE score_events_new RENAME TO score_events;
 PRAGMA foreign_keys = ON;
+-- 重建后 task_completions.awarded_event_id 全部为 NULL,业务上 user_id + task_id + completed_at 仍可定位
 
 -- 重建所有索引 (与 0001_initial.sql 一致)
 CREATE INDEX IF NOT EXISTS idx_score_events_user_status ON score_events(user_id, status);
