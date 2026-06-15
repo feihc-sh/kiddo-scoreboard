@@ -23,9 +23,12 @@ export type CompletionStatus = 'active' | 'revoked';
 // reward_type mirrors kind (with 'none' for 'custom' items that don't credit any account).
 export type ShopItemKind = 'game_time' | 'pocket_money' | 'custom';
 export type ShopRewardType = 'game_time' | 'pocket_money' | 'none';
-// shop_redemptions.status: v1 simplification — redemption is final on creation.
-// 'revoked' reserved for future PM-side undo (M3+).
-export type ShopRedemptionStatus = 'consumed' | 'revoked';
+// shop_redemptions.status (M3, 2026-06-15):
+//   - 'pending'   — kind='custom' 兑换后, 等 PM 手动 fulfill (RFC §5.2)
+//   - 'approved'  — kind='game_time' 自动 (RFC §5.1), 或 custom 被 PM 确认后
+//   - 'consumed'  — 旧 v1 写法 (RFC §3 旧版, 0007 migration 写入); 保留兼容
+//   - 'revoked'   — PM 手动撤销 (RFC §5.3 撤销流程, M3+ 引入)
+export type ShopRedemptionStatus = 'pending' | 'approved' | 'consumed' | 'revoked';
 
 // Module 8 (Health Check-in, RFC §2.2): 8 hardcoded event types. v1 hardcodes these;
 // PM backend config UI for additional types is v2+. Emoji is decided per type in
@@ -190,8 +193,11 @@ export interface ShopRedemption {
   redeemedAt: number;
   revokedAt: number | null;
   revokedBy: number | null;
+  // M3 (2026-06-15): custom 流程 PM 手动确认时间 + PM user id
+  fulfilledAt: number | null;
+  fulfilledBy: number | null;
   coinEventId: number;           // FK → score_events (type='coins', change_value=-cost)
-  rewardEventId: number;         // FK → score_events (type=reward_type, change_value=+reward)
+  rewardEventId: number | null;  // M3: nullable for kind='custom' (无对应 reward 账户)
   createdAt: number;
 }
 

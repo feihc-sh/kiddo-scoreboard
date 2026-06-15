@@ -126,7 +126,13 @@ export async function findBonusEvent(
 
 /**
  * Count redemptions a user has made this ISO week (excluding revoked).
- * Used by the weekly_limit check on POST /api/coins/exchange (M3, TC-F7).
+ * Used by the weekly_limit check on POST /api/coins/exchange (M3, TC-F7)
+ * and by GET /api/shop/items to compute `weekly_limit_remaining` (M4).
+ *
+ * M3 (2026-06-15): 'revoked' is the only excluded status — 'consumed' (old),
+ * 'pending' (custom flow), and 'approved' (game_time flow) all count, because
+ * a child who has redeemed a custom item shouldn't be able to redeem a
+ * second one even if the PM hasn't yet fulfilled the first (TC-X8 fairness).
  *
  * weekOf: 'YYYY-Www' (RFC §2.3 ISO 8601 Monday-first).
  */
@@ -138,7 +144,12 @@ export async function getWeeklyRedemptionCount(
   const row = await db
     .prepare(
       `SELECT COUNT(*) AS cnt FROM shop_redemptions
-       WHERE user_id = ? AND week_of = ? AND status = 'consumed'`,
+       WHERE user_id = ? AND week_of = ?
+         -- S2 (2026-06-15 feihao 拍板, v1.1 RFC §3.3): 新业务只查 'pending'/'approved'.
+         -- v1 'consumed' / 'revoked' records 保留在 DB 但不参与新 week count
+         -- (migration 0008 enum 仍含 4 个, 兼容 v1 已有 data; code 严格化在
+         --  query 层, 不动 migration 避免破坏 v1 production data).
+         AND status IN ('pending', 'approved')`,
     )
     .bind(userId, weekOf)
     .first<{ cnt: number }>();
