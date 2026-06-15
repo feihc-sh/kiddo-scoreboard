@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <!-- Mecha theme: deep space void -->
+  <meta name="theme-color" content="#07090D">
+  <!-- Dev mode: prevent iPad Safari from caching stale HTML/JS across wrangler dev restarts. -->
+  <!-- In production (after wrangler deploy), remove these 3 lines for real CDN caching. -->
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>🪙 JAGER — 商店</title>
+  <!-- Orbitron font for HUD display feel — same as index.html -->
+  <link rel="stylesheet" href="/app.css?v=6">
+  <!-- Favicon inline SVG: cyan hexagon (matches index.html) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><polygon points='50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5' fill='%230D1117' stroke='%2300F5FF' stroke-width='6'/><text x='50' y='65' font-size='40' text-anchor='middle' fill='%2300F5FF' font-family='monospace'>J</text></svg>">
+  <style>
+    /* shop-page-specific minimal additions — follow Mecha design system (CSS vars) */
+    .shop-wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+    .shop-back { display: inline-block; margin-bottom: 16px; color: var(--text-secondary); font-family: var(--font-mono); font-size: 13px; text-decoration: none; }
+    .shop-back:hover { color: var(--cyan); }
+    .shop-hero { padding: 18px 20px; margin-bottom: 18px; background: linear-gradient(135deg, var(--bg-plate) 0%, var(--bg-panel) 100%); border: 1px solid var(--cyan-border); border-radius: var(--radius-md, 12px); box-shadow: var(--glow-cyan); }
+    .shop-hero-title { font-family: var(--font-display); font-size: 22px; font-weight: 900; margin: 0 0 6px; color: var(--text-primary); }
+    .shop-hero-sub { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); margin: 0; }
+    .shop-hero-sub .coins-accent { color: var(--orange); font-weight: 700; text-shadow: 0 0 12px var(--orange-glow); }
+    .shop-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 28px; }
+    @media (max-width: 640px) { .shop-grid { grid-template-columns: 1fr; } }
+    .shop-item { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 22px 18px 20px; background: var(--bg-plate); border: 1px solid var(--cyan-border); border-radius: var(--radius-md, 12px); position: relative; transition: transform 0.15s ease, border-color 0.15s ease; }
+    .shop-item:hover { border-color: var(--cyan); transform: translateY(-2px); }
+    .shop-item-icon { font-size: 64px; line-height: 1; margin-bottom: 10px; filter: drop-shadow(0 0 12px var(--orange-glow)); }
+    .shop-item-name { font-family: var(--font-display); font-size: 17px; font-weight: 800; color: var(--text-primary); margin-bottom: 6px; }
+    .shop-item-desc { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; min-height: 32px; }
+    .shop-item-cost { font-family: var(--font-display); font-size: 20px; font-weight: 900; color: var(--orange); margin-bottom: 14px; text-shadow: 0 0 12px var(--orange-glow); }
+    .shop-item-cost .cost-label { color: var(--text-secondary); font-size: 11px; font-weight: 600; margin-left: 6px; font-family: var(--font-mono); }
+    .shop-item-btn { width: 100%; }
+    /* Disabled state — 0.4 opacity matches .btn:disabled in app.css (RFC §6.3) */
+    .shop-item-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .shop-section-title { font-family: var(--font-display); font-size: 16px; font-weight: 800; color: var(--text-primary); margin: 0 0 12px; padding-left: 8px; border-left: 3px solid var(--cyan); }
+    .shop-history-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+    .shop-history-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--bg-soft, var(--bg-plate)); border: 1px solid var(--metal-mid, var(--cyan-border)); border-radius: var(--radius-sm, 8px); font-family: var(--font-mono); font-size: 13px; }
+    .shop-history-item .h-icon { font-size: 22px; }
+    .shop-history-item .h-name { flex: 1; color: var(--text-primary); }
+    .shop-history-item .h-cost { color: var(--orange); font-weight: 700; }
+    .shop-history-item .h-time { color: var(--text-secondary); font-size: 12px; }
+    .shop-history-item .h-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--orange-soft); color: var(--orange); border: 1px solid var(--orange-border); }
+    .shop-history-item .h-status.approved { background: rgba(0,255,180,0.10); color: #00ffb4; border-color: rgba(0,255,180,0.30); }
+    .shop-empty { padding: 24px; text-align: center; color: var(--text-secondary); font-family: var(--font-mono); font-size: 13px; }
+    .shop-weekly { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+    .shop-weekly strong { color: var(--cyan); font-family: var(--font-display); }
+    /* Confirm modal — reuses .modal-back / .modal classes for visuals */
+    .confirm-text { font-family: var(--font-mono); font-size: 14px; color: var(--text-primary); margin: 0 0 18px; text-align: center; }
+    .confirm-text strong { color: var(--orange); }
+  </style>
+</head>
+<body>
+
+  <!-- ====== Confirm exchange modal ====== -->
+  <div id="confirm-modal" class="modal-back" hidden data-testid="confirm-modal">
+    <div class="modal" data-testid="confirm-modal-content">
+      <h2 class="modal-title">⚠ 确认兑换</h2>
+      <p id="confirm-text" class="confirm-text">确定花 <strong>10</strong> 金币换 <strong>10 分钟游戏时间</strong>?</p>
+      <div class="modal-actions">
+        <button type="button" id="confirm-cancel" class="btn btn-secondary">取消</button>
+        <button type="button" id="confirm-ok" class="btn btn-primary">确认兑换</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="app">
+    <a href="/index.html" class="shop-back">← 返回主面板</a>
+
+    <!-- ====== Hero (current balance + weekly remaining) ====== -->
+    <header class="shop-hero">
+      <h1 class="shop-hero-title">🪙 金币商店</h1>
+      <p class="shop-hero-sub">// 当前余额 <span id="shop-balance" class="coins-accent">0</span> 枚</p>
+      <p class="shop-weekly">本周剩余 (各商品独立计数): <strong data-testid="weekly-remaining">—</strong></p>
+    </header>
+
+    <!-- ====== Shop items (2-col grid) ====== -->
+    <section class="section" aria-label="商品列表">
+      <h2 class="shop-section-title">商品列表</h2>
+      <div id="shop-items" class="shop-grid" data-testid="shop-items" aria-live="polite">
+        <div class="shop-empty">加载中…</div>
+      </div>
+    </section>
+
+    <!-- ====== Redemption history ====== -->
+    <section class="section" aria-label="本周兑换历史">
+      <h2 class="shop-section-title">📅 本周兑换历史</h2>
+      <div id="week-history" class="shop-history-list" data-testid="week-history">
+        <div class="shop-empty">暂无本周兑换</div>
+      </div>
+    </section>
+
+    <section class="section" aria-label="历史兑换">
+      <h2 class="shop-section-title">📜 历史兑换 (最近 50 条)</h2>
+      <div id="all-history" class="shop-history-list" data-testid="all-history">
+        <div class="shop-empty">暂无历史兑换</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast (same #toast selector as index.html — reuses app.css .toast rules) -->
+  <div id="toast" class="toast" role="status" aria-live="polite" data-testid="toast"></div>
+
+  <script src="/shared/emoji-presets.js" defer></script>
+  <script src="/shop.js?v=1" defer></script>
+</body>
+</html>

@@ -1016,6 +1016,9 @@ function bindEvents() {
   $('#health-confirm-delete-modal')?.addEventListener('click', (e) => {
     if (e.target.id === 'health-confirm-delete-modal') closeConfirmDelete();
   });
+  // M4: tap balance-card (3rd, coins) → open /shop.html (Q5 06-11 拍板 (a))
+  // CSS uses cursor:pointer (set in app.css balance-card.coins rule) for affordance.
+  $('#card-coins')?.addEventListener('click', () => { window.location.href = '/shop.html'; });
 }
 
 async function boot() {
