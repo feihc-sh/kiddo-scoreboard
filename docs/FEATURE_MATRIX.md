@@ -3,8 +3,8 @@
 > 一张大表看清"业务规则 / UI 功能 / 测试覆盖"三件套。
 > 给 agent / 用户看: **每个功能点有没有测, 测了什么, 还有什么 gap。**
 
-**最后更新**: 2026-06-09
-**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (15 UI 功能) ↔ 24 unit + 53 e2e = **77 测试文件** (v2.2 baseline + 2 P0 + 2 P1 regression, post-#28+#29+#17+#19 rebase)
+**最后更新**: 2026-06-16
+**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (19 UI 功能, 含 3.16.1-3.16.4 coin shop v3) ↔ 24 unit + 53 e2e + 21 coin (12 functional + 4 SQL invariant + 5 visual) = **98 测试文件** (v2.2 baseline + 2 P0 + 2 P1 regression + v3 coin shop PR)
 **最新 Qual 报告**:
 - `QUAL_REPORT_2026-06-09-p0-admin-hard-delete-fk.md` (P0 永久删除 FK 约束, #28)
 - `QUAL_REPORT_2026-06-09-p0-revoke-event-sync.md` (P0 撤销 event 不同步 child UI, #29)
@@ -63,8 +63,12 @@
 | **3.13** | Child Recent Events | ✓ | — | — | `ui-child-events.spec.ts` `smoke-child-recent.spec.ts` |
 | **3.14** | Child Sleep Lockout (v2.1) | ✓ | ✓ | ✓ | `sleep-lockout.spec.ts` `ui-child-main.spec.ts` (含 cutoff 行为) |
 | **3.15** | Admin Hard Delete (v2.2) | ✓ | ✓ | ✓ | `ui-admin-hard-delete.spec.ts` (smoke + 2 happy) |
+| **3.16.1** | Child Shop Page (v3) | ✓ | ✓ | ✓ | `coin-system.spec.ts` F9-F10 + `coin-visual-regression.spec.ts` (5 visual) |
+| **3.16.2** | Child Balance Card 跳转 (v3) | ✓ | ✓ | — | `coin-system.spec.ts` F12 |
+| **3.16.3** | Child 兑换历史 (v3) | ✓ | ✓ | — | `coin-system.spec.ts` F11 |
+| **3.16.4** | Admin Shop Pending Fulfill (v3) | ✓ | ✓ | — | `coin-system.spec.ts` (F6 admin 部分) + `coin-visual-regression.spec.ts` (visual #2 confirm modal) |
 
-**UI 功能覆盖率**: **15/15 = 100%** ✅
+**UI 功能覆盖率**: **19/19 = 100%** ✅ (3.1-3.15 baseline + 3.16.1-3.16.4 coin shop v3)
 
 ---
 

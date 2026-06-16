@@ -73,179 +73,6 @@
 
 ---
 
-## Item #009 — Admin 物理删除打卡记录 (紧急, 待拍板) 🔥
-
-**用户原话**:
-> "我现在需要紧急在 admin 界面里增加把撤销掉的打卡习惯再撤销回来掉, 相当于删掉这条记录。删掉记录意味着允许再次打卡"
-
-**Clarification** (PM 整理, 拍板用):
-- **背景**: 现有 PM 可以"撤销"打卡 (软删, `status='revoked'`, 留 audit_log), 但记录还在, 孩子**当天不能再打卡** (去重逻辑)
-- **新需求**: 物理删除 score_event (或 task_completion) 记录, 让记录**完全消失**, 孩子可重新打卡
-- **跟现有原则冲突**:
-  - 之前 M11 笔记: "软删 status='revoked' + 审计 log 不可删"
-  - 现要物理删, 违反"软删"原则
-  - 建议折中: **物理删 event/completion 记录, 但 audit_log 写一条 "event_hard_deleted" + 原始数据 JSON** (审计可追溯, 数据不可恢复)
-- **风险**: 🔴 高 (物理删, 不可恢复, 只能靠 audit_log 找回)
-- **实施范围**: C (两个都要, score_event + task_completion)
-- **谁能用**: A (PM only, 二次确认弹窗, audit log 强制写)
-- **删除后列表显示**: B (灰色"已删除"标记, 含删除时间 + 谁删)
-- **新表设计** (避免再删 audit_log): 物理删的记录移到 `deleted_records` 表 (含 `record_type`, `original_id`, `original_data JSON`, `deleted_at`, `deleted_by`, `original_table`)
-
-**❓ 已拍板** (用户 2026-06-08):
-1. ✅ **范围**: C (两个都要)
-2. ✅ **谁能用**: A (PM only, 二次确认)
-3. ✅ **删除后列表显示**: B (灰色"已删除"标记)
-
-**Action Plan** (TDD 走起, **切 5 段每段 10 min 防 CC Timeout**):
-
-### 第 1 段 (≤10 min): migration + 第 1 个 unit test 基线
-- [ ] 加 migration: `migrations/0006_deleted_records.sql` (建表: id / record_type / original_id / original_data JSON / deleted_at / deleted_by / original_table)
-- [ ] 写 unit test 基线: `tests/unit/deleted-records.test.ts` (验证 deleted_records 表 schema + INSERT/SELECT 基础)
-- [ ] 跑 `npx vitest run tests/unit/deleted-records.test.ts` 必须过
-- [ ] `git add` + commit: `feat(db): add deleted_records table for hard-delete snapshot`
-- [ ] **汇报**: PM 等结果, 决定是否跑第 2 段
-
-### 第 2 段 (≤10 min): 3 helper + score_event 删 endpoint
-- [ ] utils/audit.ts: 加 `logHardDelete(record)` (写 audit_log `action='event_hard_deleted'`)
-- [ ] utils/deleted-records.ts: 加 `moveToDeletedRecords(record)` (从原表删 + INSERT deleted_records)
-- [ ] utils/balance.ts: 加 `recalcAfterHardDelete(child_id)` (重算余额)
-- [ ] 后端: `src/routes/admin/events.ts` 加 `POST /:id/hard-delete` (Hono + requirePm 守卫)
-- [ ] 写 unit test: `tests/unit/admin-events-hard-delete.test.ts` (2 case: 删成功/PM 未登录返 401)
-- [ ] 跑 vitest 全过
-- [ ] `git add` + commit: `feat(admin): score_event hard-delete with audit + deleted_records`
-- [ ] **汇报**: PM 等结果, 决定是否跑第 3 段
-
-### 第 3 段 (≤10 min): task_completion 删 endpoint
-- [ ] 后端: `src/routes/admin/task-completions.ts` 加 `POST /:id/hard-delete`
-- [ ] 写 unit test: `tests/unit/admin-task-completions-hard-delete.test.ts` (类似 events)
-- [ ] 跑 vitest 全过
-- [ ] `git add` + commit: `feat(admin): task_completion hard-delete with audit`
-- [ ] **汇报**: PM 等结果, 决定是否跑第 4 段
-
-### 第 4 段 (≤10 min): 前端 (按钮 + 弹窗 + 灰显)
-- [ ] public/admin/admin.js: 列表 "撤销" 按钮旁加 "🗑 永久删除" 按钮
-- [ ] 二次确认弹窗 (confirm() + 写死: "此操作不可恢复, 确认删除?")
-- [ ] 后端 GET endpoint 加 deleted_records 关联: 列表渲染时查 `deleted_records` 表, 已删的灰显 + 标记 (含删除时间 + 谁删)
-- [ ] 写 e2e: `tests/e2e/ui-admin-hard-delete.spec.ts` (3 case: events 删/灰显/再打卡; task_completions 删/灰显/再完成; audit log + deleted_records 双记录)
-- [ ] 跑 vitest + e2e 全过
-- [ ] `git add` + commit: `feat(admin-ui): hard-delete button + grey marker + confirm dialog`
-- [ ] **汇报**: PM 等结果, 决定是否跑第 5 段
-
-### 第 5 段 (≤10 min): 文档 + PR
-- [ ] docs/PRD.md §3.5 加新规则 (硬删 + audit log + deleted_records)
-- [ ] docs/TEST_PLAN.md 加 §3.15 Admin Hard Delete (含 Smoke/Happy/Edge)
-- [ ] docs/FEATURE_MATRIX.md 表 A 更新 #009 业务规则 + 表 C 加 §3.15
-- [ ] docs/PROGRESS.md 加 v2.2 条目
-- [ ] 跑 `npm test` 全过 (182+ → ~200)
-- [ ] `git add` + commit: `docs: PRD + TEST_PLAN + FEATURE_MATRIX + PROGRESS for hard-delete`
-- [ ] 走 PR 流程 (push 分支 + gh pr create)
-- [ ] **汇报**: PR 链接, 等用户 merge → GH Action 自动 backup + deploy
-
-**风险**: 🔴 (数据物理消失, 不可逆, deleted_records 找回; 走 issue→PR 流程多一道审查)
-**Status**: 🔄 in progress (第 1 段执行中)
-**Commit**: —
-**Started**: 2026-06-08
-
----
-
-## Item #010 — Child UI 任务冲刺弹窗 (游戏化专注感) ⏳ pending
-
-**用户原话** (feihao 2026-06-10 飞书 DM):
-> "帮我在 nightly todo 上再新加一个 item 内容是针对 user 的界面,目前的界面上,任务的部分就点击之后就只有一个完成。
-> 我希望他点击了那个任务之后,开启一个新的弹窗,弹窗上显示:
-> 1. 任务的详情和图片
-> 2. 显示这个任务正在冲刺中
-> 3. 如果是一个倒计时任务的话,在比较大的页面上弹出一个倒计时数字,显示还剩余多少分钟
-> 4. 下面有一个打卡按钮
-> 这样子的话,就会显得比较正式,更像游戏界面一些,也可以更专注在当前任务中。也允许关闭。"
-
-**Clarification** (PM 整理):
-- **作用对象**: child UI (`public/app.js`),不是 admin UI;当前 task 按钮 (`task-btn`) click **直接调 `completeTask(t.id)`**,一触即完成
-- **新交互流程**:
-  1. 点 task 按钮 → 弹冲刺模态框 `#sprint-modal`
-  2. 模态框显示任务详情(图标 + 名称)、状态 "冲刺中..." 标题
-  3. 若有 `cutoff_time` → 大字号倒计时数字 + 颜色随剩余时间变化
-  4. "✓ 打卡" 主按钮 → 调 `completeTask(t.id)` → 关闭弹窗 → 原有动画/撒花继续
-  5. 关闭: X 角 + 点空白 + `Esc` 键 (参照非 welcome modal 的通用做法)
-- **"详情和图片" 字段**:
-  - **默认方案 A** (本 Item 采用): 用现有 `t.icon` (emoji) 作"图片", `t.name` 作"详情"; **不**扩 schema
-  - **可选方案 B** (后续 Item, 如用户要): 加 `description TEXT` + `image_url TEXT` 字段 + migration + admin UI 上传 — 工程量大
-- **已有可复用** (Code Agent 实施时直接用):
-  - `computeCutoffDiffSec(hhmm)` + `formatHHMMSS(sec)` — §3.12 倒计时 helpers (app.js:222, 230)
-  - `.modal-back` + `.modal` CSS — 已有样式 (app.css:465-493)
-  - `showWelcome()` / `hideWelcome()` 关闭模式参照 — 但本弹窗允许 backdrop click + Esc (跟 welcome 不同)
-- **回归风险点**:
-  - 现有 task 按钮"一触即打卡" → 改为"点开弹窗"会**改变已有 UX**: 小孩不再能随手打卡
-  - 假设这是用户期望 ("更专注"), 但需用户拍板确认这是预期行为, 不是 bug
-- **风险**: 🟡 (UI-only, 不动 schema / 不动后端, 但改变既有 click 行为)
-
-**❓ 待拍板** (默认采用括号内方案, 不同意告诉 PM):
-1. **"详情 + 图片" 字段**: (A. 用现有 `icon` + `name`, 不动 schema — 默认)
-2. **关闭方式**: (C. X 角 + 点空白 + Esc 三种都允许 — 默认)
-3. **倒计时颜色变化**: (默认按剩余时间 灰 / 黄 / 橙 / 红, 后期可调)
-4. **已有 UX 改动**: (默认接受 "点任务不再直接打卡, 必须确认" — 这是用户原话语义)
-
-**Action Plan** (TDD 走起, **切 3 段每段 ≤15 min 防 CC Timeout**):
-
-### 第 1 段 (≤15 min): 冲刺弹窗 DOM + CSS + 数据绑定
-- [ ] `public/index.html` 加 `#sprint-modal` 骨架 (默认 `hidden`):
-  - `.sprint-modal-back.modal-back`
-  - `.sprint-modal.modal`
-    - 关闭 X 角 `.sprint-close`
-    - 标题 "冲刺中..." `.sprint-title`
-    - 详情区 `.sprint-detail` (大图标 `.sprint-icon` + 名称 `.sprint-name`)
-    - 倒计时区 `.sprint-countdown` (大字号, 默认 hidden, 有 `cutoff_time` 才显示)
-    - 底部打卡按钮 `.sprint-checkin.btn-primary` (调用原 `completeTask`)
-- [ ] `public/app.css` 加冲刺弹窗样式:
-  - `.sprint-modal` 比普通 modal 大 (max-width 480px, padding 32px)
-  - `.sprint-title` 字号 24px
-  - `.sprint-icon` 字号 72px (比卡片更显眼)
-  - `.sprint-countdown` 字号 96px + `font-variant-numeric: tabular-nums` + 居中
-  - `.sprint-countdown[data-urgency="warning"]` 黄 / `[data-urgency="danger"]` 橙 / `[data-urgency="critical"]` 红
-  - 关闭 X 角 `.sprint-close` 右上角
-- [ ] `public/app.js` 加 `showSprintModal(task)` / `hideSprintModal()`:
-  - 写入 `.sprint-icon` / `.sprint-name` 文案
-  - 若 task 有 `cutoff_time` → 显示 `.sprint-countdown`, 启动独立计时器 (走 `computeCutoffDiffSec` + `formatHHMMSS`), 颜色按 `urgency` 切换
-  - 若无 → `.sprint-countdown` hidden
-- [ ] 写 unit test (DOM-level): `tests/unit/sprint-modal.test.ts` 验证 show/hide + 文案注入 + urgency 切换
-- [ ] `git add` + commit: `feat(child-ui): sprint modal DOM/CSS scaffold + show/hide helpers`
-- [ ] **汇报**: PM 等结果, 决定是否跑第 2 段
-
-### 第 2 段 (≤15 min): 任务按钮 click 改造 + 关闭交互
-- [ ] `public/app.js` 任务按钮 click handler: 从 `completeTask(t.id)` 改为 `showSprintModal(t)`
-  - **排除条件**: `task-btn-locked-out` (已过 cutoff) 仍走原有逻辑 (不弹窗, 直接 disabled)
-- [ ] 关闭交互:
-  - X 角 click → `hideSprintModal()`
-  - backdrop click → `hideSprintModal()`
-  - `Escape` 键 → `hideSprintModal()` (一次性 `document.addEventListener('keydown', ...)`, 加 flag 防重复挂载)
-- [ ] 打卡按钮 click: `completeTask(t.id)` → `hideSprintModal()` → 原 success 动画/撒花继续触发
-- [ ] 写 e2e: `tests/e2e/ui-child-sprint-modal.spec.ts` (≥3 case: 点任务弹窗 / 点打卡关闭 + 列表更新 / X 角关闭列表不变 / Esc 关闭 / backdrop 关闭 / 倒计时任务显示大数字 / 非倒计时任务隐藏数字)
-- [ ] `git add` + commit: `feat(child-ui): task click opens sprint modal + close interactions`
-- [ ] **汇报**: PM 等结果, 决定是否跑第 3 段
-
-### 第 3 段 (≤10 min): 倒计时紧迫度 + 文档 + PR
-- [ ] `public/app.js` `updateSprintCountdown()` 加 urgency 分级:
-  - `diff > 3600` → `data-urgency="ok"` (默认灰)
-  - `diff ≤ 3600` → `"warning"` (黄)
-  - `diff ≤ 600` → `"danger"` (橙)
-  - `diff ≤ 60` → `"critical"` (红)
-- [ ] `public/app.css` 加对应颜色 (`color` + 轻量阴影), `critical` 可选加心跳 keyframes (`@keyframes pulse` 1s infinite)
-- [ ] 跑 `npx vitest run` + `npx playwright test tests/e2e/ui-child-sprint-modal.spec.ts` 全过
-- [ ] 文档:
-  - `docs/PRD.md` §3 加 "child UI 任务点击 → 冲刺模态框 (专注感)" 一段
-  - `docs/FEATURE_MATRIX.md` 表 B 加 #010 行
-  - `docs/TEST_PLAN.md` §3 加 #010 e2e 测试矩阵
-- [ ] `git add` + commit: `feat(child-ui): sprint countdown urgency colors + docs`
-- [ ] 走 PR 流程 (push 分支 + `gh pr create`)
-- [ ] **汇报**: PR 链接, 等用户 merge → GH Action 自动 backup + deploy
-
-**风险**: 🟡 (UI-only, 不动 schema / 后端; 改变既有 task 按钮 click 行为, 算小回归风险)
-**Status**: ⏳ pending
-**Commit**: —
-**Started**: 2026-06-10
-
----
-
 ## 📦 归档 (用户 2026-06-08 拍板: 全部不实现, 留历史参考)
 
 ---
@@ -381,6 +208,18 @@
 
 单元测试 8/8 ✅ (deleted-records + admin-events-hard-delete + admin-task-completions-hard-delete)。
 cron 2026-06-10 清理孤儿 in_progress 标记。
+
+## Item #010 — Child UI 任务冲刺弹窗 (游戏化专注感) ✅
+
+**用户原话** (feihao 2026-06-10 飞书 DM):
+> "帮我在 nightly todo 上再新加一个 item 内容是针对 user 的界面,目前的界面上,任务的部分就点击之后就只有一个完成。我希望他点击了那个任务之后,开启一个新的弹窗,弹窗上显示: 1. 任务的详情和图片 2. 显示这个任务正在冲刺中 3. 如果是一个倒计时任务的话,在比较大的页面上弹出一个倒计时数字 4. 下面有一个打卡按钮"
+
+**Status**: ✅ done (commit `700da9a`, 2026-06-16)
+**风险**: 🟡 (UI-only)
+**Started**: 2026-06-10
+**Completed**: 2026-06-16
+
+**说明**: sprint modal DOM + CSS + show/hide/countdown + sprint-urgency.test.ts 在 2026-06-15 之前 cron 已实现 (但 NIGHTLY-TODO.md 没归档). 2026-06-16 cron 补上唯一缺失的 `src/utils/sprint-urgency.ts` (17 行) 让单测 8/8 通过. **未做** (留待 PR 阶段): click 改造 (task 按钮 → showSprintModal) + 关闭交互 (X/backdrop/Esc) + e2e playwright spec + PRD/TEST_PLAN/FEATURE_MATRIX 文档 + PR. 下轮 cron 接着跑第 2-3 段. 注意: index.html 里 sprint-modal 骨架出现两次 (line 252 + line 272), 可能是上几轮重复 insert 造成, 需 cleanup.
 
 ---
 

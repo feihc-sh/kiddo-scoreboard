@@ -19,13 +19,16 @@
    - 3.4 [PM All Events](#34-pm-all-events)
    - 3.5 [PM Task Config (CRUD)](#35-pm-task-config-crud)
    - 3.6 [PM Audit Log](#36-pm-audit-log)
-   - 3.7 [PM Exchange](#37-pm-exchange)
+   - 3.7 [PM 双账户兑换 (game ↔ money)](#37-pm-双账户兑换-game--money)
    - 3.8 [PM Weekly Grant](#38-pm-weekly-grant)
    - 3.9 [Child First-time Flow](#39-child-first-time-flow)
    - 3.10 [Child Main Page](#310-child-main-page)
    - 3.11 [Child Task Complete](#311-child-task-complete)
    - 3.12 [Child Event Submit](#312-child-event-submit)
    - 3.13 [Child Recent Events](#313-child-recent-events)
+   - 3.14 [Child Sleep Lockout](#314-child-sleep-lockout-self-lockout-task-type--item-002)
+   - 3.15 [Admin Hard Delete](#315-admin-hard-delete-v22-新增-item-009)
+   - 3.16 [Coin System Test Scenarios](#316-coin-system-test-scenarios-v3-新增)
 4. [Cross-Cutting E2E Flows](#4-cross-cutting-e2e-flows)
 5. [Visual & UX Tests (Manual QA)](#5-visual--ux-tests-manual-qa)
 6. [Non-Functional Tests](#6-non-functional-tests)
@@ -516,7 +519,10 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 
 ---
 
-### 3.7 PM Exchange
+### 3.7 PM 双账户兑换 (game ↔ money)
+
+> **消歧**: 本节"PM Exchange" = game_time ↔ pocket_money 双账户兑换 (PM 在 admin 后台手动操作)。
+> 金币商店兑换 (coin → game_time / custom 商品) 是 §3.16 Coin System,**不是**本节。
 
 **Spec file:** `tests/e2e/ui-admin-exchange.spec.ts`
 **Page:** `/admin/` → Section E `#sec-exchange`
@@ -1063,6 +1069,119 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 
 #### Cross-cutting
 - Hard-delete flow §4 Flow G walks: events 删 → 灰显 → 孩子再打卡 (one full scenario per direction).
+
+---
+
+### 3.16 Coin System Test Scenarios (v3 新增)
+
+> **来源**: `docs/coin-system-rfc.md` §7 (F1-F12 验收) + `docs/coin-system-test-plan.md` §2/§3 + `docs/coin-shop-requirements.md` §7.
+> **消歧**: 本节是**金币商店** (coin → game_time / custom 商品)。**不是** §3.7 双账户兑换 (game ↔ money)。
+
+**Spec files (3 个 e2e, 21 个 case)**:
+- `tests/e2e/coin-system.spec.ts` — 12 functional F1-F12
+- `tests/e2e/coin-invariants.spec.ts` — 4 SQL invariant INV-1-4
+- `tests/e2e/coin-visual-regression.spec.ts` — 5 visual baseline
+
+**Page**: `/shop.html` (child) + `/admin/index.html` (PM 待发 section H)
+
+**Element selectors (data-testid contract, M4 §6.1/§6.2 实现)**:
+- `[data-testid="shop-items"]` — 根 grid
+- `[data-testid="shop-item-{id}"]` — 单个商品卡
+- `[data-testid="exchange-btn-{id}"]` — 兑换按钮 (id=1 游戏时间, id=2 小乐高)
+- `[data-testid="weekly-remaining"]` — 周剩余 widget (e.g. `1 / 3`)
+- `[data-testid="week-history"]` / `[data-testid="all-history"]` — 历史区
+- `[data-testid="history-item"]` — 单条历史 (本周或全部)
+- `[data-testid="confirm-modal"]` — 兑换确认弹窗
+- `[data-testid="toast"]` — 成功/失败 toast (复用 `#toast`)
+
+#### F1 — 任务完成 +1 金币
+- Steps: Seed child user + 1 个 task; child `POST /api/me/tasks/:id/complete`; 查询 DB `score_events`。
+- Assert: 1 条 `type='coins' change_value=+1 status='approved'` 写入; balance 正确反映 (via `GET /api/coins/balance`)。
+
+#### F2 — 全部任务完成 +3 bonus
+- Steps: Seed child + N 个 task, 全部完成; 查询 DB。
+- Assert: 额外 1 条 `type='coins' change_value=+3` 写入, `week_of` 锁定本周 (ISO 8601 format like '2026-W24')。
+
+#### F3 — 撤销任务回收 -1 金币
+- Steps: F1 后, PM `POST /api/admin/task-completions/:id/revoke`。
+- Assert: 1 条 `type='coins' change_value=-1 status='approved'` 写入 (来源 `source='revoke'`); balance 减少。
+
+#### F4 — 撤销任务回收 bonus -3
+- Steps: F2 后, 撤销任一 task completion 触发 bonus 回滚。
+- Assert: 1 条 `type='coins' change_value=-3` 写入 (如果 bonus 已发, 应回收; 验证 M3 hook 正确)。
+
+#### F5 — 撤销后重做再发 bonus
+- Steps: F3 后, child 重新 complete 同一 task; 验证所有 task 都完成。
+- Assert: bonus 重新发 (幂等性, M3 实现正确)。
+
+#### F6 — 兑换扣金币 + 加游戏时间 (functional + admin 部分)
+- Steps: Seed child balance=100 coins; child 点 `exchange-btn-1` → confirm modal → 确认。
+- Assert:
+  - DB: 2 条 `score_events`: `-10 coins` (source='exchange') + `+10 game_time` (source='exchange')
+  - `shop_redemptions`: 1 条 `status='approved'`, `cost_coins=10`, `reward_value=10`, `reward_type='game_time'`, `week_of` = 本周 ISO
+  - `audit_log`: 1 条 `action='coin_exchange'` 含 details JSON
+  - UI: toast `✅ 兑换成功!`; balance 减 10; 历史区多 1 条
+  - **Admin 部分 (3.16.4)**: PM 在 admin 待发 section 看 id=1 不在 (因为是 game_time, 自动 approved), 只有 id=2 (custom) 才出现
+
+#### F7 — 周限额 3 次
+- Steps: Seed child balance=100 coins, item id=1 weekly_limit=3; child 连续 `POST /api/coins/exchange` 4 次。
+- Assert: 前 3 次返 200; 第 4 次返 400 `WEEKLY_LIMIT_REACHED` 含 `details={used:3, limit:3, week_of}`。
+
+#### F8 — 跨周自动重置
+- Steps: Mock time 跳到本周日 23:59; child 兑换 3 次到限额; mock time 跳到下周一 00:00; 再试 1 次。
+- Assert: 第 4 次成功 (本周已重置, `week_of` 跨周)。
+
+#### F9 — 按钮置灰 (余额不足)
+- Steps: Seed child balance=5 coins; 打开 `/shop.html`。
+- Assert:
+  - `exchange-btn-1` (cost=10) `disabled`, 文本含 `还差 5 金币`
+  - computed style: `opacity < 1` (Mecha 置灰)
+  - 即使绕过 disabled, `POST /api/coins/exchange` 返 400 `INSUFFICIENT_COINS` 含 `details={need:10, have:5}` (server-side 校验)
+
+#### F10 — 按钮置灰 (周次数用完)
+- Steps: Seed child balance=100; item id=1 已兑换 3 次; 打开 `/shop.html`。
+- Assert:
+  - `exchange-btn-1` `disabled`, 文本含 `本周已用 3 / 3 次`
+  - `[data-testid="weekly-remaining"]` 显示 `0 / 3`
+  - `POST /api/coins/exchange` 返 400 `WEEKLY_LIMIT_REACHED`
+
+#### F11 — 兑换历史展示
+- Steps: Seed 2 exchanges 本周 + 1 exchange 上一周 (mock 时间); 打开 `/shop.html`。
+- Assert:
+  - `[data-testid="week-history"] [data-testid="history-item"]` count = 2
+  - `[data-testid="all-history"] [data-testid="history-item"]` count >= 3
+  - 每个 history-item 含: icon (e.g. 🎮) + 商品名 + 成本 `10 🪙` + 时间 `YYYY-MM-DD HH:mm` + status badge (待发/已发)
+
+#### F12 — 第 3 个 balance card 显示 + 跳转
+- Steps: Seed child balance=1 coin; 打开 `/index.html`。
+- Assert:
+  - `[id="card-coins"]` 可见, 不含 `placeholder` class, 含 `金币` + `1`
+  - computed style: `cursor: pointer`
+  - 点击 → 跳转 `/shop.html`, URL 匹配 `/\/shop(\.html)?$/`
+  - 新页 `[data-testid="shop-items"]` 可见
+
+#### INV-1 — balance 一致性
+- SQL CHECK: `SELECT SUM(change_value) FROM score_events WHERE user_id=? AND type='coins' AND status='approved' AND source IN ('task_complete','revoke','exchange','manual','daily_bonus')` = `getCoinBalance(user_id)` (允许 0 偏差)
+
+#### INV-2 — task_completion 唯一 coin grant
+- SQL CHECK: 同一 `task_completion_id` 只产生 1 条 `type='coins' change_value=+1` event (无重复 grant)
+
+#### INV-3 — bonus 每周每 user ≤1
+- SQL CHECK: 同一 user_id + week_of, `type='coins' change_value=+3` (bonus) 最多 1 条
+
+#### INV-4 — week_of ISO 8601
+- SQL CHECK: 所有 `shop_redemptions.week_of` 匹配 `^\d{4}-W\d{2}$` (e.g. `2026-W24`)
+
+#### Visual Regression (5 baselines, iPad 1180x820, maxDiffPixelRatio 0.01)
+1. **shop-page-default** — 商店页 grid 2 列, 2 件商品, balance 100
+2. **shop-confirm-modal** — 兑换 confirm 弹窗 (点 `exchange-btn-1` 后)
+3. **shop-insufficient-coins** — 余额不足按钮置灰 (balance=5, 文案 `还差 5 金币`)
+4. **shop-weekly-limit-reached** — 周次数用完按钮置灰 (3/3, 文案 `本周已用 3 / 3 次`)
+5. **shop-redemption-success** — 兑换成功 toast (含 `兑换成功`)
+
+#### Cross-cutting (per coin-shop-requirements.md §10 risk #2)
+- M3/M4/M5/M6 实施跟 main 分支无交集; deploy 必带 `User-Agent: Mozilla/5.0` 绕过 GH Action bot 检测 (per `kiddo-scoreboard-deploy` §9a)
+- 2 个 pre-existing flaky in `me-tasks-complete.test.ts` 跟 coin shop 无关, 单独 issue 跟踪, 不阻塞本 PR
 
 ---
 

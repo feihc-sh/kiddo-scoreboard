@@ -13,6 +13,8 @@ import weeklyGrant from './weekly-grant.ts';
 import tasksConfig from './tasks.ts';
 import deletedRecordsRoute from './deleted-records.ts';
 import adminHealth from './health.ts';
+// Module 7 (Coin System, M3 — RFC §4.5): PM 手动 confirm kind='custom' 兑换
+import shopFulfill from './shop-fulfill.ts';
 import type { Env } from '../../worker.ts';
 
 const admin = new Hono<{ Bindings: Env }>();
@@ -31,5 +33,7 @@ admin.route('/weekly-grant', weeklyGrant);
 admin.route('/tasks', tasksConfig);
 admin.route('/deleted-records', deletedRecordsRoute);
 admin.route('/health', adminHealth);
+// Module 7 (Coin System, M3): POST /api/admin/shop/fulfill/:id
+admin.route('/shop/fulfill', shopFulfill);
 
 export default admin;

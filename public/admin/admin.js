@@ -31,6 +31,8 @@ const state = {
   // `${record_type}:${original_id}` so the same id space can carry both
   // score_event and task_completion entries without collision.
   deletedRecords: {},    // { 'score_event:42': { deleted_at, deleted_by, ... } }
+  // M4 §6.5: PM 待发商品列表 (kind=custom redemptions status='pending')
+  pendingRedemptions: [],  // AdminRedemption[]
 };
 
 // ---------- Toast ----------
@@ -135,6 +137,17 @@ async function loadCompletions() {
   const r = await api('GET', '/api/admin/task-completions?' + qs.toString());
   state.completions = r.completions;
 }
+async function loadPendingRedemptions() {
+  // M4 §6.5: 列 kind=custom 待发商品 (status='pending')。Best-effort:
+  // 端点缺失或失败时, render 拿空 list 即可, section 显示 empty state。
+  try {
+    const r = await api('GET', '/api/admin/shop/fulfill?status=pending');
+    state.pendingRedemptions = Array.isArray(r.redemptions) ? r.redemptions : [];
+  } catch (e) {
+    if (e.message === 'UNAUTHORIZED') throw e;  // bounce to login
+    state.pendingRedemptions = [];
+  }
+}
 async function loadDeletedRecords() {
   // Best-effort: if the endpoint is missing or the call fails, we just
   // render with no markers. The grey-out is a UX nicety, not a contract.
@@ -167,6 +180,7 @@ async function refreshAll() {
       loadAudit(),
       loadCompletions(),
       loadDeletedRecords(),
+      loadPendingRedemptions(),
     ]);
     renderAll();
   } catch (e) {
@@ -183,6 +197,61 @@ function renderAll() {
   renderTasks();
   renderAudit();
   renderCompletions();
+  renderPendingRedemptions();
+}
+
+// ---------- H. Shop pending fulfill (M4 §6.5) ----------
+function renderPendingRedemptions() {
+  const root = $('#shop-pending-list');
+  const empty = $('#shop-pending-empty');
+  if (!root) return;
+  $('#count-shop-pending').textContent = state.pendingRedemptions.length;
+  root.innerHTML = '';
+  if (state.pendingRedemptions.length === 0) {
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  state.pendingRedemptions.forEach((r) => {
+    const icon = r.item_icon || '🎁';
+    const name = escapeHtml(r.item_name || `item#${r.item_id}`);
+    const child = r.child_name ? escapeHtml(r.child_name) : `user #${r.user_id}`;
+    root.appendChild(rowEl(`
+      <div class="pm-row-main">
+        <div class="pm-row-title">
+          ${icon} ${name}
+          <span class="pm-badge pending">待发</span>
+        </div>
+        <div class="pm-row-meta">
+          ${child} 兑换 · ${r.cost_coins} 🪙 · week_of ${escapeHtml(r.week_of || '—')}
+          · <span class="pm-mono">#${r.id}</span>
+          · ${fmtTime(r.redeemed_at)}
+        </div>
+      </div>
+      <div class="pm-row-actions">
+        <button class="pm-btn primary"
+                data-act="fulfill-redemption"
+                data-id="${r.id}">✓ 已发</button>
+      </div>
+    `));
+  });
+}
+
+async function fulfillRedemption(id) {
+  if (!Number.isInteger(id) || id <= 0) return;
+  const ok = window.confirm(`确定已发货 #${id}? 此操作不可撤销。`);
+  if (!ok) return;
+  try {
+    await api('POST', `/api/admin/shop/fulfill/${id}`);
+    toast('✅ 已发货', 'success');
+    // Reload list (fulfilled ones disappear)
+    await loadPendingRedemptions();
+    renderPendingRedemptions();
+  } catch (e) {
+    if (e.message === 'UNAUTHORIZED') return;
+    const msg = e.message === 'INVALID_STATUS' ? '该兑换已发货或被撤销' : '发货失败: ' + e.message;
+    toast(msg, 'error');
+  }
 }
 function renderHeader() {
   const u = state.user;
@@ -664,6 +733,7 @@ function bindDelegatedActions() {
     if (act === 'revoke-completion') return revokeCompletion(id);
     if (act === 'hard-delete-event') return hardDeleteEvent(id);
     if (act === 'hard-delete-completion') return hardDeleteCompletion(id);
+    if (act === 'fulfill-redemption') return fulfillRedemption(id);
   });
 }
 
