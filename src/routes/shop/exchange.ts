@@ -132,7 +132,9 @@ exchange.post('/exchange', async (c) => {
   // 3) 周限额校验 (RFC §4.4 step 3)
   // 用 coin.ts 的 getWeeklyRedemptionCount, 它 M3 起包含 'consumed' / 'pending' / 'approved'
   // 三种状态 (排除 'revoked' — PM 撤销后 child 可再兑)。
-  const weekUsed = await getWeeklyRedemptionCount(db, CHILD_USER_ID, week);
+  // 2026-06-16 fix: 传 itemId 让 SQL 按 per-item 计数 (之前 SQL 缺 item_id 过滤, 把 user
+  // 全部 item 的本周兑换都算进 used, 错把 cross-item 兑换数当 same-item 计数).
+  const weekUsed = await getWeeklyRedemptionCount(db, CHILD_USER_ID, week, itemId);
   if (item.weekly_limit > 0 && weekUsed >= item.weekly_limit) {
     return jsonError(
       c,

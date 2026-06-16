@@ -54,7 +54,9 @@ shopItems.get('/', async (c) => {
   // can fold it into a single GROUP BY join.
   const items = await Promise.all(
     (result.results ?? []).map(async (it) => {
-      const used = await getWeeklyRedemptionCount(db, CHILD_USER_ID, week);
+      // 2026-06-16 fix: 传 it.id 让 getWeeklyRedemptionCount 按 per-item 计数
+      // (之前 SQL 缺 item_id 过滤, 算 user 全部 item 的本周兑换总数, N+1 loop 错算)
+      const used = await getWeeklyRedemptionCount(db, CHILD_USER_ID, week, it.id);
       const remaining = it.weekly_limit === 0
         ? Number.POSITIVE_INFINITY  // 0 = unlimited
         : Math.max(0, it.weekly_limit - used);

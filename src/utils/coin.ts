@@ -125,7 +125,8 @@ export async function findBonusEvent(
 }
 
 /**
- * Count redemptions a user has made this ISO week (excluding revoked).
+ * Count redemptions a user has made this ISO week for a specific item
+ * (excluding revoked).
  * Used by the weekly_limit check on POST /api/coins/exchange (M3, TC-F7)
  * and by GET /api/shop/items to compute `weekly_limit_remaining` (M4).
  *
@@ -134,24 +135,29 @@ export async function findBonusEvent(
  * a child who has redeemed a custom item shouldn't be able to redeem a
  * second one even if the PM hasn't yet fulfilled the first (TC-X8 fairness).
  *
+ * FIX (2026-06-16 feihao 报告): SQL 缺 `item_id` 过滤, 把 user 全部 item
+ * 的本周兑换都算进 used (例如 feihao 换 2 次游戏时间后, 小乐高 weekly_limit
+ * check 错用 total=2 跟 1 比较, 永远 fail). 加 itemId parameter + SQL filter.
+ *
  * weekOf: 'YYYY-Www' (RFC §2.3 ISO 8601 Monday-first).
  */
 export async function getWeeklyRedemptionCount(
   db: D1Database,
   userId: number,
   weekOf: string,
+  itemId: number,
 ): Promise<number> {
   const row = await db
     .prepare(
       `SELECT COUNT(*) AS cnt FROM shop_redemptions
-       WHERE user_id = ? AND week_of = ?
+       WHERE user_id = ? AND week_of = ? AND item_id = ?
          -- S2 (2026-06-15 feihao 拍板, v1.1 RFC §3.3): 新业务只查 'pending'/'approved'.
          -- v1 'consumed' / 'revoked' records 保留在 DB 但不参与新 week count
          -- (migration 0008 enum 仍含 4 个, 兼容 v1 已有 data; code 严格化在
          --  query 层, 不动 migration 避免破坏 v1 production data).
          AND status IN ('pending', 'approved')`,
     )
-    .bind(userId, weekOf)
+    .bind(userId, weekOf, itemId)
     .first<{ cnt: number }>();
   return Number(row?.cnt ?? 0);
 }
