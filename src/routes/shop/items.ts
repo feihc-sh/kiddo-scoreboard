@@ -10,7 +10,6 @@
 
 import { Hono } from 'hono';
 import type { Env } from '../../worker.ts';
-import { getWeeklyRedemptionCount } from '../../utils/coin.ts';
 import { currentWeek } from '../../utils/week.ts';
 
 const shopItems = new Hono<{ Bindings: Env }>();
@@ -33,51 +32,61 @@ interface ShopItemRow {
   is_active: number;
   sort_order: number;
   weekly_limit: number;
+  weekly_limit_used: number;
 }
 
 shopItems.get('/', async (c) => {
   const db = c.env.DB;
   const week = currentWeek();
 
+  // CC follow-up #2 (2026-06-16 PR #39 review): fold N+1 Promise.all loop
+  // (1 items query + N per-item getWeeklyRedemptionCount) into a single
+  // LEFT JOIN ... GROUP BY query. Same response shape, 1 query instead of N+1.
+  //
+  // Status filter 'pending'/'approved' (跟 coin.ts S2 严格化一致, v1.1 RFC §3.3):
+  // v1 'consumed' / 'revoked' records 保留在 DB 但不参与 new week count
+  // (migration 0008 enum 仍含 4 个, 兼容 v1 已有 data).
+  //
+  // COALESCE(SUM(...), 0) 保证 LEFT JOIN 没 match 的 item 也返 0 (not NULL).
   const result = await db
     .prepare(
-      `SELECT id, name, kind, cost_coins, reward_value, reward_type,
-              description, icon, is_active, sort_order, weekly_limit
-       FROM shop_items
-       WHERE is_active = 1
-       ORDER BY sort_order ASC, id ASC`,
+      `SELECT si.id, si.name, si.kind, si.cost_coins, si.reward_value, si.reward_type,
+              si.description, si.icon, si.is_active, si.sort_order, si.weekly_limit,
+              COALESCE(SUM(CASE WHEN sr.status IN ('pending', 'approved') THEN 1 ELSE 0 END), 0) AS weekly_limit_used
+       FROM shop_items si
+       LEFT JOIN shop_redemptions sr
+         ON sr.item_id = si.id
+         AND sr.user_id = ?
+         AND sr.week_of = ?
+       WHERE si.is_active = 1
+       GROUP BY si.id
+       ORDER BY si.sort_order ASC, si.id ASC`,
     )
+    .bind(CHILD_USER_ID, week)
     .all<ShopItemRow>();
 
-  // For each item, compute weekly_limit_remaining. We do N+1 (item count is
-  // bounded — v1=2, target < 10) so this is fine; if the catalog grows we
-  // can fold it into a single GROUP BY join.
-  const items = await Promise.all(
-    (result.results ?? []).map(async (it) => {
-      // 2026-06-16 fix: 传 it.id 让 getWeeklyRedemptionCount 按 per-item 计数
-      // (之前 SQL 缺 item_id 过滤, 算 user 全部 item 的本周兑换总数, N+1 loop 错算)
-      const used = await getWeeklyRedemptionCount(db, CHILD_USER_ID, week, it.id);
-      const remaining = it.weekly_limit === 0
-        ? Number.POSITIVE_INFINITY  // 0 = unlimited
-        : Math.max(0, it.weekly_limit - used);
-      return {
-        id: it.id,
-        name: it.name,
-        kind: it.kind,
-        cost_coins: it.cost_coins,
-        reward_value: it.reward_value,
-        reward_type: it.reward_type,
-        description: it.description,
-        icon: it.icon,
-        weekly_limit: it.weekly_limit,
-        weekly_limit_used: used,
-        weekly_limit_remaining: remaining === Number.POSITIVE_INFINITY ? null : remaining,
-        // Coarse "affordable / can_exchange" hints for child UI 按钮置灰。
-        // 注意: 这只是 UI 提示, 真验证在 POST /api/coins/exchange 服务端 (防 race)。
-        is_unlimited: it.weekly_limit === 0,
-      };
-    }),
-  );
+  // Compute weekly_limit_remaining / is_unlimited in JS (同原 logic).
+  const items = (result.results ?? []).map((it) => {
+    const remaining = it.weekly_limit === 0
+      ? Number.POSITIVE_INFINITY  // 0 = unlimited
+      : Math.max(0, it.weekly_limit - it.weekly_limit_used);
+    return {
+      id: it.id,
+      name: it.name,
+      kind: it.kind,
+      cost_coins: it.cost_coins,
+      reward_value: it.reward_value,
+      reward_type: it.reward_type,
+      description: it.description,
+      icon: it.icon,
+      weekly_limit: it.weekly_limit,
+      weekly_limit_used: it.weekly_limit_used,
+      weekly_limit_remaining: remaining === Number.POSITIVE_INFINITY ? null : remaining,
+      // Coarse "affordable / can_exchange" hints for child UI 按钮置灰。
+      // 注意: 这只是 UI 提示, 真验证在 POST /api/coins/exchange 服务端 (防 race)。
+      is_unlimited: it.weekly_limit === 0,
+    };
+  });
 
   return c.json({ week_of: week, items });
 });
