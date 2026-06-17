@@ -39,7 +39,7 @@
 
 ---
 
-## 📋 当前清单 (3 个 Item, 全部 ⏸ hold)
+## 📋 当前清单 (4 个 Item: 1 ⏳ pending, 3 ⏸ hold)
 
 ## Item #006 — 打卡日历 (月历可视化) ⏸ hold (用户 2026-06-08 暂缓)
 
@@ -220,6 +220,77 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 **Completed**: 2026-06-16
 
 **说明**: sprint modal DOM + CSS + show/hide/countdown + sprint-urgency.test.ts 在 2026-06-15 之前 cron 已实现 (但 NIGHTLY-TODO.md 没归档). 2026-06-16 cron 补上唯一缺失的 `src/utils/sprint-urgency.ts` (17 行) 让单测 8/8 通过. **未做** (留待 PR 阶段): click 改造 (task 按钮 → showSprintModal) + 关闭交互 (X/backdrop/Esc) + e2e playwright spec + PRD/TEST_PLAN/FEATURE_MATRIX 文档 + PR. 下轮 cron 接着跑第 2-3 段. 注意: index.html 里 sprint-modal 骨架出现两次 (line 252 + line 272), 可能是上几轮重复 insert 造成, 需 cleanup.
+
+---
+
+## Item #011 — 跑步小地图 + 积分礼包 (上海→苏州 主题) ⏳ pending
+
+**用户原话** (feihao 2026-06-17 飞书 DM):
+> "在 Nightly Todo 里再增加一个功能：记录跑步的每次公里数，并绘制一个小地图。每一次跑了多远的距离，会在一个虚拟的小地图上，从一个点移动到另一个点。当到达一个新的点位时（比如跑到10公里），可以开一个小礼包，礼包里有一个随机的积分"
+
+**用户拍板 (2026-06-17)**:
+1. **多张地图 + 第一张 = 上海→苏州**: 起点上海普陀区, 终点苏州. 总距离 ~95 km (普陀→苏州园区公路). **不均距**切 10 个目标, 路线曲折非直线, 有变化节奏.
+2. **风格 = 科技风手绘** (B2): 跟现有 child UI 视觉一致 (cyan glow + 网格底), 路径为自由曲线 SVG, 各目的地之间非直线连接.
+3. **推进方式 = C2**: 累计总公里数推进小人位置; 距离增长与本次打卡距离成正比; 一次打卡小人只前进一步 (不闪现).
+4. **积分概率分布 (D3)**: 60% 小奖 1-5, 35% 中奖 5-10, 5% 大奖 10-20. 每到一个**新点位** roll 一次.
+5. **录入 = E1**: 孩子点 🏃 emoji → 弹输入框填公里数 → 提交; **后台 PM 可撤销** (跟现有 score_event revoke 走相同审计模式).
+6. **多图通关**: 第一张 (上海→苏州) 跑完后, 孩子"通关"动画 → 开启下一张地图 (例如 苏州→杭州, 计划二期). 本期只做第 1 张.
+
+**Clarification** (PM 整理):
+- **数据模型 (3 张新表)**:
+  - `running_maps` (id, name, theme, total_km, is_active, display_order) — 主题地图清单
+  - `running_points` (id, map_id, name, order_index, cum_km) — 每个点的累计 km (含起点 0 km, 终点 95 km)
+  - `running_records` (id, child_id, map_id, km, awarded_point_id, awarded_minutes, created_at, revoked_at, revoked_by) — 每次打卡
+- **点位设计 (10 个, 不均距, 上海→苏州)** — Stage 1 由 CC 设计 seed:
+  - 0 km: 🏁 上海·普陀区 (起点)
+  - 1: ~8 km: 嘉定新城
+  - 2: ~22 km: 太仓
+  - 3: ~32 km: 昆山花桥
+  - 4: ~45 km: 昆山城区
+  - 5: ~58 km: 阳澄湖
+  - 6: ~72 km: 苏州相城区
+  - 7: ~82 km: 苏州姑苏区
+  - 8: ~89 km: 苏州工业园区
+  - 9: ~95 km: 🚩 苏州·金鸡湖 (终点)
+  - 设计原则: 8 次打卡完成 (一次 3-4 km × 8 = 24-32 km 太慢, 应让单次 3-4 km 推进感明显, 总 95 km 是**目标里程**而非时间)
+  - 调整: 实际点位 km 待 Stage 1 由 CC 查百度/高德确认, 不强制照搬上述数字
+- **小地图渲染**: SVG 500×300 viewBox, 路径用 `<path d="M ... C ... ">` cubic Bezier 拼成曲折线, 节点用 `<circle>` + 名称 label, 小人用 `<image href="...">` 或 emoji 字符. 进度按累计 cum_km / total_km 计算小人 position.
+- **礼物 modal**: 跟 #010 sprint modal 同套 CSS, 标题 "🎁 通关奖励!" / "🎁 到达 X 地点!", 中央大数字显示积分 (e.g. "+8 min"), "再跑一次" 关闭按钮.
+- **撤销语义 (X1 修订 2026-06-17)**: PM 在 admin UI 看到 running_records 列表, 可点 "↩ 撤销" (二次确认弹窗防误操作) → 写入 revoked_at + revoked_by + 减回积分 + **回退累计 km** (完全撤销本次记录, 跟 #009 硬删语义保持一致). **理由**: 防误点 (feihao 2026-06-17 拍板). 后续打卡按"撤销后累计"重新推进; 如果撤销后累计低于当前 point, 小人**自动回退**到对应 point.
+- **跨图解锁 (X2 修订 2026-06-17)**: 通关时 (cum_km >= total_km) 孩子界面弹大图恭喜 modal (跟礼物 modal 同样式, 80% 屏, 居中卡片, 撒花动画) → 标题 "🎉 恭喜通关! 上海→苏州" + 显示累计跑步次数/总 km/用时天数 + "查看下一张地图" 按钮 → **自动** `UPDATE running_maps SET is_active=1 WHERE display_order = current.display_order + 1`. 如果没有下一张 map, 显示 "🌍 等待 PM 制作下一张地图...". 本期只 seed 第 1 张; 第 2/3 张可以先 INSERT is_active=0 占位 (id=2,3, name 待定), 通关时若无下一张就显示等待页.
+- **可关闭性**: 孩子可 "🏃" 跳过 (不打卡), 地图仍可看, 不会强制跑步
+
+**Action Plan** (4 段, 每段 ≤ 15 min, anti-CC-Timeout):
+- [ ] **Stage 1 (≤15 min)**: D1 schema + seed
+  - `migrations/0007_running_tables.sql` (3 张表: running_maps / running_points / running_records)
+  - `migrations/0008_seed_shanghai_suzhou.sql` (第 1 张地图 + 10 个点 seed)
+  - 单元测试: schema migration 验证 (`tests/unit/running-schema.test.ts`)
+  - `git commit -m "feat(running): add running_maps/points/records schema + shanghai→suzhou seed (Item #011 §1)"`
+- [ ] **Stage 2 (≤15 min)**: 跑步打卡 modal
+  - `public/index.html` — 加 `#running-checkin-modal` (输入 km + 提交按钮)
+  - `public/app.js` — `showRunningCheckinModal()` + `submitRunning(km)` + POST `/api/running/records` + 累计 km
+  - `public/app.css` — modal 样式 (跟 #010 sprint modal 同套)
+  - E2E: `tests/e2e/ui-running-checkin.spec.ts` (输入 3.5 km → 累计 +3.5)
+  - `git commit -m "feat(running): child check-in modal + km submission (Item #011 §2)"`
+- [ ] **Stage 3 (≤15 min)**: SVG 地图渲染 + 小人移动 + 礼物 modal + 通关解锁
+  - `public/index.html` — 加 `#running-map-section` (SVG 容器, 路径 + 节点 + 小人 + 起点/终点标志) + `#running-completion-modal` (通关大图, 80% 屏, 撒花动画)
+  - `public/app.js` — `renderRunningMap(mapId)` + `animateAvatarToPoint(pointId)` (CSS transition 1.5s) + `showGiftModal(point, minutes)` + roll 概率积分 (D3) + `showCompletionModal(mapId)` (通关时弹) + POST `/api/running/maps/:id/complete` 触发 `UPDATE running_maps SET is_active=1 WHERE display_order = current + 1`
+  - `public/app.css` — 科技风手绘样式 (cyan glow, 网格底, 曲线路径, 节点 pulse 动画) + 通关 modal 大图样式 (80% 屏, 居中卡片, 全屏撒花)
+  - E2E: `tests/e2e/ui-running-map.spec.ts` (跑 8 次 3.5 km 累计 28 km, 验证小人 position + 通关礼物) + 通关测试 (mock cum_km=total_km, 验证大图 modal + 翻 is_active + 没有下一张时显示等待页)
+  - `git commit -m "feat(running): SVG map + avatar animation + milestone gift + completion modal (Item #011 §3)"`
+- [ ] **Stage 4 (≤10 min)**: Admin 撤销 (含 km 回退) + 文档
+  - `src/routes/admin/running.ts` — `GET /api/admin/running/records` 列表 + `POST /api/admin/running/records/:id/revoke` 撤销 (同时减回积分 + 回退累计 km, 写 audit_log)
+  - `public/admin.html` + `public/admin.js` — running_records 列表 + "↩ 撤销" 按钮 + 二次确认弹窗 (防误操作)
+  - 单元测试: revoke endpoint (积分减回 + km 累计回退 + 小人自动回退到对应 point) + 审计 log + 防误点逻辑
+  - 文档: PRD §3.x 新增 running map 段 + TEST_PLAN §3.x + FEATURE_MATRIX 标记 + PROGRESS v2.x
+  - **🚫 不做**: wrangler deploy / git push (按 cron 红灯规则)
+  - `git commit -m "feat(running): admin revoke (km+points 回退) + PRD/TEST_PLAN docs (Item #011 §4)"`
+
+**Status**: ⏳ pending
+**风险**: 🟡 (新 schema + UI + admin 撤销, 参考 #009 已有 hard-delete / revoke 模式可复用)
+**Started**: —
+**Completed**: —
+**Commit**: —
 
 ---
 
