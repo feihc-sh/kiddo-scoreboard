@@ -39,7 +39,7 @@
 
 ---
 
-## 📋 当前清单 (4 个 Item: 2 ⏳ pending, 2 ⏸ hold)
+## 📋 当前清单 (4 个 Item: 3 ⏳ pending, 1 ⏸ hold)
 
 ## Item #006 — 打卡日历 (月历可视化) ⏳ pending (2026-06-17 拍板, 等 0:00 cron 跑)
 
@@ -104,32 +104,58 @@
 
 ---
 
-## Item #008 — 任务装备/机甲化 (任务视觉) ⏸ hold 🆕 (2026-06-17 激活, 待拍板 A/B/C)
+## Item #008 — 任务装备/机甲化 (任务视觉) ⏳ pending (2026-06-17 拍板, 等 0:00 cron 跑)
 
 > 用户原话 (2026-06-08): "先 hold 一下"
-> 用户提到"小朋友喜欢机甲风格" → 推荐 B 方案 (机甲部件), 等 hold 解除后确认
-> 2026-06-17 DM: "激活 6 和 8" → PM 整理 A/B/C 拍板选项
+> 用户提到"小朋友喜欢机甲风格" → 当时推荐 B 方案
+> 2026-06-17 DM 拍板: "B + 夸张 + 独立"
+
+**已拍板 (2026-06-17)**:
+1. **方案 = B (机甲 HUD)**: 任务按钮框做成**机甲 HUD 角括号** + 霓虹青边框 + 扫描线
+2. **Q1 冲击 = 夸张**: **全屏 HUD 风格**, 任务像"装备舱", 改 child UI 任务区主布局
+3. **Q2 关联 #007 = 独立**: #008 自己一套, 跟 #007 Pacific Rim Jaeger 解耦, 不等 #007 拍板
 
 **Clarification** (PM 整理 2026-06-17):
+- **HUD 风格元素** (全屏, 覆盖 child UI 任务区):
+  - 角括号: 任务卡片四角加 ◢◤◣◥ 装饰 (CSS clip-path 或 SVG)
+  - 扫描线: 背景 `@keyframes scanline` 上下移动 (cyan 低不透明度 0.05)
+  - 霓虹青光: 边框 `box-shadow: 0 0 8px #00d4ff` + hover 加深
+  - 数据流背景: 任务区背景用 `repeating-linear-gradient` 网格底 (跟 #011 running map 同套)
+- **"装备舱"模式**: 任务完成时按钮**展开** → 显示"装备激活"动画 (类似机甲开机) → 短暂 hold 0.5s → 折回
+- **跟 #010 sprint modal 联动**: sprint modal 打开时全屏切换成 HUD "装备舱" 视角, 任务按钮变 "装备模块" 角括号
+- **跟 #011 联动**: running map 跟 HUD 任务区用同色板 (cyan + 深灰底), 视觉统一
+- **跟 #006 联动**: 月历格子未来可升级 HUD 角括号 (延后, 等 #006 拍板 cron 跑完)
+- **Q2 独立 = 不等 #007**: #008 自己定调 (霓虹青/扫描线), #007 后续拍板不影响 #008 实施
+- **⚠️ 风险升级**: 选"夸张"= 改 child UI 任务区主布局, 跟现有进度条/列表有冲突, 需 regression test
+- **⚠️ 性能**: 全屏扫描线动画要 60fps, 用 CSS `transform/opacity` 避免 reflow, 移动端需降级 (关扫描线保留角括号)
+- **可关闭性**: 视觉风格本身没有 toggle 按钮 (PM 拍板: 全屏总是开, 关闭可加 "🔧 经典模式" toggle 留二期)
 
-**3 个 A/B/C 设计方案**:
+**Action Plan** (4 段, 每段 ≤ 15 min, anti-CC-Timeout):
+- [ ] **Stage 1 (≤15 min)**: 机甲 HUD CSS 组件库
+  - `public/app.css` — 新增 `.mecha-frame` + `.mecha-corner` + `.mecha-scanline` + `.mecha-glow` 样式 (角括号/扫描线/霓虹青光)
+  - 单元测试: `tests/unit/mecha-frame.test.ts` (DOM 节点 + 类名断言)
+  - `git commit -m "feat(mecha): HUD frame CSS components (Item #008 §1)"`
+- [ ] **Stage 2 (≤15 min)**: 任务按钮升级
+  - `public/index.html` — task button 加 `.mecha-frame` 类 (角括号)
+  - `public/app.css` — task button 适配 padding/border/font-size + hover 霓虹光
+  - 单测: `tests/unit/task-mecha-button.test.ts`
+  - E2E: `tests/e2e/ui-task-mecha-frame.spec.ts` (看到任务按钮是机甲 HUD 风)
+  - `git commit -m "feat(mecha): apply HUD frame to task buttons (Item #008 §2)"`
+- [ ] **Stage 3 (≤15 min)**: 全屏 HUD 装备舱模式 + 任务完成展开动画
+  - `public/app.css` — child UI 任务区背景 (扫描线 + 网格底 + 数据流) + 任务完成时按钮展开/折回动画 (CSS keyframes 0.5s)
+  - `public/app.js` — `triggerEquipActivation(taskId)` 触发完成时装备激活动画
+  - E2E: `tests/e2e/ui-equip-activation.spec.ts` (打卡 → 看到装备展开动画)
+  - 视觉对齐: 跟 #005 进度条 + #010 sprint modal + #011 running map 同色板
+  - `git commit -m "feat(mecha): fullscreen HUD cockpit + equip activation (Item #008 §3)"`
+- [ ] **Stage 4 (≤10 min)**: 文档 + 视觉对齐 + 性能 + regression
+  - 文档: PRD §3.x 新增 mecha frame 段 + TEST_PLAN §3.x + FEATURE_MATRIX + PROGRESS v2.x
+  - 性能: 全屏扫描线 60fps (CSS transform/opacity), 移动端降级 (关扫描线保留角括号, `@media (max-width: 768px)`)
+  - Regression: 跑全套 vitest + e2e, 确保 #005/#006/#010/#011 视觉不破
+  - **🚫 不做**: 跟 #007 同步 (Q2 独立); 经典模式 toggle (留二期); wrangler deploy / git push
+  - `git commit -m "feat(mecha): docs + perf + regression test (Item #008 §4)"`
 
-- **A 方案 (等级徽章)**: 每个 task 完成 N 次后升级 (铜 → 银 → 金 → 钻石), 任务按钮左侧加小型徽章. 渐进式, 不喧宾夺主, 保留现有布局.
-- **B 方案 (机甲 HUD)** (PM 推荐, 跟 feihao 2026-06-08 偏好 + 跟 #007 Pacific Rim Jaeger 蓝灰 + 黄眼 + 双蓝剑 风格一致): 任务按钮框做成**机甲 HUD 角括号** + 霓虹青边框 + 扫描线, 跟现有 #010 sprint modal + #011 running map 科技风统一. 视觉冲击中等, gamification 明显.
-- **C 方案 (装备/武器槽)**: 完成特定 task 解锁"装备" (枪/剑/盾/机器人), 装饰在 child UI 角落"装备库", 任务变成"装备库"导航. 重量级, gamification 最强, 改动最大.
-
-**2 个 Q**:
-
-- **Q1 视觉冲击等级**:
-  - 微调: 只改按钮边框/角, 不动布局
-  - 中等: 加 HUD 角括号 + 霓虹光, 按钮视觉升级 (PM 默认, 跟 #010/#011 呼应)
-  - 夸张: 全屏 HUD 风格, 任务像"装备舱" (跟现有进度条/列表布局冲突大)
-- **Q2 关联 #007 头像吗**:
-  - 同款: 跟 #007 Pacific Rim Jaeger 同步, 视觉统一 (注意 #007 仍 hold, 解锁后风格直接对齐)
-  - 独立: #008 自己一套, 跟 #007 解耦 (允许不同步拍板)
-
-**Status**: ⏸ hold (待拍板 A/B/C + 2 Q, 拍板后 PM 拟定 Action Plan)
-**风险**: 🟡 (UI-only, 但需要跟 #007/#010/#011 视觉对齐; 选 C 方案需改 navigation)
+**Status**: ⏳ pending
+**风险**: 🔴 (UI-only 但全屏 HUD 改 child UI 主区域, 跟 #005/#006/#010/#011 视觉有冲突, 需全量 regression; 选 C 方案需改 navigation)
 **Started**: —
 **Commit**: —
 
