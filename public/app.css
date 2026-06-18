@@ -7,6 +7,56 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Noto+Sans+SC:wght@400;700&display=swap');
 
 /* ==========================================================================
+ * Item #008 §1: MECHA HUD frame component library
+ * Reusable corner brackets + scanline + neon glow for any HUD-styled card.
+ * ========================================================================== */
+.mecha-frame {
+  position: relative;
+  border: 1px solid var(--cyan-border);
+  box-shadow: 0 0 8px var(--cyan-glow), inset 0 0 12px rgba(0, 245, 255, 0.05);
+  background: var(--bg-panel);
+}
+
+.mecha-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--cyan);
+  filter: drop-shadow(0 0 4px var(--cyan-glow));
+  pointer-events: none;
+}
+.mecha-corner.tl { top: -2px; left: -2px;  border-right: 0; border-bottom: 0; }
+.mecha-corner.tr { top: -2px; right: -2px; border-left: 0;  border-bottom: 0; }
+.mecha-corner.bl { bottom: -2px; left: -2px;  border-right: 0; border-top: 0; }
+.mecha-corner.br { bottom: -2px; right: -2px; border-left: 0;  border-top: 0; }
+
+.mecha-scanline {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 245, 255, 0.05) 50%, transparent 100%);
+  background-size: 100% 6px;
+  animation: mecha-scanline-move 2.4s linear infinite;
+  opacity: 0.6;
+}
+@keyframes mecha-scanline-move {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.mecha-glow {
+  box-shadow: 0 0 8px var(--cyan-glow), 0 0 16px var(--cyan-soft);
+  transition: box-shadow 0.2s var(--mecha-enter, ease-out);
+}
+.mecha-glow:hover {
+  box-shadow: 0 0 12px var(--cyan-glow-strong), 0 0 24px var(--cyan-glow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mecha-scanline { animation: none; opacity: 0.3; }
+}
+
+/* ==========================================================================
  * Item #006 §1: Calendar fold toggle + 7×6 grid scaffold
  * Stage 2+ will populate cells + color tiers. CSS-only scaffold here.
  * ========================================================================== */
