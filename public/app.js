@@ -22,7 +22,93 @@ const state = {
   progress: null,                 // { daily:{completed,total}, monthly:{completed,target}, yearly:{completed,target} }
   selectedDir: 1,                 // for submit modal
   health: { activeType: 'cough', currentMonth: null, events: [] },
+  running: { activeMap: null, cumKm: 0 },
 };
+// Expose state for e2e introspection (read-only).
+if (typeof window !== 'undefined') window.__kiddoState = state;
+
+// ---------- Running Check-in (Item #011 §2) ----------
+/** Load active map + cumulative km for the running check-in. */
+async function loadRunningState() {
+  try {
+    // Stage 2 reuses the records endpoint: the response includes cum_km.
+    // For an initial load (no records), we fall back to a 0-km read.
+    const r = await api('GET', '/api/running/records?limit=1');
+    // If the route doesn't yet expose GET, just hide the ticker.
+    if (r && typeof r.cum_km === 'number') {
+      state.running.cumKm = r.cum_km;
+      renderRunningCum();
+    }
+  } catch (_) {
+    // Stage 2 ships POST first; GET is Stage 3+. Silently no-op.
+  }
+}
+
+function renderRunningCum() {
+  const el = document.getElementById('running-cum');
+  const kmEl = document.getElementById('running-cum-km');
+  if (!el || !kmEl) return;
+  kmEl.textContent = Number(state.running.cumKm || 0).toFixed(1);
+  el.hidden = state.running.cumKm <= 0;
+}
+
+function openRunningCheckinModal() {
+  const modal = document.getElementById('running-checkin-modal');
+  const err = document.getElementById('running-checkin-error');
+  const input = document.getElementById('running-km-input');
+  if (!modal || !input) return;
+  if (err) { err.hidden = true; err.textContent = ''; }
+  input.value = '3.5';
+  modal.hidden = false;
+  input.focus();
+  input.select();
+}
+
+function closeRunningCheckinModal() {
+  const modal = document.getElementById('running-checkin-modal');
+  const form = document.getElementById('running-checkin-form');
+  if (form) form.reset();
+  if (modal) modal.hidden = true;
+}
+
+function showRunningError(message) {
+  const err = document.getElementById('running-checkin-error');
+  if (!err) return;
+  err.textContent = message;
+  err.hidden = false;
+}
+
+async function submitRunning(km) {
+  const submitBtn = document.getElementById('running-checkin-submit');
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    const r = await api('POST', '/api/running/records', { km });
+    // Refresh local state from the server response.
+    state.running.cumKm = Number(r.cum_km || 0);
+    renderRunningCum();
+    // Update the 3 balance cards if the response includes them.
+    if (r.balance) {
+      const gt = document.getElementById('balance-game-time');
+      const pm = document.getElementById('balance-pocket-money');
+      const co = document.getElementById('balance-coins');
+      if (gt) gt.textContent = r.balance.game_time ?? state.balance.game_time;
+      if (pm) pm.textContent = r.balance.pocket_money ?? state.balance.pocket_money;
+      if (co) co.textContent = r.balance.coins ?? state.balance.coins;
+    }
+    closeRunningCheckinModal();
+    const points = r.new_points_reached?.length || 0;
+    const minutes = r.total_awarded_minutes || 0;
+    if (points > 0) {
+      toast(`🏃 跑了 ${km} km, 到达 ${points} 个新点位, +${minutes} 分钟`, 'success');
+    } else {
+      toast(`🏃 跑了 ${km} km, 累计 ${state.running.cumKm.toFixed(1)} km`, 'success');
+    }
+  } catch (e) {
+    showRunningError(e?.message || '提交失败, 再试一次');
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
 
 // ---------- Health Checkin (M2 — RFC §6.2) ----------
 const HEALTH_EVENT_TYPES = [
@@ -715,9 +801,6 @@ function renderEvents() {
 function statusLabel(s) {
   return ({ pending: '◷ 待确认', approved: '✓ 已通过', rejected: '✕ 已拒绝', revoked: '↩ 已回收' })[s] || s;
 }
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-}
 // ---------- Reward / event icon helpers (2026-06-14: 任务实际入账是 🪙 coin, 0007 schema drift) ----------
 // task.target_account schema only allows 'game_time' | 'pocket_money', but task completion
 // actually grants 'coins' (writeTaskCoinGrant in src/utils/coin.ts hardcodes type='coins').
@@ -981,6 +1064,24 @@ function bindEvents() {
   $('#submit-modal').addEventListener('click', (e) => {
     if (e.target.id === 'submit-modal') closeSubmitModal();
   });
+  // Item #011 §2 — running check-in
+  $('#btn-running')?.addEventListener('click', openRunningCheckinModal);
+  $('#running-checkin-cancel')?.addEventListener('click', closeRunningCheckinModal);
+  $('#running-checkin-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'running-checkin-modal') closeRunningCheckinModal();
+  });
+  $('#running-checkin-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = $('#running-km-input');
+    const km = parseFloat(input?.value ?? '');
+    if (!Number.isFinite(km)) {
+      showRunningError('公里数要大于 0 哦');
+      return;
+    }
+    submitRunning(km);
+  });
+  // Load initial running state (cum-km ticker)
+  loadRunningState();
   // Health checkin — month nav
   $('#health-prev-month')?.addEventListener('click', () => shiftHealthMonth(-1));
   $('#health-next-month')?.addEventListener('click', () => shiftHealthMonth(1));

@@ -1070,6 +1070,42 @@ body {
 .modal-actions .btn { flex: 1; }
 
 /* ===========================================================================
+ * RUNNING CHECK-IN — Item #011 §2
+ *   Reuses .modal-back / .modal / .modal-title for the check-in modal shell.
+ *   Adds the cum-km ticker + a minor layout nudge for the km input.
+ * ========================================================================== */
+.running-cum {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  margin: 12px 16px 0;
+  border: 1px solid var(--cyan-glow, #00F5FF);
+  border-radius: 10px;
+  background: rgba(0, 245, 255, 0.04);
+  font-family: var(--font-display, monospace);
+  letter-spacing: 0.04em;
+}
+.running-cum[hidden] { display: none; }
+.running-cum-label {
+  font-size: 12px;
+  color: var(--text-secondary, #8B9CB6);
+  text-transform: uppercase;
+}
+.running-cum-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--cyan-glow, #00F5FF);
+}
+#running-km-input {
+  font-family: var(--font-display, monospace);
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.05em;
+}
+
+/* ===========================================================================
  * WELCOME MODAL — 机甲启动界面
  * ========================================================================== */
 .welcome-modal .modal {

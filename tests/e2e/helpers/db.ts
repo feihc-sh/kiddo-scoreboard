@@ -68,7 +68,41 @@ export function clearDynamicData(): void {
 
 /** Full reset: drop users/tasks too. Use sparingly (each task config test will recreate them). */
 export function clearAllData(): void {
-  d1Exec('DELETE FROM auth_attempts; DELETE FROM audit_log; DELETE FROM task_completions; DELETE FROM score_events; DELETE FROM tasks; DELETE FROM users;');
+  d1Exec(
+    'DELETE FROM auth_attempts; DELETE FROM audit_log; DELETE FROM task_completions; ' +
+    'DELETE FROM score_events; DELETE FROM tasks; DELETE FROM users; ' +
+    'DELETE FROM running_records; DELETE FROM running_points; DELETE FROM running_maps;'
+  );
+}
+
+/** Re-seed the default running map + points (Shanghai→Suzhou 95 km, 10 nodes).
+ *  Item #011 Stage 1 ships these via migrations/0010_seed_shanghai_suzhou.sql.
+ *  Tests call clearAllData() which wipes them; this helper re-applies the seed
+ *  so the running check-in tests don't depend on migration timing.
+ *
+ *  Kept in sync with the 0010 migration — if the seed changes there, update
+ *  here too. We do NOT use wrangler to apply migrations mid-test (would race
+ *  with the workerd process the tests are running against).
+ */
+export function seedRunningMap(): void {
+  const now = Math.floor(Date.now() / 1000);
+  d1Exec(`
+    INSERT OR IGNORE INTO running_maps (id, name, theme, total_km, is_active, display_order, created_at)
+    VALUES (1, '上海 → 苏州', 'shanghai-suzhou', 95.0, 1, 1, ${now});
+  `);
+  d1Exec(`
+    INSERT OR IGNORE INTO running_points (id, map_id, name, order_index, cum_km) VALUES
+      (1,  1, '🏁 上海·普陀区 (起点)',     0,   0.0),
+      (2,  1, '嘉定新城',                 1,   8.0),
+      (3,  1, '太仓',                     2,  22.0),
+      (4,  1, '昆山花桥',                 3,  32.0),
+      (5,  1, '昆山城区',                 4,  45.0),
+      (6,  1, '阳澄湖',                   5,  58.0),
+      (7,  1, '苏州相城区',               6,  72.0),
+      (8,  1, '苏州姑苏区',               7,  82.0),
+      (9,  1, '苏州工业园区',             8,  89.0),
+      (10, 1, '🚩 苏州·金鸡湖 (终点)',    9,  95.0);
+  `);
 }
 
 /** Seed a PM user with the given PIN. Returns the user id. */

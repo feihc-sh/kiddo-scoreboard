@@ -12,6 +12,10 @@ import meHealth from './routes/me/health.ts';
 import meCoins from './routes/me/coins.ts';
 import shopItems from './routes/shop/items.ts';
 import shopExchange from './routes/shop/exchange.ts';
+// Item #011 §2 (Running check-in modal) — child submits km, server writes
+// the record, rolls any newly-reached point prizes, and returns the
+// updated balance for the home page to refresh.
+import running from './routes/running/index.ts';
 
 export interface Env {
   DB: D1Database;
@@ -47,5 +51,9 @@ app.route('/api/me/health', meHealth);
 app.route('/api/coins', meCoins);
 app.route('/api/coins', shopExchange);
 app.route('/api/shop/items', shopItems);
+// Item #011 §2 (Running check-in modal):
+//   POST /api/running/records   — child submits km, server writes record +
+//     score_event + audit_log atomically.
+app.route('/api/running', running);
 
 export default app;
