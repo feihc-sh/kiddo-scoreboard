@@ -44,13 +44,27 @@ beforeAll(async () => {
     .sort();
 });
 
-// splitStatements: same shape as deleted-records.test.ts stage 1
+// splitStatements: same shape as deleted-records.test.ts stage 1.
+// Strips BOTH leading "--" comment lines AND inline "-- …" tails so
+// semicolons inside a comment (e.g. "INTEGER, -- comment; tail") do
+// not break the statement split. PRAGMA statements are passed
+// through unchanged; D1 accepts them on their own line.
 function splitStatements(sql: string): string[] {
-  const stripped = sql
+  // 1) strip full-line comments first
+  const noLineComments = sql
     .split('\n')
     .filter((line) => !line.trim().startsWith('--'))
     .join('\n');
-  return stripped
+  // 2) strip inline "--" tails on each remaining line (keeps anything
+  //    before the "--" so SQL like "x = 1; -- weird" still works).
+  const noInlineComments = noLineComments
+    .split('\n')
+    .map((line) => {
+      const idx = line.indexOf('--');
+      return idx === -1 ? line : line.slice(0, idx);
+    })
+    .join('\n');
+  return noInlineComments
     .split(';')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
