@@ -6,9 +6,100 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Noto+Sans+SC:wght@400;700&display=swap');
 
+/* ==========================================================================
+ * Item #006 §1: Calendar fold toggle + 7×6 grid scaffold
+ * Stage 2+ will populate cells + color tiers. CSS-only scaffold here.
+ * ========================================================================== */
+.calendar-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 8px;
+  padding: 8px 14px;
+  background: var(--bg-plate);
+  color: var(--cyan);
+  border: 1px solid var(--cyan-border);
+  border-radius: 4px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s var(--mecha-enter, ease-out);
+  box-shadow: 0 0 4px var(--cyan-soft);
+}
+.calendar-toggle-btn:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan-glow);
+  background: var(--bg-plate-light);
+}
+.calendar-toggle-btn[aria-expanded="true"] {
+  background: var(--bg-hud);
+  border-color: var(--cyan);
+}
+
+.calendar-panel {
+  margin: 8px 0 16px;
+  padding: 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--cyan-border);
+  border-radius: 4px;
+  box-shadow: 0 0 8px var(--cyan-soft), inset 0 0 12px rgba(0, 245, 255, 0.03);
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 10px;
+  border-bottom: 1px solid var(--cyan-border);
+  margin-bottom: 10px;
+}
+
+.calendar-month-nav {
+  background: transparent;
+  color: var(--cyan);
+  border: 1px solid var(--cyan-border);
+  border-radius: 3px;
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s var(--mecha-enter, ease-out);
+}
+.calendar-month-nav:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan-glow);
+}
+
+.calendar-month-label {
+  font-family: 'Orbitron', 'Share Tech Mono', monospace;
+  color: var(--cyan);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  min-height: 200px;
+}
+.calendar-grid > * {
+  aspect-ratio: 1 / 1;
+  border: 1px solid rgba(0, 245, 255, 0.1);
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 /* ===========================================================================
  * DESIGN TOKENS — MECHA SYSTEM
- * ========================================================================== */
+ * =========================================================================== */
 :root {
   /* --- Surfaces (deep space metal) --- */
   --bg-void: #07090D;

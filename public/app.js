@@ -873,6 +873,39 @@ function openSubmitModal() {
 function closeSubmitModal() { $('#submit-modal').hidden = true; $('#submit-form').reset(); state.selectedDir = 1; $$('.seg-btn').forEach((b) => b.classList.toggle('seg-btn-active', Number(b.dataset.dir) === 1)); }
 
 // ---------- Confetti ----------
+// ============================================================================
+// Item #006 §1: Calendar fold toggle + localStorage persistence
+// Stage 2+ will add loadMonthCheckins() + renderCalendar() inside #calendar-grid
+// ============================================================================
+const CALENDAR_COLLAPSED_KEY = 'calendarCollapsed';
+
+function initCalendarToggle() {
+  const btn = document.getElementById('calendar-toggle-btn');
+  const panel = document.getElementById('calendar-panel');
+  if (!btn || !panel) return;
+  // Restore folded state from localStorage (default = collapsed)
+  const stored = localStorage.getItem(CALENDAR_COLLAPSED_KEY);
+  const isCollapsed = stored === null ? true : stored === '1';
+  applyCalendarCollapsed(btn, panel, isCollapsed);
+  btn.addEventListener('click', () => {
+    const nowCollapsed = panel.hasAttribute('hidden');
+    applyCalendarCollapsed(btn, panel, nowCollapsed);
+    try { localStorage.setItem(CALENDAR_COLLAPSED_KEY, nowCollapsed ? '1' : '0'); } catch (_) { /* ignore quota */ }
+  });
+}
+
+function applyCalendarCollapsed(btn, panel, collapsed) {
+  if (collapsed) {
+    panel.setAttribute('hidden', '');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.textContent = '📅 月历';
+  } else {
+    panel.removeAttribute('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+    btn.textContent = '📅 收起月历';
+  }
+}
+
 function confettiKey() { return 'lastConfettiAt'; }
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function hasFiredConfettiToday() { return localStorage.getItem(confettiKey()) === todayStr(); }

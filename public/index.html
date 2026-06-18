@@ -108,6 +108,21 @@
       </div>
     </section>
 
+    <!-- Item #006 §1: Calendar fold toggle + panel scaffold (Stage 1) -->
+    <button id="calendar-toggle-btn" class="calendar-toggle-btn" type="button" aria-expanded="false" aria-controls="calendar-panel">
+      📅 月历
+    </button>
+    <section id="calendar-panel" class="calendar-panel" aria-label="打卡月历" hidden>
+      <div class="calendar-header">
+        <button id="calendar-prev-month" class="calendar-month-nav" type="button" aria-label="上一月">◀</button>
+        <span id="calendar-month-label" class="calendar-month-label">—</span>
+        <button id="calendar-next-month" class="calendar-month-nav" type="button" aria-label="下一月">▶</button>
+      </div>
+      <div id="calendar-grid" class="calendar-grid" role="grid">
+        <!-- Stage 2+ will populate 7×6 grid -->
+      </div>
+    </section>
+
     <!-- 3 progress bars (daily / monthly / yearly) — Item #005 -->
     <section class="progress-bars" aria-label="任务完成率">
       <div class="progress-bar daily" id="pb-daily">
