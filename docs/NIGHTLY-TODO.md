@@ -39,34 +39,55 @@
 
 ---
 
-## 📋 当前清单 (4 个 Item: 1 ⏳ pending, 3 ⏸ hold)
+## 📋 当前清单 (4 个 Item: 2 ⏳ pending, 2 ⏸ hold)
 
-## Item #006 — 打卡日历 (月历可视化) ⏸ hold 🆕 (2026-06-17 激活, 待拍板 A/B/C)
+## Item #006 — 打卡日历 (月历可视化) ⏳ pending (2026-06-17 拍板, 等 0:00 cron 跑)
 
 > 用户原话 (2026-06-08): "先 hold 一下这个 idea 放 todo 里吧, 后面我再来拍"
-> 2026-06-17 DM: "激活 6 和 8" → PM 整理 A/B/C 拍板选项
+> 2026-06-17 DM 拍板: "B + 折叠 + 所有日期, 可切月份"
+
+**已拍板 (2026-06-17)**:
+1. **方案 = B (标准月历)**: 折叠月历视图, 标准 7×6 网格, 每格点击可看当天打卡明细 (任务名 + 积分)
+2. **Q1 触发 = 折叠**: child UI 顶部"📅 月历"按钮点击展开/收起 (跟现在 child UI 风格一致)
+3. **Q2 数据 = 所有日期 (可切月份)**: 显示全部历史, ◀/▶ 按钮切月份, 长跨度成就感
 
 **Clarification** (PM 整理 2026-06-17):
+- **数据来源**: `task_completions` 表 (现有 schema, 无需改), 按 `child_id + completed_at` 聚合每天打卡数
+- **按月分页**: 一次只拉一个月的打卡数据, 切月份时再拉 (避免一次拉全表, 跟 #010 sprint modal 数据流一致)
+- **颜色档位** (GitHub 风, 4 档): 0 次灰 / 1 次浅青 / 2 次中青 / 3+ 次深青 + 霓虹光
+- **月历组件**: 顶部 ◀/▶ 月份切换 + 居中标题"YYYY 年 M 月" + 7×6 网格 (含上下月灰显日期) + 格子 click 弹 modal (复用 #010 sprint modal 同套 CSS)
+- **可关闭性**: 折叠按钮再次点击收起; ESC 键关闭; localStorage 记忆折叠状态
+- **视觉对齐**: 复用 #010 sprint modal 样式 + #011 running map 科技风 (cyan glow + 网格底) + 跟 #005 三进度条同色系
+- **跟 #008 联动 (后续)**: #008 机甲化时, 月历格子可升级 HUD 角括号 (同款视觉)
+- **跟 #011 联动**: 月历 grid 跟 running map grid 视觉呼应 (科技风统一)
 
-**3 个 A/B/C 设计方案**:
+**Action Plan** (4 段, 每段 ≤ 15 min, anti-CC-Timeout):
+- [ ] **Stage 1 (≤15 min)**: HTML/CSS scaffold + 折叠按钮
+  - `public/index.html` — 加 `#calendar-toggle-btn` (📅 月历) + `#calendar-panel` (默认隐藏, 跟 #005 进度条同位置)
+  - `public/app.js` — `toggleCalendar()` + localStorage 记忆折叠状态
+  - `public/app.css` — 折叠面板 + 月历 grid 7×6 样式 (cyan glow)
+  - 单测: `tests/unit/calendar-toggle.test.ts` (show/hide + localStorage 持久化)
+  - `git commit -m "feat(calendar): fold toggle button + panel scaffold (Item #006 §1)"`
+- [ ] **Stage 2 (≤15 min)**: 月历渲染 + 数据加载 + 月份切换
+  - `public/app.js` — `loadMonthCheckins(childId, year, month)` + `renderCalendar(year, month)` + ◀/▶ 切月事件
+  - 单测: `tests/unit/calendar-render.test.ts` (month calculation + grid + 边界日期上下月填充)
+  - E2E: `tests/e2e/ui-calendar-month-nav.spec.ts` (折叠 → 看到当月 → 点 ▶ 切下月 → 点 ◀ 切回)
+  - `git commit -m "feat(calendar): month grid render + prev/next nav (Item #006 §2)"`
+- [ ] **Stage 3 (≤15 min)**: 颜色档位 + 格子点击 → 当天明细 modal
+  - `public/app.js` — `getColorTier(count)` 4 档 + 格子 click → `showDayDetailModal(date)` 复用 #010 sprint modal 同套
+  - `public/app.css` — 4 档颜色 (gray / light-cyan / cyan / neon-cyan) + hover 浅光
+  - 单测: `tests/unit/calendar-color.test.ts` (档位逻辑)
+  - E2E: `tests/e2e/ui-calendar-day-detail.spec.ts` (点 6/15 → 弹 modal → 看任务列表)
+  - `git commit -m "feat(calendar): color tiers + day detail modal (Item #006 §3)"`
+- [ ] **Stage 4 (≤10 min)**: 文档 + 视觉对齐 + 性能
+  - 文档: PRD §3.x 新增 calendar 段 + TEST_PLAN §3.x + FEATURE_MATRIX 标记 + PROGRESS v2.x
+  - 视觉对齐: 跟 #005 进度条 + #010 sprint modal + #011 running map 风格统一 (cyan 调色板)
+  - 性能验证: 1000+ 打卡记录时切月 <200ms (按月分页已保)
+  - **🚫 不做**: 跨年统计 (留二期, 加 ◀/▶ 切年按钮); 任务列表导出 (留二期); wrangler deploy / git push
+  - `git commit -m "feat(calendar): docs + visual alignment + perf test (Item #006 §4)"`
 
-- **A 方案 (轻量 — GitHub 风贡献条)**: 在 child UI 顶部加 7/30 天**水平条** (类似 GitHub contribution graph), 每格一天, 颜色深浅 = 打卡次数. 最轻量, 不占屏, 一眼看到"我最近勤不勤".
-- **B 方案 (标准月历)**: 弹窗/折叠**月历视图**, 标准 7×5/6 网格, 每格点击可看当天打卡明细 (任务名 + 积分). 中等, 跟 iPad 适配, 信息密度适中.
-- **C 方案 (互动大日历)**: 整页大日历 (类似 Apple Fitness 风格), 每格可点击展开当天任务列表, 顶部显示**当月统计** (总积分 / 打卡次数 / 连胜天数). 重量级, 沉浸感强, 跟 #005 B 进度条 + #011 跑步地图呼应.
-
-**2 个 Q**:
-
-- **Q1 触发方式**:
-  - 折叠: child UI 顶部"📅 月历"按钮点击展开/收起 (跟现在 child UI 风格一致)
-  - 弹窗: 全屏 modal 弹出 (跟 #010 sprint modal 同套)
-  - 独立 tab: child UI 主菜单加"📅 月历" tab (最重, 改 navigation)
-- **Q2 数据范围**:
-  - 全部历史: 长跨度成就感 (e.g. 半年 1 万次打卡)
-  - 近 30 天: 最近习惯高亮
-  - 本月: 跟 #005 B 进度条 (月 100) 联动, 节奏感强
-
-**Status**: ⏸ hold (待拍板 A/B/C + 2 Q, 拍板后 PM 拟定 Action Plan)
-**风险**: 🟢 (UI-only, 无 schema 改动)
+**Status**: ⏳ pending
+**风险**: 🟢 (UI-only, 复用 #010 modal + 现有 schema)
 **Started**: —
 **Commit**: —
 
