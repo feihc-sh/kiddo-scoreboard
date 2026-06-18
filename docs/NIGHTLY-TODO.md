@@ -39,9 +39,9 @@
 
 ---
 
-## 📋 当前清单 (4 个 Item: 3 ⏳ pending, 1 ⏸ hold)
+## 📋 当前清单 (4 个 Item: 0 ⏳ pending, 3 🔧 running stage 1 done, 1 ⏸ hold)
 
-## Item #006 — 打卡日历 (月历可视化) ⏳ pending (2026-06-17 拍板, 等 0:00 cron 跑)
+## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
 
 > 用户原话 (2026-06-08): "先 hold 一下这个 idea 放 todo 里吧, 后面我再来拍"
 > 2026-06-17 DM 拍板: "B + 折叠 + 所有日期, 可切月份"
@@ -86,10 +86,11 @@
   - **🚫 不做**: 跨年统计 (留二期, 加 ◀/▶ 切年按钮); 任务列表导出 (留二期); wrangler deploy / git push
   - `git commit -m "feat(calendar): docs + visual alignment + perf test (Item #006 §4)"`
 
-**Status**: ⏳ pending
+**Status**: 🔧 running (Stage 1 done, 等 Stage 2-4)
 **风险**: 🟢 (UI-only, 复用 #010 modal + 现有 schema)
-**Started**: —
-**Commit**: —
+**Started**: 2026-06-17
+**Commit (Stage 1)**: `0389c85` (calendar fold toggle + 7×6 grid scaffold + 6 单测全过)
+**未做**: Stage 2 (月历渲染 + 切月份) / Stage 3 (颜色档位 + 格子弹 modal) / Stage 4 (文档)
 
 ---
 
@@ -104,7 +105,7 @@
 
 ---
 
-## Item #008 — 任务装备/机甲化 (任务视觉) ⏳ pending (2026-06-17 拍板, 等 0:00 cron 跑)
+## Item #008 — 任务装备/机甲化 (任务视觉) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
 
 > 用户原话 (2026-06-08): "先 hold 一下"
 > 用户提到"小朋友喜欢机甲风格" → 当时推荐 B 方案
@@ -154,10 +155,11 @@
   - **🚫 不做**: 跟 #007 同步 (Q2 独立); 经典模式 toggle (留二期); wrangler deploy / git push
   - `git commit -m "feat(mecha): docs + perf + regression test (Item #008 §4)"`
 
-**Status**: ⏳ pending
+**Status**: 🔧 running (Stage 1 done, 等 Stage 2-4)
 **风险**: 🔴 (UI-only 但全屏 HUD 改 child UI 主区域, 跟 #005/#006/#010/#011 视觉有冲突, 需全量 regression; 选 C 方案需改 navigation)
-**Started**: —
-**Commit**: —
+**Started**: 2026-06-17
+**Commit (Stage 1)**: `1612a28` (HUD frame CSS 组件库 + 5 单测全过)
+**未做**: Stage 2 (任务按钮升级角括号) / Stage 3 (全屏装备舱 + 任务完成展开动画) / Stage 4 (文档 + regression)
 
 ---
 
@@ -374,11 +376,11 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
   - **🚫 不做**: wrangler deploy / git push (按 cron 红灯规则)
   - `git commit -m "feat(running): admin revoke (km+points 回退) + PRD/TEST_PLAN docs (Item #011 §4)"`
 
-**Status**: ⏳ pending
+**Status**: 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
 **风险**: 🟡 (新 schema + UI + admin 撤销, 参考 #009 已有 hard-delete / revoke 模式可复用)
-**Started**: —
-**Completed**: —
-**Commit**: —
+**Started**: 2026-06-17
+**Commit (Stage 1)**: `d4be219` (3 张表 schema + 上海→苏州 10 个点位 seed + 8 单测全过)
+**未做**: Stage 2 (check-in modal) / Stage 3 (SVG 地图 + 小人 + 礼物 + 通关) / Stage 4 (admin 撤销 + 文档)
 
 ---
 
