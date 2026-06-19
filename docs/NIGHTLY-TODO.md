@@ -39,7 +39,7 @@
 
 ---
 
-## 📋 当前清单 (4 个 Item: 0 ⏳ pending, 3 🔧 running stage 1 done, 1 ⏸ hold)
+## 📋 当前清单 (4 个 Item: 0 ⏳ pending, 3 🔧 running stage 1+, 1 ⏸ hold)
 
 ## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
 
@@ -313,7 +313,7 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 
 ---
 
-## Item #011 — 跑步小地图 + 积分礼包 (上海→苏州 主题) ⏳ pending
+## Item #011 — 跑步小地图 + 积分礼包 (上海→苏州 主题) 🔧 running (Stage 1+2 done 2026-06-17/19, 等 Stage 3/4)
 
 **用户原话** (feihao 2026-06-17 飞书 DM):
 > "在 Nightly Todo 里再增加一个功能：记录跑步的每次公里数，并绘制一个小地图。每一次跑了多远的距离，会在一个虚拟的小地图上，从一个点移动到另一个点。当到达一个新的点位时（比如跑到10公里），可以开一个小礼包，礼包里有一个随机的积分"
@@ -376,11 +376,12 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
   - **🚫 不做**: wrangler deploy / git push (按 cron 红灯规则)
   - `git commit -m "feat(running): admin revoke (km+points 回退) + PRD/TEST_PLAN docs (Item #011 §4)"`
 
-**Status**: 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
+**Status**: 🔧 running (Stage 1+2 done 2026-06-17/19, 等 Stage 3/4)
 **风险**: 🟡 (新 schema + UI + admin 撤销, 参考 #009 已有 hard-delete / revoke 模式可复用)
 **Started**: 2026-06-17
 **Commit (Stage 1)**: `d4be219` (3 张表 schema + 上海→苏州 10 个点位 seed + 8 单测全过)
-**未做**: Stage 2 (check-in modal) / Stage 3 (SVG 地图 + 小人 + 礼物 + 通关) / Stage 4 (admin 撤销 + 文档)
+**Commit (Stage 2)**: `90c04d1` (child check-in modal + km submission + 7 e2e scenarios)
+**未做**: Stage 3 (SVG 地图 + 小人 + 礼物 + 通关) / Stage 4 (admin 撤销 + 文档)
 
 ---
 
