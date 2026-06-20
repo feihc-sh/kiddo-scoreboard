@@ -86,13 +86,17 @@
   - **🚫 不做**: 跨年统计 (留二期, 加 ◀/▶ 切年按钮); 任务列表导出 (留二期); wrangler deploy / git push
   - `git commit -m "feat(calendar): docs + visual alignment + perf test (Item #006 §4)"`
 
-**Status**: ✅ done
+**Status**: ✅ done (verified by Qual 2026-06-20: e2e 12/12 pass + unit 313/313 pass)
 **风险**: 🟢 (UI-only, 复用 #010 modal + 现有 schema)
 **Started**: 2026-06-17
 **Commit (Stage 1)**: `0389c85` (calendar fold toggle + 7×6 grid scaffold + 6 单测全过)
 **Commit (Stage 2+3)**: `569e10c` (month grid render + prev/next nav + day detail modal + 2 API routes)
 **Commit (Stage 4)**: `c5d8c57` (docs + visual alignment + perf test + 1 new perf test)
-**Completed**: 2026-06-20
+**Commit (PM-fix SQL bugs)**: `5abe507` (use user_id + DATE(unixepoch))
+**Commit (PM-fix toggle + render + time)**: `f2c82e6` (toggle click !nowCollapsed + race + optimistic UI + day-detail HH:MM)
+**Commit (PM-fix helper + e2e tests)**: `a4eb27b` (helper user_id + month-nav snapshot timing)
+**Commit (P1-A jsdom test)**: `ade11a1` (regex-only → happy-dom click test, 7 tests)
+**Completed**: 2026-06-20 (e2e green after Qual verification)
 **未做**: 全部完成 ✅
 
 ---
