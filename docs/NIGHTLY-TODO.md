@@ -39,7 +39,7 @@
 
 ---
 
-## 📋 当前清单 (4 个 Item: 0 ⏳ pending, 3 🔧 running stage 1+, 1 ⏸ hold)
+## 📋 当前清单 (4 个 Item: 0 ⏳ pending, 2 🔧 running stage 1+, 1 ✅ done, 1 ⏸ hold)
 
 ## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
 
@@ -79,18 +79,21 @@
   - 单测: `tests/unit/calendar-color.test.ts` (档位逻辑)
   - E2E: `tests/e2e/ui-calendar-day-detail.spec.ts` (点 6/15 → 弹 modal → 看任务列表)
   - `git commit -m "feat(calendar): color tiers + day detail modal (Item #006 §3)"`
-- [ ] **Stage 4 (≤10 min)**: 文档 + 视觉对齐 + 性能
-  - 文档: PRD §3.x 新增 calendar 段 + TEST_PLAN §3.x + FEATURE_MATRIX 标记 + PROGRESS v2.x
+- [x] **Stage 4 (≤10 min)**: 文档 + 视觉对齐 + 性能 ✅ (2026-06-20)
+  - 文档: PRD §3.13 新增 calendar 段 + TEST_PLAN §3.17 + FEATURE_MATRIX 标记 + PROGRESS v2.x
   - 视觉对齐: 跟 #005 进度条 + #010 sprint modal + #011 running map 风格统一 (cyan 调色板)
-  - 性能验证: 1000+ 打卡记录时切月 <200ms (按月分页已保)
+  - 性能验证: 1000+ 打卡记录时切月 <200ms (按月分页已保, perf test ✅)
   - **🚫 不做**: 跨年统计 (留二期, 加 ◀/▶ 切年按钮); 任务列表导出 (留二期); wrangler deploy / git push
   - `git commit -m "feat(calendar): docs + visual alignment + perf test (Item #006 §4)"`
 
-**Status**: 🔧 running (Stage 1 done, 等 Stage 2-4)
+**Status**: ✅ done
 **风险**: 🟢 (UI-only, 复用 #010 modal + 现有 schema)
 **Started**: 2026-06-17
 **Commit (Stage 1)**: `0389c85` (calendar fold toggle + 7×6 grid scaffold + 6 单测全过)
-**未做**: Stage 2 (月历渲染 + 切月份) / Stage 3 (颜色档位 + 格子弹 modal) / Stage 4 (文档)
+**Commit (Stage 2+3)**: `569e10c` (month grid render + prev/next nav + day detail modal + 2 API routes)
+**Commit (Stage 4)**: `c5d8c57` (docs + visual alignment + perf test + 1 new perf test)
+**Completed**: 2026-06-20
+**未做**: 全部完成 ✅
 
 ---
 
