@@ -31,7 +31,7 @@ calendarDetails.get('/details', async (c) => {
            tc.completed_at, t.token_reward, t.target_account
     FROM task_completions tc
     JOIN tasks t ON t.id = tc.task_id
-    WHERE tc.child_id = ? AND DATE(tc.completed_at) = ?
+    WHERE tc.user_id = ? AND DATE(tc.completed_at, 'unixepoch') = ?
     ORDER BY tc.completed_at ASC
   `).bind(childId, date).all();
 

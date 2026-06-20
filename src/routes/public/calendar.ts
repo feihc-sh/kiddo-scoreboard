@@ -38,15 +38,17 @@ calendar.get('/checkins', async (c) => {
     );
   }
 
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-  const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
+  // completed_at is INTEGER unix seconds; use 'unixepoch' modifier for DATE().
+  // Range is [start-of-month, start-of-next-month) to include all of the target month.
+  const startTs = Math.floor(Date.UTC(year, month - 1, 1) / 1000);
+  const endTs = Math.floor(Date.UTC(year, month, 1) / 1000); // start of next month
 
   const result = await c.env.DB.prepare(`
-    SELECT DATE(completed_at) as date_str, COUNT(*) as cnt
+    SELECT DATE(completed_at, 'unixepoch') as date_str, COUNT(*) as cnt
     FROM task_completions
-    WHERE child_id = ? AND completed_at >= ? AND completed_at < ?
-    GROUP BY DATE(completed_at)
-  `).bind(childId, startDate, endDate + 'T23:59:59').all();
+    WHERE user_id = ? AND completed_at >= ? AND completed_at < ?
+    GROUP BY date_str
+  `).bind(childId, startTs, endTs).all();
 
   const checkins: Record<string, number> = {};
   for (const row of (result.results || [])) {
