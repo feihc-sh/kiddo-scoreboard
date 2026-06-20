@@ -22,7 +22,93 @@ const state = {
   progress: null,                 // { daily:{completed,total}, monthly:{completed,target}, yearly:{completed,target} }
   selectedDir: 1,                 // for submit modal
   health: { activeType: 'cough', currentMonth: null, events: [] },
+  running: { activeMap: null, cumKm: 0 },
 };
+// Expose state for e2e introspection (read-only).
+if (typeof window !== 'undefined') window.__kiddoState = state;
+
+// ---------- Running Check-in (Item #011 §2) ----------
+/** Load active map + cumulative km for the running check-in. */
+async function loadRunningState() {
+  try {
+    // Stage 2 reuses the records endpoint: the response includes cum_km.
+    // For an initial load (no records), we fall back to a 0-km read.
+    const r = await api('GET', '/api/running/records?limit=1');
+    // If the route doesn't yet expose GET, just hide the ticker.
+    if (r && typeof r.cum_km === 'number') {
+      state.running.cumKm = r.cum_km;
+      renderRunningCum();
+    }
+  } catch (_) {
+    // Stage 2 ships POST first; GET is Stage 3+. Silently no-op.
+  }
+}
+
+function renderRunningCum() {
+  const el = document.getElementById('running-cum');
+  const kmEl = document.getElementById('running-cum-km');
+  if (!el || !kmEl) return;
+  kmEl.textContent = Number(state.running.cumKm || 0).toFixed(1);
+  el.hidden = state.running.cumKm <= 0;
+}
+
+function openRunningCheckinModal() {
+  const modal = document.getElementById('running-checkin-modal');
+  const err = document.getElementById('running-checkin-error');
+  const input = document.getElementById('running-km-input');
+  if (!modal || !input) return;
+  if (err) { err.hidden = true; err.textContent = ''; }
+  input.value = '3.5';
+  modal.hidden = false;
+  input.focus();
+  input.select();
+}
+
+function closeRunningCheckinModal() {
+  const modal = document.getElementById('running-checkin-modal');
+  const form = document.getElementById('running-checkin-form');
+  if (form) form.reset();
+  if (modal) modal.hidden = true;
+}
+
+function showRunningError(message) {
+  const err = document.getElementById('running-checkin-error');
+  if (!err) return;
+  err.textContent = message;
+  err.hidden = false;
+}
+
+async function submitRunning(km) {
+  const submitBtn = document.getElementById('running-checkin-submit');
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    const r = await api('POST', '/api/running/records', { km });
+    // Refresh local state from the server response.
+    state.running.cumKm = Number(r.cum_km || 0);
+    renderRunningCum();
+    // Update the 3 balance cards if the response includes them.
+    if (r.balance) {
+      const gt = document.getElementById('balance-game-time');
+      const pm = document.getElementById('balance-pocket-money');
+      const co = document.getElementById('balance-coins');
+      if (gt) gt.textContent = r.balance.game_time ?? state.balance.game_time;
+      if (pm) pm.textContent = r.balance.pocket_money ?? state.balance.pocket_money;
+      if (co) co.textContent = r.balance.coins ?? state.balance.coins;
+    }
+    closeRunningCheckinModal();
+    const points = r.new_points_reached?.length || 0;
+    const minutes = r.total_awarded_minutes || 0;
+    if (points > 0) {
+      toast(`🏃 跑了 ${km} km, 到达 ${points} 个新点位, +${minutes} 分钟`, 'success');
+    } else {
+      toast(`🏃 跑了 ${km} km, 累计 ${state.running.cumKm.toFixed(1)} km`, 'success');
+    }
+  } catch (e) {
+    showRunningError(e?.message || '提交失败, 再试一次');
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
 
 // ---------- Health Checkin (M2 — RFC §6.2) ----------
 const HEALTH_EVENT_TYPES = [
@@ -715,9 +801,6 @@ function renderEvents() {
 function statusLabel(s) {
   return ({ pending: '◷ 待确认', approved: '✓ 已通过', rejected: '✕ 已拒绝', revoked: '↩ 已回收' })[s] || s;
 }
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-}
 // ---------- Reward / event icon helpers (2026-06-14: 任务实际入账是 🪙 coin, 0007 schema drift) ----------
 // task.target_account schema only allows 'game_time' | 'pocket_money', but task completion
 // actually grants 'coins' (writeTaskCoinGrant in src/utils/coin.ts hardcodes type='coins').
@@ -873,6 +956,259 @@ function openSubmitModal() {
 function closeSubmitModal() { $('#submit-modal').hidden = true; $('#submit-form').reset(); state.selectedDir = 1; $$('.seg-btn').forEach((b) => b.classList.toggle('seg-btn-active', Number(b.dataset.dir) === 1)); }
 
 // ---------- Confetti ----------
+// ============================================================================
+// Item #006 §1: Calendar fold toggle + localStorage persistence
+// Stage 2+ adds loadMonthCheckins() + renderCalendar() inside #calendar-grid
+// ============================================================================
+const CALENDAR_COLLAPSED_KEY = 'calendarCollapsed';
+
+// ---------- §6 Calendar state ----------
+const calendarState = {
+  year: new Date().getFullYear(),
+  month: new Date().getMonth() + 1, // 1-indexed
+  checkins: {}, // { "2026-06-15": 3 }
+};
+
+// Weekday labels (Mon first per ISO 8601)
+const CAL_WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
+
+/** Load month checkins from API and re-render calendar. */
+async function loadMonthCheckins(childId, year, month) {
+  try {
+    const r = await api('GET',
+      `/api/public/calendar/checkins?child_id=${childId}&year=${year}&month=${month}`
+    );
+    calendarState.checkins = r?.checkins ?? {};
+  } catch (_) {
+    calendarState.checkins = {};
+  }
+  renderCalendar(year, month);
+}
+
+/** Render the 7×6 month grid into #calendar-grid. */
+function renderCalendar(_year, _month) {
+  const grid = document.getElementById('calendar-grid');
+  const label = document.getElementById('calendar-month-label');
+  if (!grid || !label) return;
+
+  // Use calendarState (latest) instead of closure args (year, month) to avoid
+  // race when user clicks ◀/▶ rapidly: if a stale fetch resolves after a newer
+  // click, the render still reflects the latest state.
+  const year = calendarState.year;
+  const month = calendarState.month;
+
+  label.textContent = `${year} 年 ${month} 月`;
+  grid.innerHTML = '';
+
+  // Header row: weekday labels
+  CAL_WEEKDAYS.forEach((wd) => {
+    const h = document.createElement('div');
+    h.className = 'calendar-weekday';
+    h.textContent = wd;
+    grid.appendChild(h);
+  });
+
+  // Days in month
+  const daysInMonth = new Date(year, month, 0).getDate();
+  // First day: Mon=1 … Sun=7 (ISO 8601)
+  const firstDay = new Date(year, month - 1, 1);
+  const firstWeekday = ((firstDay.getDay() + 6) % 7) + 1; // 1=Mon
+
+  // Previous month trailing days (gray)
+  const prevMonthDays = new Date(year, month - 1, 0).getDate();
+  for (let i = firstWeekday - 1; i > 0; i--) {
+    const cell = document.createElement('div');
+    cell.className = 'calendar-cell calendar-cell--other-month';
+    cell.textContent = String(prevMonthDays - i + 1);
+    grid.appendChild(cell);
+  }
+
+  // Current month days
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const cell = document.createElement('div');
+    cell.className = 'calendar-cell';
+    cell.dataset.date = dateStr;
+    if (dateStr === todayStr) cell.classList.add('calendar-cell--today');
+
+    const count = calendarState.checkins[dateStr] ?? 0;
+    if (count > 0) {
+      cell.classList.add('calendar-cell--active');
+      cell.classList.add(`calendar-cell--tier-${getColorTier(count)}`);
+      cell.title = `${count} 次打卡`;
+    }
+
+    const dayLabel = document.createElement('span');
+    dayLabel.className = 'calendar-cell-day';
+    dayLabel.textContent = String(d);
+    cell.appendChild(dayLabel);
+
+    if (count > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'calendar-cell-count';
+      badge.textContent = String(count);
+      cell.appendChild(badge);
+    }
+
+    cell.addEventListener('click', () => showDayDetailModal(dateStr));
+    grid.appendChild(cell);
+  }
+
+  // Next month leading days (gray) — always pad to 42 day cells (7×6 grid)
+  // totalCells here counts day cells only (we just finished the current-month
+  // loop, weekday headers are children but not .calendar-cell). The spec
+  // (calendar-render.test.ts:99) is "Always 42 cells", so we pad day cells
+  // to 42, leaving 7 weekday headers + 42 day cells = 49 total children.
+  const dayCellsRendered = grid.querySelectorAll('.calendar-cell').length;
+  const remaining = 42 - dayCellsRendered;
+  for (let d = 1; d <= remaining; d++) {
+    const cell = document.createElement('div');
+    cell.className = 'calendar-cell calendar-cell--other-month';
+    cell.textContent = String(d);
+    grid.appendChild(cell);
+  }
+}
+
+/** Color tier: 0=gray, 1=light-cyan, 2=cyan, 3+=neon-cyan */
+function getColorTier(count) {
+  if (count === 0) return 0;
+  if (count === 1) return 1;
+  if (count === 2) return 2;
+  return 3;
+}
+
+/** Show day detail modal with task completions for the given date. */
+async function showDayDetailModal(dateStr) {
+  const modal = document.getElementById('calendar-day-modal');
+  const title = document.getElementById('calendar-day-title');
+  const body = document.getElementById('calendar-day-body');
+  if (!modal || !title || !body) return;
+
+  title.textContent = `${dateStr} 打卡明细`;
+  body.innerHTML = '<div class="modal-hint">加载中…</div>';
+  modal.hidden = false;
+
+  try {
+    const r = await api('GET',
+      `/api/public/calendar/details?child_id=${CHILD_USER_ID}&date=${dateStr}`
+    );
+
+    if (!r?.completions || r.completions.length === 0) {
+      body.innerHTML = '<div class="modal-hint">当日无打卡记录</div>';
+      return;
+    }
+
+    body.innerHTML = r.completions.map(c => {
+      // API returns completed_at as INTEGER unix seconds; convert to local HH:MM
+      const time = c.completed_at
+        ? new Date(Number(c.completed_at) * 1000).toTimeString().slice(0, 5)
+        : '';
+      return `
+      <div class="calendar-completion-item">
+        <span class="calendar-completion-icon">${c.task_icon || '⭐'}</span>
+        <span class="calendar-completion-name">${escapeHtml(c.task_name)}</span>
+        <span class="calendar-completion-reward">+${c.token_reward} 🪙</span>
+        <span class="calendar-completion-time">${time}</span>
+      </div>
+    `;
+    }).join('');
+  } catch (e) {
+    body.innerHTML = '<div class="modal-hint" style="color:var(--red)">加载失败：' + escapeHtml(String(e)) + '</div>';
+  }
+}
+
+function closeCalendarDayModal() {
+  const modal = document.getElementById('calendar-day-modal');
+  if (modal) modal.hidden = true;
+}
+
+/** Initialize calendar: load current month and bind nav events. */
+function initCalendar() {
+  const prevBtn = document.getElementById('calendar-prev-month');
+  const nextBtn = document.getElementById('calendar-next-month');
+
+  prevBtn?.addEventListener('click', () => {
+    let m = calendarState.month - 1;
+    let y = calendarState.year;
+    if (m < 1) { m = 12; y -= 1; }
+    // Bound check: 2024-01 is the earliest allowed
+    if (y < 2024) return;
+    calendarState.year = y;
+    calendarState.month = m;
+    // Optimistic UI: re-render synchronously so the label/grid update
+    // immediately, not after the async fetch resolves. The fetch will
+    // re-render with fresh checkins when it completes.
+    renderCalendar();
+    loadMonthCheckins(CHILD_USER_ID, y, m);
+  });
+
+  nextBtn?.addEventListener('click', () => {
+    const now = new Date();
+    const curY = calendarState.year;
+    const curM = calendarState.month;
+    // Bound: cannot navigate past current month
+    if (curY > now.getFullYear()) return;
+    if (curY === now.getFullYear() && curM >= now.getMonth() + 1) return;
+
+    let m = curM + 1;
+    let y = curY;
+    if (m > 12) { m = 1; y += 1; }
+    calendarState.year = y;
+    calendarState.month = m;
+    // Optimistic UI: re-render synchronously (see prev handler for rationale).
+    renderCalendar();
+    loadMonthCheckins(CHILD_USER_ID, y, m);
+  });
+
+  // Close modal on backdrop click or ESC
+  const modal = document.getElementById('calendar-day-modal');
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closeCalendarDayModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeCalendarDayModal();
+  });
+  document.getElementById('calendar-day-close')?.addEventListener('click', closeCalendarDayModal);
+
+  // Load current month on init
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  calendarState.year = y;
+  calendarState.month = m;
+  loadMonthCheckins(CHILD_USER_ID, y, m);
+}
+
+function initCalendarToggle() {
+  const btn = document.getElementById('calendar-toggle-btn');
+  const panel = document.getElementById('calendar-panel');
+  if (!btn || !panel) return;
+  // Restore folded state from localStorage (default = collapsed)
+  const stored = localStorage.getItem(CALENDAR_COLLAPSED_KEY);
+  const isCollapsed = stored === null ? true : stored === '1';
+  applyCalendarCollapsed(btn, panel, isCollapsed);
+  btn.addEventListener('click', () => {
+    const nowCollapsed = panel.hasAttribute('hidden');
+    const nextCollapsed = !nowCollapsed; // toggle: flip current state for both DOM + localStorage
+    applyCalendarCollapsed(btn, panel, nextCollapsed);
+    try { localStorage.setItem(CALENDAR_COLLAPSED_KEY, nextCollapsed ? '1' : '0'); } catch (_) { /* ignore quota */ }
+  });
+}
+
+function applyCalendarCollapsed(btn, panel, collapsed) {
+  if (collapsed) {
+    panel.setAttribute('hidden', '');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.textContent = '📅 月历';
+  } else {
+    panel.removeAttribute('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+    btn.textContent = '📅 收起月历';
+  }
+}
+
 function confettiKey() { return 'lastConfettiAt'; }
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function hasFiredConfettiToday() { return localStorage.getItem(confettiKey()) === todayStr(); }
@@ -948,6 +1284,27 @@ function bindEvents() {
   $('#submit-modal').addEventListener('click', (e) => {
     if (e.target.id === 'submit-modal') closeSubmitModal();
   });
+  // Item #006 §2 — calendar month nav + grid render
+  initCalendar();
+  // Item #006 §1 — calendar fold toggle button (PM-fix: was defined but never invoked)
+  initCalendarToggle();
+  $('#btn-running')?.addEventListener('click', openRunningCheckinModal);
+  $('#running-checkin-cancel')?.addEventListener('click', closeRunningCheckinModal);
+  $('#running-checkin-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'running-checkin-modal') closeRunningCheckinModal();
+  });
+  $('#running-checkin-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = $('#running-km-input');
+    const km = parseFloat(input?.value ?? '');
+    if (!Number.isFinite(km)) {
+      showRunningError('公里数要大于 0 哦');
+      return;
+    }
+    submitRunning(km);
+  });
+  // Load initial running state (cum-km ticker)
+  loadRunningState();
   // Health checkin — month nav
   $('#health-prev-month')?.addEventListener('click', () => shiftHealthMonth(-1));
   $('#health-next-month')?.addEventListener('click', () => shiftHealthMonth(1));

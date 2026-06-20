@@ -68,7 +68,41 @@ export function clearDynamicData(): void {
 
 /** Full reset: drop users/tasks too. Use sparingly (each task config test will recreate them). */
 export function clearAllData(): void {
-  d1Exec('DELETE FROM auth_attempts; DELETE FROM audit_log; DELETE FROM task_completions; DELETE FROM score_events; DELETE FROM tasks; DELETE FROM users;');
+  d1Exec(
+    'DELETE FROM auth_attempts; DELETE FROM audit_log; DELETE FROM task_completions; ' +
+    'DELETE FROM score_events; DELETE FROM tasks; DELETE FROM users; ' +
+    'DELETE FROM running_records; DELETE FROM running_points; DELETE FROM running_maps;'
+  );
+}
+
+/** Re-seed the default running map + points (Shanghai→Suzhou 95 km, 10 nodes).
+ *  Item #011 Stage 1 ships these via migrations/0010_seed_shanghai_suzhou.sql.
+ *  Tests call clearAllData() which wipes them; this helper re-applies the seed
+ *  so the running check-in tests don't depend on migration timing.
+ *
+ *  Kept in sync with the 0010 migration — if the seed changes there, update
+ *  here too. We do NOT use wrangler to apply migrations mid-test (would race
+ *  with the workerd process the tests are running against).
+ */
+export function seedRunningMap(): void {
+  const now = Math.floor(Date.now() / 1000);
+  d1Exec(`
+    INSERT OR IGNORE INTO running_maps (id, name, theme, total_km, is_active, display_order, created_at)
+    VALUES (1, '上海 → 苏州', 'shanghai-suzhou', 95.0, 1, 1, ${now});
+  `);
+  d1Exec(`
+    INSERT OR IGNORE INTO running_points (id, map_id, name, order_index, cum_km) VALUES
+      (1,  1, '🏁 上海·普陀区 (起点)',     0,   0.0),
+      (2,  1, '嘉定新城',                 1,   8.0),
+      (3,  1, '太仓',                     2,  22.0),
+      (4,  1, '昆山花桥',                 3,  32.0),
+      (5,  1, '昆山城区',                 4,  45.0),
+      (6,  1, '阳澄湖',                   5,  58.0),
+      (7,  1, '苏州相城区',               6,  72.0),
+      (8,  1, '苏州姑苏区',               7,  82.0),
+      (9,  1, '苏州工业园区',             8,  89.0),
+      (10, 1, '🚩 苏州·金鸡湖 (终点)',    9,  95.0);
+  `);
 }
 
 /** Seed a PM user with the given PIN. Returns the user id. */
@@ -157,6 +191,48 @@ export function seedEvent(overrides: Partial<{
   const sql =
     `INSERT INTO score_events (id, user_id, type, change_value, reason, status, submitted_by, source, week_of, created_at) ` +
     `VALUES (${sqlNum(id)}, ${sqlNum(user_id)}, ${sqlStr(type)}, ${sqlNum(change_value)}, ${sqlStr(reason)}, ${sqlStr(status)}, ${sqlStr(submitted_by)}, ${sqlStr(source)}, ${sqlStr(week_of)}, ${sqlNum(now)});`;
+  d1Exec(sql);
+  return id;
+}
+
+/** Seed a task_completion for a child + task + date. Returns the completion id.
+ *
+ *  Input `completed_at` is a Shanghai-local wall-clock string
+ *  'YYYY-MM-DD HH:MM:SS' (matches the test pattern in ui-calendar-day-detail
+ *  and other e2e specs). The helper derives `completed_date` (the SH date)
+ *  and converts the wall-clock time to a unix-seconds INTEGER for the
+ *  `completed_at` column — matches the canonical schema in
+ *  ui-admin-revoke-event-sync.spec.ts (which sets `completed_at` to
+ *  `Math.floor(Date.now() / 1000)`).
+ *
+ *  Note: `created_at` was previously inserted but is not a column of the
+ *  `task_completions` table (see migrations/0001_initial.sql). Removed —
+ *  the schema columns are id, task_id, user_id, status, completed_date,
+ *  completed_at, awarded_event_id, revoked_at, revoked_by.
+ */
+export function seedTaskCompletion(overrides: Partial<{
+  id: number;
+  user_id: number;
+  task_id: number;
+  completed_at: string; // 'YYYY-MM-DD HH:MM:SS' in Asia/Shanghai (TZ +08:00)
+  status: 'active' | 'revoked';
+}> = {}): number {
+  const id = overrides.id ?? 2000 + Math.floor(Math.random() * 100000);
+  const user_id = overrides.user_id ?? 2;
+  const task_id = overrides.task_id ?? 100;
+  // Default to today (Shanghai) at 08:00:00 local time
+  const completed_at_str = overrides.completed_at ?? shanghaiToday() + ' 08:00:00';
+  const status = overrides.status ?? 'active';
+  // Derive completed_date (SH date 'YYYY-MM-DD') + unix-seconds completed_at
+  const completed_date = completed_at_str.split(' ')[0];
+  // Parse 'YYYY-MM-DD HH:MM:SS' as Asia/Shanghai (+08:00) → unix seconds
+  const completedAtUnix = Math.floor(
+    new Date(completed_at_str.replace(' ', 'T') + '+08:00').getTime() / 1000
+  );
+  const sql =
+    `INSERT INTO task_completions (id, task_id, user_id, status, completed_date, completed_at) ` +
+    `VALUES (${sqlNum(id)}, ${sqlNum(task_id)}, ${sqlNum(user_id)}, ${sqlStr(status)}, ${sqlStr(completed_date)}, ${sqlNum(completedAtUnix)}) ` +
+    `ON CONFLICT(id) DO UPDATE SET completed_at=excluded.completed_at, status=excluded.status;`;
   d1Exec(sql);
   return id;
 }

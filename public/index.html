@@ -108,6 +108,21 @@
       </div>
     </section>
 
+    <!-- Item #006 §1: Calendar fold toggle + panel scaffold (Stage 1) -->
+    <button id="calendar-toggle-btn" class="calendar-toggle-btn" type="button" aria-expanded="false" aria-controls="calendar-panel">
+      📅 月历
+    </button>
+    <section id="calendar-panel" class="calendar-panel" aria-label="打卡月历" hidden>
+      <div class="calendar-header">
+        <button id="calendar-prev-month" class="calendar-month-nav" type="button" aria-label="上一月">◀</button>
+        <span id="calendar-month-label" class="calendar-month-label">—</span>
+        <button id="calendar-next-month" class="calendar-month-nav" type="button" aria-label="下一月">▶</button>
+      </div>
+      <div id="calendar-grid" class="calendar-grid" role="grid">
+        <!-- Stage 2+ will populate 7×6 grid -->
+      </div>
+    </section>
+
     <!-- 3 progress bars (daily / monthly / yearly) — Item #005 -->
     <section class="progress-bars" aria-label="任务完成率">
       <div class="progress-bar daily" id="pb-daily">
@@ -134,7 +149,26 @@
     <section class="actions">
       <button id="btn-submit" class="btn btn-primary action-btn">📡 提交申请</button>
       <button id="btn-refresh" class="btn btn-secondary action-btn">🔄 刷新</button>
+      <!-- Item #011 §2: 🏃 跑步打卡按钮 — opens #running-checkin-modal -->
+      <button id="btn-running" class="btn btn-secondary action-btn" type="button" aria-label="跑步打卡">🏃 跑步</button>
     </section>
+
+    <!-- Item #011 §2: cum-km ticker (filled by loadRunningState + submitRunning) -->
+    <div id="running-cum" class="running-cum" hidden>
+      <span class="running-cum-label">累计跑步</span>
+      <span class="running-cum-value"><span id="running-cum-km">0</span> km</span>
+    </div>
+
+    <!-- Item #006 §3: Day detail modal — shows task completions for a clicked cell -->
+    <div id="calendar-day-modal" class="modal-back" hidden>
+      <div class="modal">
+        <h2 class="modal-title" id="calendar-day-title">— 打卡明细</h2>
+        <div id="calendar-day-body" class="modal-hint"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="calendar-day-close">关闭</button>
+        </div>
+      </div>
+    </div>
 
     <!-- ====== M2: Health Checkin (RFC §6.2) — 主 tab「健康」+ 8 子 tab + 月历 ====== -->
     <section class="section health-section" id="tab-health" aria-label="健康打卡">
@@ -245,6 +279,26 @@
         <button type="button" class="btn btn-secondary" id="health-confirm-delete-cancel">取消</button>
         <button type="button" class="btn btn-danger" id="health-confirm-delete-confirm">确定删除</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Item #011 §2: 跑步打卡 modal — child enters km, submits, server records.
+       Reuses .modal-back / .modal classes (#app.css lines 999+). -->
+  <div id="running-checkin-modal" class="modal-back" hidden>
+    <div class="modal">
+      <h2 class="modal-title">🏃 跑步打卡</h2>
+      <p class="modal-hint" id="running-checkin-hint">// 这次跑了多少公里?</p>
+      <form id="running-checkin-form" class="form">
+        <div class="field">
+          <label for="running-km-input">公里数</label>
+          <input id="running-km-input" name="km" type="number" min="0.1" max="100" step="0.1" value="3.5" required>
+        </div>
+        <p id="running-checkin-error" class="welcome-error" role="alert" hidden></p>
+        <div class="modal-actions">
+          <button type="button" id="running-checkin-cancel" class="btn btn-secondary">取消</button>
+          <button type="submit" id="running-checkin-submit" class="btn btn-primary">提交</button>
+        </div>
+      </form>
     </div>
   </div>
 

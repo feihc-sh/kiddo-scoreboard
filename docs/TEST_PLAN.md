@@ -1072,6 +1072,47 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 
 ---
 
+### 3.17 Calendar — Month Grid + Day Detail Modal (Item #006, v2.x)
+
+**Spec files**: `tests/unit/calendar-render.test.ts` + `tests/unit/calendar-color.test.ts` + `tests/e2e/ui-calendar-month-nav.spec.ts` + `tests/e2e/ui-calendar-day-detail.spec.ts`
+
+**Page**: `/` → `#calendar-toggle-btn` + `#calendar-panel` + `#calendar-day-detail-modal`
+
+#### Unit Tests (39 tests)
+
+**`tests/unit/calendar-render.test.ts`** (30 tests):
+- getDaysInMonth: 28d non-leap / 29d leap / 30d / 31d / century leap / century non-leap
+- getFirstWeekday: Mon / Sat / various months
+- grid cell count: always 42 cells (Feb non-leap / leap / Mar with prev padding / Jun / Dec)
+- getColorTier: 0→tier0, 1→tier1, 2→tier2, 3→tier3, 100→tier3 (capped), -1→tier3
+- prev-month trailing padding: correct prev cell count per firstWeekday
+
+**`tests/unit/calendar-color.test.ts`** (7 tests):
+- getColorTier boundaries: 0/1/2/3/4/100/9999 all map correctly (cap at tier 3)
+- monotonic: tier(0) < tier(1) < tier(2) < tier(3)
+
+**Performance** (1 test):
+- `tests/unit/calendar-render.test.ts`: seed 1000 checkins, measure renderCalendar < 200ms
+
+#### E2E Tests (2 scenarios)
+
+**`tests/e2e/ui-calendar-month-nav.spec.ts`** (2 scenarios):
+- **Smoke: Fold → Expand → See month → Navigate → Back**
+  - Steps: Click `#calendar-toggle-btn` → `#calendar-panel` visible; verify month label (e.g. "2026 年 6 月"); click `#calendar-next-month` → month increments; click `#calendar-prev-month` → returns; click toggle → panel hides.
+  - Assert: Panel shows/hides correctly; month label updates; navigation buttons work.
+
+**`tests/e2e/ui-calendar-day-detail.spec.ts`** (1 scenario):
+- **Happy: Click calendar cell → modal shows task list for that day**
+  - Steps: Expand calendar; click a day cell that has checkins (≥1); `#calendar-day-detail-modal` opens.
+  - Assert: Modal title shows date; task list shows correct task names + icons + rewards + times; clicking backdrop or pressing ESC closes modal.
+
+#### Visual / UX (manual QA)
+- V11: Calendar 4 color tiers visible — gray (0) / light cyan (1) / cyan (2) / neon cyan with glow (3+)
+- V12: ◀/▶ nav buttons have Mecha cyan hover glow
+- V13: Day detail modal renders task list cleanly with icons and times
+
+---
+
 ### 3.16 Coin System Test Scenarios (v3 新增)
 
 > **来源**: `docs/coin-system-rfc.md` §7 (F1-F12 验收) + `docs/coin-system-test-plan.md` §2/§3 + `docs/coin-shop-requirements.md` §7.
