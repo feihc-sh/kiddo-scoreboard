@@ -39,7 +39,7 @@
 
 ---
 
-## 📋 当前清单 (4 个 Item: 0 ⏳ pending, 2 🔧 running stage 1+, 1 ✅ done, 1 ⏸ hold)
+## 📋 当前清单 (5 个 Item: 1 ⏳ pending, 2 🔧 running stage 1+, 1 ⏸ hold, 1 ✅ done 待归档)
 
 ## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
 
@@ -392,7 +392,90 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 
 ---
 
-## 📝 Item 模板 (未来新 Item 用)
+## Item #012 — Calendar icon 渲染 + Tab 筛选 🔧 deferred (等 #008 done)
+
+> 用户原话 (2026-06-20): "日历的地方有一个问题，我不希望只显示数字，而是希望显示那个他任务完成的对应的小图标。并且增加几个Tab，可以单独筛选：1. 看所有的 2. 筛选特定的任务"
+
+**已拍板 (2026-06-20)**:
+
+1. **A3+ (图标显示策略)**: 横排所有 task icon, 无数字无 +N; **当天 5 个都打** 的话显示 ⭐ 单 icon (overflow 避免拥挤)
+2. **B2 (Tab 多选 OR)**: 多选 tab, 用户可同时选 N 个 task → 显示 N 个 task **任一完成** 的格子 (OR logic)
+3. **C1 (Tab 来源)**: 所有 is_active=1 tasks 都成 tab (现在 5 个: 刷牙 / 整理玩具 / 阅读 / 运动 / 帮助做家务; 未来 task 增到 10+ 再考虑 overflow → C2 "添加筛选" 按钮)
+4. **D2 (持久化)**: localStorage 保存选中的 task_id 数组 (`[]` = 全部, `[1, 3]` = 刷牙 + 阅读)
+
+**Clarification** (PM 整理):
+
+- **数据模型不变**: `task_completions` 表 + `tasks` JOIN, 现有 schema 够用。无需 migration。
+- **API 改动 2 个**:
+  - `GET /api/public/calendar/checkins?child=X&year=Y&month=M` 改返 `{checkins: {date: [{task_id, task_icon, task_name, count}, ...]}}` (从 `{date: count}` 扩展)
+  - 加 `task_ids` query param (逗号分隔): `?task_ids=1,3` → server 端 WHERE filter (避免 client 拿全表再 filter, D1 scan 优化)
+  - 加新 endpoint `GET /api/public/calendar/tasks` → 返 `[is_active=1] tasks 列表` (供 tab bar 渲染), `{tasks: [{id, name, icon, category, sort_order}, ...]}`
+- **前端 state**:
+  - `calendarState.checkins` 改结构: `{date: [{task_id, task_icon, task_name, count}, ...]}`
+  - 新增 `calendarState.selectedTaskIds: number[]` (从 localStorage 初始化, `[]` = 全部)
+- **Tab bar 视觉**:
+  - 顶部 📅 月历按钮 + ◀/▶ 月份 下面 + 月历 grid 上面, 一行 pill tabs
+  - 默认 tab "全部" (id=null/empty) 在最左, 然后按 task.sort_order ASC 排列
+  - Active state: cyan glow + 1px border (跟现有 #005/#008 风格统一)
+  - Multi-select: tap toggle, active tabs 高亮 (B2 OR logic)
+  - 5+ tasks 时 tabs 横向滚动 (overflow-x: auto)
+- **Cell 渲染新逻辑**:
+  - 当前 count → 拆成 task list (`{date: [{task_id, task_icon, ...}]}`)
+  - 横排 icons (CSS flex), icon 大小跟 cell 适配 (24px?)
+  - **当 task list ≥ 5** → 显示 ⭐ 单 icon (overflow indicator)
+  - 当 list 空 (count=0) → gray cell (跟现在一样)
+  - 4 档颜色 (gray/light-cyan/cyan/neon-cyan) 继续按 **完成任务数** 算 (跟"全部" mode 一致)
+- **筛选 mode**:
+  - 选 "全部" (空 selectedTaskIds) → 显示所有 task completions, color tier 按 count
+  - 选 1+ task → 显示这些 task 任一完成的格子, color tier 按 **选中 task 完成的总数**
+  - 例: 6/18 刷牙 + 阅读完成, 选 "全部" → tier 2 (2 个 task) + 2 icons. 选只 "刷牙" → tier 1 (1 个 task) + 1 icon.
+- **API 边界**:
+  - `task_ids` 空 / 缺失 → return all (跟"全部" tab 一致)
+  - `task_ids` 含无效 id → silently filter (server log warn)
+  - 0 完成 → empty checkins object + 全部 gray cell
+- **localStorage key**: `calendarSelectedTaskIds` (array<number>), JSON serialized
+- **iPad Safari cache**: 跟 #006 一样, `?v=N` cache-bust + hard reload
+
+**Action Plan** (4 段, 每段 ≤ 15 min):
+
+- [ ] **Stage 1 (≤20 min)**: API 改动 (calendar/checkins + 新增 calendar/tasks)
+  - `src/routes/public/calendar.ts`: SQL 改返 task 详情 (JOIN tasks) + 加 `task_ids` filter param
+  - `src/routes/public/calendar-tasks.ts` (新文件): `/api/public/calendar/tasks` endpoint, 返 is_active=1 tasks
+  - `src/worker.ts`: 注册新 route
+  - 单测: `tests/unit/calendar-tasks.test.ts` (task list filtering + sort)
+  - 单测: `tests/unit/calendar-checkins-filter.test.ts` (task_ids param behavior)
+  - `git commit -m "feat(calendar): API returns task details + task_ids filter + /calendar/tasks endpoint (Item #012 §1)"`
+- [ ] **Stage 2 (≤20 min)**: UI cell 渲染 icons (A3+ 逻辑)
+  - `public/app.js`: `calendarState.checkins` 改结构; `renderCalendar` 改 cell 渲染 (icons 横排, 5+ → ⭐)
+  - `public/app.css`: `.calendar-cell-icons` flex + `.calendar-cell-icon` 24px + `.calendar-cell-icon-overflow` (⭐) 居中
+  - 单测: `tests/unit/calendar-render-icons.test.ts` (icon count, overflow logic)
+  - e2e: `tests/e2e/ui-calendar-icons.spec.ts` (1 task → 1 icon, 3 tasks → 3 icons, 5 → ⭐)
+  - `git commit -m "feat(calendar): cell renders task icons (5+ → ⭐ overflow) (Item #012 §2)"`
+- [ ] **Stage 3 (≤20 min)**: Tab bar (B2 + C1 + D2 整合)
+  - `public/index.html`: 加 `#calendar-tabs` 容器 (默认 "全部" tab + dynamic task tabs from API)
+  - `public/app.js`: `initCalendarTabs()` (load tasks from /calendar/tasks, render tabs, bind multi-select toggle), `calendarState.selectedTaskIds` localStorage 读写, tab 切换 → 重新调 `loadMonthCheckins(task_ids=...)`
+  - `public/app.css`: `.calendar-tabs` 横向滚动 + `.calendar-tab` pill + `.calendar-tab--active` cyan glow
+  - 单测: `tests/unit/calendar-tabs.test.ts` (localStorage toggle + loadMonthCheckins call with correct task_ids)
+  - e2e: `tests/e2e/ui-calendar-tabs.spec.ts` (默认 "全部" / 多选 toggle / 切换后 cell 更新 / 持久化跨刷新)
+  - `git commit -m "feat(calendar): multi-select tab bar (B2 + C1) + localStorage (D2) (Item #012 §3)"`
+- [ ] **Stage 4 (≤15 min)**: 文档 + 视觉对齐 + regression
+  - `docs/PRD.md` §3.13 加 tab filter 段
+  - `docs/TEST_PLAN.md` §3.17 加新 e2e + 单测
+  - `docs/FEATURE_MATRIX.md` 标记 ✅
+  - 视觉对齐: tab bar 跟 #005/#008/#010/#011 cyan 风格统一
+  - Regression: 跑全套 npx vitest run + npx playwright test
+  - `git commit -m "feat(calendar): docs + visual alignment + regression (Item #012 §4)"`
+
+**Status**: ⏳ pending (deferred: queue after #008, 等 cron 自然 file-order 跑到 #012)
+
+**风险**: 🟢 (UI-only + 2 API 端点改动, schema 不变, #006 已 verify pattern)
+
+**Started**: —
+**Commit**: —
+
+**预计开始**: 跑完 #008 + #011 后, 大约 2026-06-22 之后 (1 task/晚, #008 stage 2-4 + #011 stage 3-4 各 1 晚)
+
+---
 
 ```markdown
 ## Item #XXX — <一句话标题>
