@@ -966,18 +966,18 @@ const CALENDAR_COLLAPSED_KEY = 'calendarCollapsed';
 const calendarState = {
   year: new Date().getFullYear(),
   month: new Date().getMonth() + 1, // 1-indexed
-  checkins: {} as Record<string, number>, // { "2026-06-15": 3 }
+  checkins: {}, // { "2026-06-15": 3 }
 };
 
 // Weekday labels (Mon first per ISO 8601)
 const CAL_WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 
 /** Load month checkins from API and re-render calendar. */
-async function loadMonthCheckins(childId: number, year: number, month: number) {
+async function loadMonthCheckins(childId, year, month) {
   try {
     const r = await api('GET',
       `/api/public/calendar/checkins?child_id=${childId}&year=${year}&month=${month}`
-    ) as { checkins: Record<string, number> };
+    );
     calendarState.checkins = r?.checkins ?? {};
   } catch (_) {
     calendarState.checkins = {};
@@ -986,10 +986,16 @@ async function loadMonthCheckins(childId: number, year: number, month: number) {
 }
 
 /** Render the 7×6 month grid into #calendar-grid. */
-function renderCalendar(year: number, month: number) {
+function renderCalendar(_year, _month) {
   const grid = document.getElementById('calendar-grid');
   const label = document.getElementById('calendar-month-label');
   if (!grid || !label) return;
+
+  // Use calendarState (latest) instead of closure args (year, month) to avoid
+  // race when user clicks ◀/▶ rapidly: if a stale fetch resolves after a newer
+  // click, the render still reflects the latest state.
+  const year = calendarState.year;
+  const month = calendarState.month;
 
   label.textContent = `${year} 年 ${month} 月`;
   grid.innerHTML = '';
@@ -1050,9 +1056,13 @@ function renderCalendar(year: number, month: number) {
     grid.appendChild(cell);
   }
 
-  // Next month leading days (gray) — always pad to 42 cells
-  const totalCells = grid.children.length;
-  const remaining = 42 - totalCells;
+  // Next month leading days (gray) — always pad to 42 day cells (7×6 grid)
+  // totalCells here counts day cells only (we just finished the current-month
+  // loop, weekday headers are children but not .calendar-cell). The spec
+  // (calendar-render.test.ts:99) is "Always 42 cells", so we pad day cells
+  // to 42, leaving 7 weekday headers + 42 day cells = 49 total children.
+  const dayCellsRendered = grid.querySelectorAll('.calendar-cell').length;
+  const remaining = 42 - dayCellsRendered;
   for (let d = 1; d <= remaining; d++) {
     const cell = document.createElement('div');
     cell.className = 'calendar-cell calendar-cell--other-month';
@@ -1062,7 +1072,7 @@ function renderCalendar(year: number, month: number) {
 }
 
 /** Color tier: 0=gray, 1=light-cyan, 2=cyan, 3+=neon-cyan */
-function getColorTier(count: number): number {
+function getColorTier(count) {
   if (count === 0) return 0;
   if (count === 1) return 1;
   if (count === 2) return 2;
@@ -1070,7 +1080,7 @@ function getColorTier(count: number): number {
 }
 
 /** Show day detail modal with task completions for the given date. */
-async function showDayDetailModal(dateStr: string) {
+async function showDayDetailModal(dateStr) {
   const modal = document.getElementById('calendar-day-modal');
   const title = document.getElementById('calendar-day-title');
   const body = document.getElementById('calendar-day-body');
@@ -1083,28 +1093,35 @@ async function showDayDetailModal(dateStr: string) {
   try {
     const r = await api('GET',
       `/api/public/calendar/details?child_id=${CHILD_USER_ID}&date=${dateStr}`
-    ) as { completions: Array<{ id: number; task_name: string; task_icon: string; completed_at: string; token_reward: number; target_account: string }> };
+    );
 
     if (!r?.completions || r.completions.length === 0) {
       body.innerHTML = '<div class="modal-hint">当日无打卡记录</div>';
       return;
     }
 
-    body.innerHTML = r.completions.map(c => `
+    body.innerHTML = r.completions.map(c => {
+      // API returns completed_at as INTEGER unix seconds; convert to local HH:MM
+      const time = c.completed_at
+        ? new Date(Number(c.completed_at) * 1000).toTimeString().slice(0, 5)
+        : '';
+      return `
       <div class="calendar-completion-item">
         <span class="calendar-completion-icon">${c.task_icon || '⭐'}</span>
         <span class="calendar-completion-name">${escapeHtml(c.task_name)}</span>
         <span class="calendar-completion-reward">+${c.token_reward} 🪙</span>
-        <span class="calendar-completion-time">${c.completed_at ? c.completed_at.slice(11, 16) : ''}</span>
+        <span class="calendar-completion-time">${time}</span>
       </div>
-    `).join('');
+    `;
+    }).join('');
   } catch (e) {
     body.innerHTML = '<div class="modal-hint" style="color:var(--red)">加载失败：' + escapeHtml(String(e)) + '</div>';
   }
 }
 
 function closeCalendarDayModal() {
-  document.getElementById('calendar-day-modal')!.hidden = true;
+  const modal = document.getElementById('calendar-day-modal');
+  if (modal) modal.hidden = true;
 }
 
 /** Initialize calendar: load current month and bind nav events. */
@@ -1120,6 +1137,10 @@ function initCalendar() {
     if (y < 2024) return;
     calendarState.year = y;
     calendarState.month = m;
+    // Optimistic UI: re-render synchronously so the label/grid update
+    // immediately, not after the async fetch resolves. The fetch will
+    // re-render with fresh checkins when it completes.
+    renderCalendar();
     loadMonthCheckins(CHILD_USER_ID, y, m);
   });
 
@@ -1136,6 +1157,8 @@ function initCalendar() {
     if (m > 12) { m = 1; y += 1; }
     calendarState.year = y;
     calendarState.month = m;
+    // Optimistic UI: re-render synchronously (see prev handler for rationale).
+    renderCalendar();
     loadMonthCheckins(CHILD_USER_ID, y, m);
   });
 
@@ -1168,8 +1191,9 @@ function initCalendarToggle() {
   applyCalendarCollapsed(btn, panel, isCollapsed);
   btn.addEventListener('click', () => {
     const nowCollapsed = panel.hasAttribute('hidden');
-    applyCalendarCollapsed(btn, panel, nowCollapsed);
-    try { localStorage.setItem(CALENDAR_COLLAPSED_KEY, nowCollapsed ? '1' : '0'); } catch (_) { /* ignore quota */ }
+    const nextCollapsed = !nowCollapsed; // toggle: flip current state for both DOM + localStorage
+    applyCalendarCollapsed(btn, panel, nextCollapsed);
+    try { localStorage.setItem(CALENDAR_COLLAPSED_KEY, nextCollapsed ? '1' : '0'); } catch (_) { /* ignore quota */ }
   });
 }
 
@@ -1262,6 +1286,8 @@ function bindEvents() {
   });
   // Item #006 §2 — calendar month nav + grid render
   initCalendar();
+  // Item #006 §1 — calendar fold toggle button (PM-fix: was defined but never invoked)
+  initCalendarToggle();
   $('#btn-running')?.addEventListener('click', openRunningCheckinModal);
   $('#running-checkin-cancel')?.addEventListener('click', closeRunningCheckinModal);
   $('#running-checkin-modal')?.addEventListener('click', (e) => {
