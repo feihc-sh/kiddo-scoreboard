@@ -195,6 +195,29 @@ export function seedEvent(overrides: Partial<{
   return id;
 }
 
+/** Seed a task_completion for a child + task + date. Returns the completion id. */
+export function seedTaskCompletion(overrides: Partial<{
+  id: number;
+  child_id: number;
+  task_id: number;
+  completed_at: string; // YYYY-MM-DD HH:MM:SS
+  status: 'active' | 'revoked';
+}> = {}): number {
+  const id = overrides.id ?? 2000 + Math.floor(Math.random() * 100000);
+  const child_id = overrides.child_id ?? 2;
+  const task_id = overrides.task_id ?? 100;
+  // Default to today in Shanghai timezone
+  const completed_at = overrides.completed_at ?? shanghaiToday() + ' 08:00:00';
+  const status = overrides.status ?? 'active';
+  const now = Math.floor(Date.now() / 1000);
+  const sql =
+    `INSERT INTO task_completions (id, child_id, task_id, completed_at, status, created_at) ` +
+    `VALUES (${sqlNum(id)}, ${sqlNum(child_id)}, ${sqlNum(task_id)}, ${sqlStr(completed_at)}, ${sqlStr(status)}, ${sqlNum(now)}) ` +
+    `ON CONFLICT(id) DO UPDATE SET completed_at=excluded.completed_at, status=excluded.status;`;
+  d1Exec(sql);
+  return id;
+}
+
 function readDevSecret(): string {
   const p = `${WRANGLER_CWD}/.dev.vars`;
   if (!existsSync(p)) {

@@ -958,9 +958,205 @@ function closeSubmitModal() { $('#submit-modal').hidden = true; $('#submit-form'
 // ---------- Confetti ----------
 // ============================================================================
 // Item #006 §1: Calendar fold toggle + localStorage persistence
-// Stage 2+ will add loadMonthCheckins() + renderCalendar() inside #calendar-grid
+// Stage 2+ adds loadMonthCheckins() + renderCalendar() inside #calendar-grid
 // ============================================================================
 const CALENDAR_COLLAPSED_KEY = 'calendarCollapsed';
+
+// ---------- §6 Calendar state ----------
+const calendarState = {
+  year: new Date().getFullYear(),
+  month: new Date().getMonth() + 1, // 1-indexed
+  checkins: {} as Record<string, number>, // { "2026-06-15": 3 }
+};
+
+// Weekday labels (Mon first per ISO 8601)
+const CAL_WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
+
+/** Load month checkins from API and re-render calendar. */
+async function loadMonthCheckins(childId: number, year: number, month: number) {
+  try {
+    const r = await api('GET',
+      `/api/public/calendar/checkins?child_id=${childId}&year=${year}&month=${month}`
+    ) as { checkins: Record<string, number> };
+    calendarState.checkins = r?.checkins ?? {};
+  } catch (_) {
+    calendarState.checkins = {};
+  }
+  renderCalendar(year, month);
+}
+
+/** Render the 7×6 month grid into #calendar-grid. */
+function renderCalendar(year: number, month: number) {
+  const grid = document.getElementById('calendar-grid');
+  const label = document.getElementById('calendar-month-label');
+  if (!grid || !label) return;
+
+  label.textContent = `${year} 年 ${month} 月`;
+  grid.innerHTML = '';
+
+  // Header row: weekday labels
+  CAL_WEEKDAYS.forEach((wd) => {
+    const h = document.createElement('div');
+    h.className = 'calendar-weekday';
+    h.textContent = wd;
+    grid.appendChild(h);
+  });
+
+  // Days in month
+  const daysInMonth = new Date(year, month, 0).getDate();
+  // First day: Mon=1 … Sun=7 (ISO 8601)
+  const firstDay = new Date(year, month - 1, 1);
+  const firstWeekday = ((firstDay.getDay() + 6) % 7) + 1; // 1=Mon
+
+  // Previous month trailing days (gray)
+  const prevMonthDays = new Date(year, month - 1, 0).getDate();
+  for (let i = firstWeekday - 1; i > 0; i--) {
+    const cell = document.createElement('div');
+    cell.className = 'calendar-cell calendar-cell--other-month';
+    cell.textContent = String(prevMonthDays - i + 1);
+    grid.appendChild(cell);
+  }
+
+  // Current month days
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const cell = document.createElement('div');
+    cell.className = 'calendar-cell';
+    cell.dataset.date = dateStr;
+    if (dateStr === todayStr) cell.classList.add('calendar-cell--today');
+
+    const count = calendarState.checkins[dateStr] ?? 0;
+    if (count > 0) {
+      cell.classList.add('calendar-cell--active');
+      cell.classList.add(`calendar-cell--tier-${getColorTier(count)}`);
+      cell.title = `${count} 次打卡`;
+    }
+
+    const dayLabel = document.createElement('span');
+    dayLabel.className = 'calendar-cell-day';
+    dayLabel.textContent = String(d);
+    cell.appendChild(dayLabel);
+
+    if (count > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'calendar-cell-count';
+      badge.textContent = String(count);
+      cell.appendChild(badge);
+    }
+
+    cell.addEventListener('click', () => showDayDetailModal(dateStr));
+    grid.appendChild(cell);
+  }
+
+  // Next month leading days (gray) — always pad to 42 cells
+  const totalCells = grid.children.length;
+  const remaining = 42 - totalCells;
+  for (let d = 1; d <= remaining; d++) {
+    const cell = document.createElement('div');
+    cell.className = 'calendar-cell calendar-cell--other-month';
+    cell.textContent = String(d);
+    grid.appendChild(cell);
+  }
+}
+
+/** Color tier: 0=gray, 1=light-cyan, 2=cyan, 3+=neon-cyan */
+function getColorTier(count: number): number {
+  if (count === 0) return 0;
+  if (count === 1) return 1;
+  if (count === 2) return 2;
+  return 3;
+}
+
+/** Show day detail modal with task completions for the given date. */
+async function showDayDetailModal(dateStr: string) {
+  const modal = document.getElementById('calendar-day-modal');
+  const title = document.getElementById('calendar-day-title');
+  const body = document.getElementById('calendar-day-body');
+  if (!modal || !title || !body) return;
+
+  title.textContent = `${dateStr} 打卡明细`;
+  body.innerHTML = '<div class="modal-hint">加载中…</div>';
+  modal.hidden = false;
+
+  try {
+    const r = await api('GET',
+      `/api/public/calendar/details?child_id=${CHILD_USER_ID}&date=${dateStr}`
+    ) as { completions: Array<{ id: number; task_name: string; task_icon: string; completed_at: string; token_reward: number; target_account: string }> };
+
+    if (!r?.completions || r.completions.length === 0) {
+      body.innerHTML = '<div class="modal-hint">当日无打卡记录</div>';
+      return;
+    }
+
+    body.innerHTML = r.completions.map(c => `
+      <div class="calendar-completion-item">
+        <span class="calendar-completion-icon">${c.task_icon || '⭐'}</span>
+        <span class="calendar-completion-name">${escapeHtml(c.task_name)}</span>
+        <span class="calendar-completion-reward">+${c.token_reward} 🪙</span>
+        <span class="calendar-completion-time">${c.completed_at ? c.completed_at.slice(11, 16) : ''}</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    body.innerHTML = '<div class="modal-hint" style="color:var(--red)">加载失败：' + escapeHtml(String(e)) + '</div>';
+  }
+}
+
+function closeCalendarDayModal() {
+  document.getElementById('calendar-day-modal')!.hidden = true;
+}
+
+/** Initialize calendar: load current month and bind nav events. */
+function initCalendar() {
+  const prevBtn = document.getElementById('calendar-prev-month');
+  const nextBtn = document.getElementById('calendar-next-month');
+
+  prevBtn?.addEventListener('click', () => {
+    let m = calendarState.month - 1;
+    let y = calendarState.year;
+    if (m < 1) { m = 12; y -= 1; }
+    // Bound check: 2024-01 is the earliest allowed
+    if (y < 2024) return;
+    calendarState.year = y;
+    calendarState.month = m;
+    loadMonthCheckins(CHILD_USER_ID, y, m);
+  });
+
+  nextBtn?.addEventListener('click', () => {
+    const now = new Date();
+    const curY = calendarState.year;
+    const curM = calendarState.month;
+    // Bound: cannot navigate past current month
+    if (curY > now.getFullYear()) return;
+    if (curY === now.getFullYear() && curM >= now.getMonth() + 1) return;
+
+    let m = curM + 1;
+    let y = curY;
+    if (m > 12) { m = 1; y += 1; }
+    calendarState.year = y;
+    calendarState.month = m;
+    loadMonthCheckins(CHILD_USER_ID, y, m);
+  });
+
+  // Close modal on backdrop click or ESC
+  const modal = document.getElementById('calendar-day-modal');
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closeCalendarDayModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeCalendarDayModal();
+  });
+  document.getElementById('calendar-day-close')?.addEventListener('click', closeCalendarDayModal);
+
+  // Load current month on init
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  calendarState.year = y;
+  calendarState.month = m;
+  loadMonthCheckins(CHILD_USER_ID, y, m);
+}
 
 function initCalendarToggle() {
   const btn = document.getElementById('calendar-toggle-btn');
@@ -1064,7 +1260,8 @@ function bindEvents() {
   $('#submit-modal').addEventListener('click', (e) => {
     if (e.target.id === 'submit-modal') closeSubmitModal();
   });
-  // Item #011 §2 — running check-in
+  // Item #006 §2 — calendar month nav + grid render
+  initCalendar();
   $('#btn-running')?.addEventListener('click', openRunningCheckinModal);
   $('#running-checkin-cancel')?.addEventListener('click', closeRunningCheckinModal);
   $('#running-checkin-modal')?.addEventListener('click', (e) => {

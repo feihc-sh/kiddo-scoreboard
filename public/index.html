@@ -159,6 +159,17 @@
       <span class="running-cum-value"><span id="running-cum-km">0</span> km</span>
     </div>
 
+    <!-- Item #006 §3: Day detail modal — shows task completions for a clicked cell -->
+    <div id="calendar-day-modal" class="modal-back" hidden>
+      <div class="modal">
+        <h2 class="modal-title" id="calendar-day-title">— 打卡明细</h2>
+        <div id="calendar-day-body" class="modal-hint"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="calendar-day-close">关闭</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ====== M2: Health Checkin (RFC §6.2) — 主 tab「健康」+ 8 子 tab + 月历 ====== -->
     <section class="section health-section" id="tab-health" aria-label="健康打卡">
       <h2 class="section-title">🩺 健康打卡 <span class="section-hint">// 8 子 tab + 月历</span></h2>
