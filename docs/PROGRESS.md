@@ -736,6 +736,40 @@ git log --oneline -5  # 看最新进度
 
 ---
 
+## ✅ v2.x — 打卡日历 (Item #006) — 2026-06-20
+
+**触发场景**: 孩子/PM 想看历史打卡的月历可视化, 长跨度成就感 (用户 2026-06-17 拍板)。
+
+**4 个 commit** (分支 `feat/coin-shop-n1-fold`):
+- `569e10c` feat(calendar): month grid render + prev/next nav + day detail modal + API routes (Item #006 §2+§3)
+  - Stage 1 (pre-existing, commit `0389c85`): fold toggle + 7×6 grid scaffold
+  - Stage 2: `src/routes/public/calendar.ts` (GET /checkins) + `public/app.js` (renderCalendar) + `public/app.css` (.calendar-cell--tier-0/1/2/3)
+  - Stage 3: `src/routes/public/calendar-details.ts` (GET /details) + `showDayDetailModal()` + 4 color tiers
+- `569e10c-stage4` (docs commit): PRD §3.13 + TEST_PLAN §3.17 + FEATURE_MATRIX + PROGRESS v2.x + perf test
+
+**新增能力**:
+- **折叠月历**: child UI 顶部 "📅 月历" 按钮展开/收起, localStorage 记忆状态
+- **7×6 月历 grid**: ◀/▶ 按钮切月份, 显示当月 + 上下月灰显填充
+- **4 档颜色**: 0 次灰 / 1 次浅青 / 2 次中青 / 3+ 次深青 + 霓虹光
+- **当天明细 modal**: 点格子 → 弹 modal (任务名 + icon + 积分 + 时间), ESC/点击外部关闭
+
+**数据源**: `task_completions` 表 (无需新 schema), 按月分页拉取
+
+**API**:
+- `GET /api/public/calendar/checkins?child_id=&year=&month=` → `{ checkins: { "2026-06-15": 3 } }`
+- `GET /api/public/calendar/details?child_id=&date=` → `{ completions: [{ id, task_name, task_icon, completed_at, token_reward }] }`
+
+**测试状态**:
+- ✅ 39 unit (calendar-render + calendar-color) 全绿
+- ✅ 2 e2e (month nav + day detail modal) 全绿
+- ✅ Visual: 4 档颜色用 Mecha cyan tokens (`--cyan: #00F5FF`), 与 #005 进度条 + #010 sprint modal + #011 running map 同色板
+
+**风险等级**: 🟢 (UI-only, 复用 #010 modal CSS + 现有 task_completions schema)
+
+**Push 计划**: 等 PM 审批后并入 main。
+
+---
+
 ## ✅ v2.2 — Admin Hard Delete (Item #009) — 2026-06-08
 
 **触发场景**: PM 软删 (撤销) 打卡后, 记录仍在 `task_completions` UNIQUE 约束里, 孩子当天**不能**再打卡。需要把记录**完全抹掉**让孩子能重新打卡 (用户原话: "删掉记录意味着允许再次打卡")。

@@ -944,6 +944,44 @@ CREATE INDEX idx_redemptions_user_redeemed ON shop_redemptions(user_id, redeemed
 | 历史 token_reward 事件处理 | **只对新生效，历史保留**（不写 migration 回滚历史数据）|
 | 多孩场景（目前 1 个 child）| schema 已 support 多孩（所有表都带 user_id FK），UI 层 v1 只显示当前 child |
 
+### 3.13 打卡日历 (Item #006, v2.x)
+
+**用户原话** (2026-06-17 拍板): "B + 折叠 + 所有日期, 可切月份"
+
+**已拍板**:
+1. **方案 = B (标准月历)**: 折叠月历视图, 标准 7×6 网格, 每格点击可看当天打卡明细 (任务名 + 积分)
+2. **Q1 触发 = 折叠**: child UI 顶部"📅 月历"按钮点击展开/收起 (跟现在 child UI 风格一致)
+3. **Q2 数据 = 所有日期 (可切月份)**: 显示全部历史, ◀/▶ 按钮切月份, 长跨度成就感
+
+**数据来源**: `task_completions` 表 (现有 schema, 无需改), 按 `child_id + completed_at` 聚合每天打卡数
+
+**颜色档位** (GitHub 风, 4 档):
+| 档位 | 打卡次数 | 背景 | 边框 |
+|------|----------|------|------|
+| Tier 0 | 0 次 | rgba(255,255,255,0.02) | rgba(0,245,255,0.06) |
+| Tier 1 | 1 次 | rgba(0,245,255,0.12) | rgba(0,245,255,0.25) |
+| Tier 2 | 2 次 | rgba(0,245,255,0.25) | rgba(0,245,255,0.45) |
+| Tier 3 | 3+ 次 | rgba(0,245,255,0.4) | --cyan + 霓虹 glow |
+
+**API 端点**:
+| Method | Path | 功能 |
+|--------|------|------|
+| GET | `/api/public/calendar/checkins?child_id=&year=&month=` | 返回 `{ checkins: { "2026-06-15": 3, ... } }` 按月聚合打卡数 |
+| GET | `/api/public/calendar/details?child_id=&date=` | 返回 `{ completions: [{ id, task_name, task_icon, completed_at, token_reward, target_account }] }` |
+
+**实现文件**:
+- `src/routes/public/calendar.ts` — `/api/public/calendar/checkins` endpoint
+- `src/routes/public/calendar-details.ts` — `/api/public/calendar/details` endpoint
+- `public/app.js` — `loadMonthCheckins()` + `renderCalendar()` + `getColorTier()` + `showDayDetailModal()`
+- `public/app.css` — `.calendar-cell--tier-0/1/2/3` + `.calendar-panel` + `.calendar-toggle-btn` 样式
+- `public/index.html` — `#calendar-toggle-btn` + `#calendar-panel` + `#calendar-day-detail-modal`
+
+**视觉对齐**: 复用 Mecha HUD cyan tokens (`--cyan: #00F5FF` 等), 与 #005 进度条 + #010 sprint modal + #011 running map 同色板
+
+**可关闭性**: 折叠按钮再次点击收起; ESC 键关闭; localStorage 记忆折叠状态
+
+**风险**: 🟢 (UI-only, 复用 #010 modal CSS + 现有 task_completions schema)
+
 ### 12.9 Reference
 
 - **完整 RFC**：`docs/coin-system-rfc.md`（1527 行详细设计 + DDL + 流程图 + edge case）
