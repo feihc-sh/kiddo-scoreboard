@@ -195,24 +195,43 @@ export function seedEvent(overrides: Partial<{
   return id;
 }
 
-/** Seed a task_completion for a child + task + date. Returns the completion id. */
+/** Seed a task_completion for a child + task + date. Returns the completion id.
+ *
+ *  Input `completed_at` is a Shanghai-local wall-clock string
+ *  'YYYY-MM-DD HH:MM:SS' (matches the test pattern in ui-calendar-day-detail
+ *  and other e2e specs). The helper derives `completed_date` (the SH date)
+ *  and converts the wall-clock time to a unix-seconds INTEGER for the
+ *  `completed_at` column — matches the canonical schema in
+ *  ui-admin-revoke-event-sync.spec.ts (which sets `completed_at` to
+ *  `Math.floor(Date.now() / 1000)`).
+ *
+ *  Note: `created_at` was previously inserted but is not a column of the
+ *  `task_completions` table (see migrations/0001_initial.sql). Removed —
+ *  the schema columns are id, task_id, user_id, status, completed_date,
+ *  completed_at, awarded_event_id, revoked_at, revoked_by.
+ */
 export function seedTaskCompletion(overrides: Partial<{
   id: number;
-  child_id: number;
+  user_id: number;
   task_id: number;
-  completed_at: string; // YYYY-MM-DD HH:MM:SS
+  completed_at: string; // 'YYYY-MM-DD HH:MM:SS' in Asia/Shanghai (TZ +08:00)
   status: 'active' | 'revoked';
 }> = {}): number {
   const id = overrides.id ?? 2000 + Math.floor(Math.random() * 100000);
-  const child_id = overrides.child_id ?? 2;
+  const user_id = overrides.user_id ?? 2;
   const task_id = overrides.task_id ?? 100;
-  // Default to today in Shanghai timezone
-  const completed_at = overrides.completed_at ?? shanghaiToday() + ' 08:00:00';
+  // Default to today (Shanghai) at 08:00:00 local time
+  const completed_at_str = overrides.completed_at ?? shanghaiToday() + ' 08:00:00';
   const status = overrides.status ?? 'active';
-  const now = Math.floor(Date.now() / 1000);
+  // Derive completed_date (SH date 'YYYY-MM-DD') + unix-seconds completed_at
+  const completed_date = completed_at_str.split(' ')[0];
+  // Parse 'YYYY-MM-DD HH:MM:SS' as Asia/Shanghai (+08:00) → unix seconds
+  const completedAtUnix = Math.floor(
+    new Date(completed_at_str.replace(' ', 'T') + '+08:00').getTime() / 1000
+  );
   const sql =
-    `INSERT INTO task_completions (id, child_id, task_id, completed_at, status, created_at) ` +
-    `VALUES (${sqlNum(id)}, ${sqlNum(child_id)}, ${sqlNum(task_id)}, ${sqlStr(completed_at)}, ${sqlStr(status)}, ${sqlNum(now)}) ` +
+    `INSERT INTO task_completions (id, task_id, user_id, status, completed_date, completed_at) ` +
+    `VALUES (${sqlNum(id)}, ${sqlNum(task_id)}, ${sqlNum(user_id)}, ${sqlStr(status)}, ${sqlStr(completed_date)}, ${sqlNum(completedAtUnix)}) ` +
     `ON CONFLICT(id) DO UPDATE SET completed_at=excluded.completed_at, status=excluded.status;`;
   d1Exec(sql);
   return id;

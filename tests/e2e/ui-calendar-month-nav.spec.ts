@@ -37,7 +37,9 @@ test.describe('UI: Calendar Month Navigation (Item #006 §2)', () => {
     const text = await label.textContent();
     expect(text).toMatch(/\d{4} 年 \d{1,2} 月/);
 
-    // 42 cells: 7 weekday headers + 35 grid cells
+    // 42 day cells: 0 prev + 30 current + 12 next (June 2026 starts Monday,
+    // fills 7×6 = 42 cells). Weekday header divs use .calendar-weekday,
+    // NOT .calendar-cell — they're separate (rendered in row 0).
     const cells = page.locator('#calendar-grid .calendar-cell');
     await expect(cells).toHaveCount(42);
   });
@@ -60,14 +62,17 @@ test.describe('UI: Calendar Month Navigation (Item #006 §2)', () => {
     await page.goto('/');
     await page.locator('#calendar-toggle-btn').click();
 
-    // Go prev first (to test next has a valid target)
-    await page.locator('#calendar-prev-month').click();
+    // Snapshot current month BEFORE the nav cycle so we can verify that
+    // ◀ then ▶ returns to the original month.
     const before = await page.locator('#calendar-month-label').textContent();
 
+    // Go prev first (to test next has a valid target)
+    await page.locator('#calendar-prev-month').click();
     await page.locator('#calendar-next-month').click();
+
     const after = await page.locator('#calendar-month-label').textContent();
 
-    expect(after).toBe(before); // back to original
+    expect(after).toBe(before); // ◀ then ▶ returns to original
   });
 
   test('▶ does NOT navigate past current month', async ({ page }) => {
