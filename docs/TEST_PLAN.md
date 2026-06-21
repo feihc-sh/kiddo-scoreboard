@@ -1118,13 +1118,15 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
   - Steps: Mock cum_km >= total_km; complete map.
   - Assert: Large completion modal visible; "🎉 恭喜通关! 上海→苏州"; next map activated.
 
-### 3.17 Calendar — Month Grid + Day Detail Modal (Item #006, v2.x)
+### 3.17 Calendar — Month Grid + Day Detail Modal + Cell Icons + Tab Filter (Item #006 + #012, v2.x)
 
-**Spec files**: `tests/unit/calendar-render.test.ts` + `tests/unit/calendar-color.test.ts` + `tests/e2e/ui-calendar-month-nav.spec.ts` + `tests/e2e/ui-calendar-day-detail.spec.ts`
+**Spec files**:
+- Unit: `tests/unit/calendar-render.test.ts` + `tests/unit/calendar-color.test.ts` + `tests/unit/calendar-toggle.test.ts` + `tests/unit/calendar-tasks.test.ts` + `tests/unit/calendar-checkins-filter.test.ts`
+- E2E: `tests/e2e/ui-calendar-month-nav.spec.ts` + `tests/e2e/ui-calendar-day-detail.spec.ts` + `tests/e2e/ui-calendar-icons.spec.ts`
 
-**Page**: `/` → `#calendar-toggle-btn` + `#calendar-panel` + `#calendar-day-detail-modal`
+**Page**: `/` → `#calendar-toggle-btn` + `#calendar-panel` + `#calendar-tab-bar` + `#calendar-grid` + `#calendar-day-detail-modal`
 
-#### Unit Tests (39 tests)
+#### Unit Tests (49+ tests)
 
 **`tests/unit/calendar-render.test.ts`** (30 tests):
 - getDaysInMonth: 28d non-leap / 29d leap / 30d / 31d / century leap / century non-leap
@@ -1137,10 +1139,26 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 - getColorTier boundaries: 0/1/2/3/4/100/9999 all map correctly (cap at tier 3)
 - monotonic: tier(0) < tier(1) < tier(2) < tier(3)
 
+**`tests/unit/calendar-tasks.test.ts`** (5 tests, Item #012 §1):
+- Returns `{ tasks: [...] }` shape
+- Only is_active=1 returned (is_active=0 filtered out)
+- Sort: sort_order ASC, id ASC tiebreaker
+- Each task has 5 fields: id / name / icon / category / sort_order (no extras)
+- Zero active tasks → empty array, no error
+
+**`tests/unit/calendar-checkins-filter.test.ts`** (7 tests, Item #012 §1):
+- New response structure: `{checkins: {date: [{task_id, task_icon, task_name, count}, ...]}}`
+- No task_ids param → returns all tasks
+- task_ids filter → only requested tasks
+- Invalid id (999) silently filtered, no 400
+- Revoked completions excluded (status='active' filter)
+- Same day multiple tasks → array with multiple entries
+- Zero completions → `{checkins: {}}` (empty object, no error)
+
 **Performance** (1 test):
 - `tests/unit/calendar-render.test.ts`: seed 1000 checkins, measure renderCalendar < 200ms
 
-#### E2E Tests (2 scenarios)
+#### E2E Tests (3 files, 11+ scenarios)
 
 **`tests/e2e/ui-calendar-month-nav.spec.ts`** (2 scenarios):
 - **Smoke: Fold → Expand → See month → Navigate → Back**
@@ -1152,10 +1170,22 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
   - Steps: Expand calendar; click a day cell that has checkins (≥1); `#calendar-day-detail-modal` opens.
   - Assert: Modal title shows date; task list shows correct task names + icons + rewards + times; clicking backdrop or pressing ESC closes modal.
 
+**`tests/e2e/ui-calendar-icons.spec.ts`** (8 scenarios, Item #012 §2 + §3):
+- **SMOKE**: Calendar panel + tab bar + "全部" tab active (5 task tabs from API)
+- **ICON-1**: 1 task completed → cell shows 1 icon (no count badge)
+- **ICON-2**: 3 tasks same day → cell shows 3 icons 横排
+- **ICON-3**: 5+ tasks same day → ⭐ overflow (single star with drop-shadow glow)
+- **TAB-1**: Click task tab → only that task's icon shown (filter at API level)
+- **TAB-2**: Multiple tabs selected → OR logic (任一完成的格子显示)
+- **TAB-3**: Click "全部" → all icons reappear (selectedTaskIds = [])
+- **PERSIST**: localStorage `calendarSelectedTaskIds` saved + restored on reload (D2)
+
 #### Visual / UX (manual QA)
 - V11: Calendar 4 color tiers visible — gray (0) / light cyan (1) / cyan (2) / neon cyan with glow (3+)
 - V12: ◀/▶ nav buttons have Mecha cyan hover glow
 - V13: Day detail modal renders task list cleanly with icons and times
+- **V14 (Item #012 §2+3)**: Cell shows task icons (🪥 📖 🏃 etc.) instead of count number; 5+ icons → ⭐ single overflow
+- **V15 (Item #012 §2+3)**: Tab bar visible above grid; "全部" tab active by default (cyan glow + border); selecting tabs shows cyan glow + border; 5+ tabs horizontal scroll
 
 ---
 

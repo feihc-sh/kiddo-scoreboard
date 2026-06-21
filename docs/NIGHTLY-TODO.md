@@ -394,7 +394,7 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 
 ---
 
-## Item #012 — Calendar icon 渲染 + Tab 筛选 🔧 running (manually started 2026-06-20, 等 Stage 1-4)
+## Item #012 — Calendar icon 渲染 + Tab 筛选 ✅ DONE 2026-06-22 (PR 待提)
 
 > 用户原话 (2026-06-20): "日历的地方有一个问题，我不希望只显示数字，而是希望显示那个他任务完成的对应的小图标。并且增加几个Tab，可以单独筛选：1. 看所有的 2. 筛选特定的任务"
 
