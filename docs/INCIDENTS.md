@@ -130,3 +130,12 @@
 - **Check**: GitHub Actions run log
 - **Recovery**: `wrangler d1 export kiddo-scoreboard-db --remote --output=remote-backup/manual-$(date +%Y-%m-%d).sql`
 
+## 2026-06-21T19:09:02Z - Pre-deploy D1 backup FAILED
+- **Commit**: 8d89de5cdf205204921bf1b24c896ff2e12c3340
+- **Actor**: feihc-sh
+- **Run**: 27914553938
+- **Branch**: refs/heads/main
+- **Action**: Deploy blocked (backup is mandatory)
+- **Check**: GitHub Actions run log
+- **Recovery**: `wrangler d1 export kiddo-scoreboard-db --remote --output=remote-backup/manual-$(date +%Y-%m-%d).sql`
+
