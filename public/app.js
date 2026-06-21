@@ -1252,17 +1252,116 @@ const CALENDAR_COLLAPSED_KEY = 'calendarCollapsed';
 const calendarState = {
   year: new Date().getFullYear(),
   month: new Date().getMonth() + 1, // 1-indexed
-  checkins: {}, // { "2026-06-15": 3 }
+  checkins: {}, // { "2026-06-15": [{task_id, task_icon, task_name, count}, ...] }
+  tasks: [],    // [{id, name, icon, category, sort_order}]  from /api/public/calendar/tasks
+  selectedTaskIds: [], // [] = 全部 (Item #012 §4 D2 localStorage)
 };
+
+// localStorage keys for Item #012 §4 (D2 persistence)
+const CALENDAR_SELECTED_KEY = 'calendarSelectedTaskIds';
+
+/** Load selectedTaskIds from localStorage. Returns [] on any failure. */
+function loadCalendarSelectedFromStorage() {
+  try {
+    const raw = localStorage.getItem(CALENDAR_SELECTED_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((n) => Number.isInteger(n) && n > 0) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+/** Persist selectedTaskIds to localStorage. */
+function saveCalendarSelectedToStorage() {
+  try {
+    localStorage.setItem(CALENDAR_SELECTED_KEY, JSON.stringify(calendarState.selectedTaskIds));
+  } catch (_) {
+    // localStorage might be disabled (e.g. Safari private mode) — silently ignore
+  }
+}
 
 // Weekday labels (Mon first per ISO 8601)
 const CAL_WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 
+/** Load active task list (Item #012 §1 endpoint) and render tab bar. */
+async function loadCalendarTasks() {
+  try {
+    const r = await api('GET', '/api/public/calendar/tasks');
+    calendarState.tasks = Array.isArray(r?.tasks) ? r.tasks : [];
+  } catch (_) {
+    calendarState.tasks = [];
+  }
+  renderCalendarTabs();
+}
+
+/** Render the row of task pills above the calendar grid (Item #012 §3 C1). */
+function renderCalendarTabs() {
+  const bar = document.getElementById('calendar-tab-bar');
+  if (!bar) return;
+  bar.innerHTML = '';
+
+  // "全部" tab (id = empty / null)
+  const allTab = document.createElement('button');
+  allTab.type = 'button';
+  allTab.className = 'calendar-tab';
+  allTab.dataset.taskId = '';
+  allTab.textContent = '全部';
+  if (calendarState.selectedTaskIds.length === 0) allTab.classList.add('calendar-tab--active');
+  bar.appendChild(allTab);
+
+  // One tab per active task (B2 multi-select with OR logic)
+  for (const task of calendarState.tasks) {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'calendar-tab';
+    tab.dataset.taskId = String(task.id);
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'calendar-tab-icon';
+    iconSpan.textContent = task.icon || '';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'calendar-tab-name';
+    nameSpan.textContent = task.name || '';
+    tab.appendChild(iconSpan);
+    tab.appendChild(nameSpan);
+    if (calendarState.selectedTaskIds.includes(task.id)) {
+      tab.classList.add('calendar-tab--active');
+    }
+    bar.appendChild(tab);
+  }
+
+  // Attach click handlers (toggle selection)
+  bar.querySelectorAll('.calendar-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const raw = tab.dataset.taskId;
+      if (raw === '') {
+        // "全部" tab clicked → clear all selections
+        calendarState.selectedTaskIds = [];
+      } else {
+        const id = Number(raw);
+        const idx = calendarState.selectedTaskIds.indexOf(id);
+        if (idx >= 0) {
+          calendarState.selectedTaskIds.splice(idx, 1);
+        } else {
+          calendarState.selectedTaskIds.push(id);
+        }
+      }
+      saveCalendarSelectedToStorage();
+      renderCalendarTabs();
+      // Re-fetch checkins with new filter (and re-render)
+      loadMonthCheckins(CHILD_USER_ID, calendarState.year, calendarState.month);
+    });
+  });
+}
+
 /** Load month checkins from API and re-render calendar. */
 async function loadMonthCheckins(childId, year, month) {
+  const taskIdsParam = calendarState.selectedTaskIds.length > 0
+    ? `&task_ids=${calendarState.selectedTaskIds.join(',')}`
+    : '';
   try {
     const r = await api('GET',
-      `/api/public/calendar/checkins?child_id=${childId}&year=${year}&month=${month}`
+      `/api/public/calendar/checkins?child_id=${childId}&year=${year}&month=${month}${taskIdsParam}`
     );
     calendarState.checkins = r?.checkins ?? {};
   } catch (_) {
@@ -1319,11 +1418,15 @@ function renderCalendar(_year, _month) {
     cell.dataset.date = dateStr;
     if (dateStr === todayStr) cell.classList.add('calendar-cell--today');
 
-    const count = calendarState.checkins[dateStr] ?? 0;
-    if (count > 0) {
+    // checkins[dateStr] is now [{task_id, task_icon, task_name, count}, ...] (Item #012 §1)
+    // When task_ids filter is applied via the API, server returns only matching tasks.
+    const dateCheckins = calendarState.checkins[dateStr];
+    const filteredCount = Array.isArray(dateCheckins) ? dateCheckins.length : 0;
+
+    if (filteredCount > 0) {
       cell.classList.add('calendar-cell--active');
-      cell.classList.add(`calendar-cell--tier-${getColorTier(count)}`);
-      cell.title = `${count} 次打卡`;
+      cell.classList.add(`calendar-cell--tier-${getColorTier(filteredCount)}`);
+      cell.title = `${filteredCount} 次打卡`;
     }
 
     const dayLabel = document.createElement('span');
@@ -1331,11 +1434,25 @@ function renderCalendar(_year, _month) {
     dayLabel.textContent = String(d);
     cell.appendChild(dayLabel);
 
-    if (count > 0) {
-      const badge = document.createElement('span');
-      badge.className = 'calendar-cell-count';
-      badge.textContent = String(count);
-      cell.appendChild(badge);
+    if (filteredCount > 0) {
+      // Item #012 §2 A3+: 横排所有 task icon, 无数字无 +N; ≥5 → ⭐ single icon (overflow)
+      const iconsWrap = document.createElement('div');
+      iconsWrap.className = 'calendar-cell-icons';
+      if (filteredCount >= 5) {
+        const star = document.createElement('span');
+        star.className = 'calendar-cell-icon calendar-cell-overflow';
+        star.textContent = '⭐';
+        iconsWrap.appendChild(star);
+      } else {
+        for (const c of dateCheckins) {
+          const ic = document.createElement('span');
+          ic.className = 'calendar-cell-icon';
+          ic.textContent = c.task_icon || '⭐';
+          ic.title = c.task_name || '';
+          iconsWrap.appendChild(ic);
+        }
+      }
+      cell.appendChild(iconsWrap);
     }
 
     cell.addEventListener('click', () => showDayDetailModal(dateStr));
@@ -1412,6 +1529,9 @@ function closeCalendarDayModal() {
 
 /** Initialize calendar: load current month and bind nav events. */
 function initCalendar() {
+  // Item #012 §2 D2: restore tab selection from localStorage BEFORE first render
+  calendarState.selectedTaskIds = loadCalendarSelectedFromStorage();
+
   const prevBtn = document.getElementById('calendar-prev-month');
   const nextBtn = document.getElementById('calendar-next-month');
 
@@ -1572,6 +1692,8 @@ function bindEvents() {
   });
   // Item #006 §2 — calendar month nav + grid render
   initCalendar();
+  // Item #012 §2 — load active task list (drives the tab bar)
+  loadCalendarTasks();
   // Item #006 §1 — calendar fold toggle button (PM-fix: was defined but never invoked)
   initCalendarToggle();
   $('#btn-running')?.addEventListener('click', openRunningCheckinModal);
