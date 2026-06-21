@@ -71,7 +71,8 @@ export function clearAllData(): void {
   d1Exec(
     'DELETE FROM auth_attempts; DELETE FROM audit_log; DELETE FROM task_completions; ' +
     'DELETE FROM score_events; DELETE FROM tasks; DELETE FROM users; ' +
-    'DELETE FROM running_records; DELETE FROM running_points; DELETE FROM running_maps;'
+    'DELETE FROM running_records; DELETE FROM running_points; DELETE FROM running_maps; ' +
+    'DELETE FROM running_progress;'
   );
 }
 

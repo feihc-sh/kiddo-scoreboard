@@ -86,6 +86,7 @@ async function submitRunning(km) {
     // Refresh local state from the server response.
     state.running.cumKm = Number(r.cum_km || 0);
     renderRunningCum();
+
     // Update the 3 balance cards if the response includes them.
     if (r.balance) {
       const gt = document.getElementById('balance-game-time');
@@ -95,13 +96,41 @@ async function submitRunning(km) {
       if (pm) pm.textContent = r.balance.pocket_money ?? state.balance.pocket_money;
       if (co) co.textContent = r.balance.coins ?? state.balance.coins;
     }
+
+    // Re-render the map to show avatar in the new position.
+    if (state.running.activeMap) {
+      renderRunningMap(state.running.activeMap, state.running.cumKm);
+    }
+
     closeRunningCheckinModal();
+
     const points = r.new_points_reached?.length || 0;
     const minutes = r.total_awarded_minutes || 0;
-    if (points > 0) {
+
+    // Show gift modal for each newly-reached point.
+    if (points > 0 && r.new_points_reached) {
+      // Show the first gift modal; the rest (if any) are shown after closing.
+      const firstPoint = r.new_points_reached[0];
+      showGiftModal(firstPoint, minutes);
       toast(`🏃 跑了 ${km} km, 到达 ${points} 个新点位, +${minutes} 分钟`, 'success');
     } else {
       toast(`🏃 跑了 ${km} km, 累计 ${state.running.cumKm.toFixed(1)} km`, 'success');
+    }
+
+    // Check if map is now completed (cumKm >= totalKm).
+    if (r.cum_km >= r.total_km) {
+      // Trigger server-side completion (unlocks next map).
+      if (r.map_id) triggerMapComplete(r.map_id);
+      // Gather stats for the completion modal.
+      const stats = {
+        mapName: state.running.activeMap?.name || '上海→苏州',
+        totalKm: r.total_km || 95,
+        totalRuns: 1, // Approximate; server has the real count
+        totalDays: 1,
+        hasNextMap: true, // Optimistic; server will confirm
+      };
+      // Small delay so the gift modal plays first.
+      setTimeout(() => showCompletionModal(stats), 600);
     }
   } catch (e) {
     showRunningError(e?.message || '提交失败, 再试一次');
@@ -364,6 +393,263 @@ function renderHealthCalendar() {
     && ev.start_date.startsWith(`${year}-${String(month).padStart(2, '0')}`)
   );
   $('#health-empty').hidden = monthEvents.length > 0;
+}
+
+// ---------- Running Map (Item #011 §3) ----------
+// SVG map rendering + avatar animation + gift modal + completion modal.
+
+/** SVG node positions — hand-crafted curved route from 上海普陀区 → 苏州金鸡湖.
+ *  SVG viewBox: 600×280. Each entry: [x, y] in SVG coordinate space.
+ *  Route is curved (cubic Bezier) through all 10 points. */
+const NODE_POSITIONS = [
+  [30,  220],  // 0: 起点 上海·普陀区
+  [90,  200],  // 1: 嘉定新城
+  [160, 160],  // 2: 太仓
+  [220, 180],  // 3: 昆山花桥
+  [290, 140],  // 4: 昆山城区
+  [360, 120],  // 5: 阳澄湖
+  [430, 100],  // 6: 苏州相城区
+  [490,  80],  // 7: 苏州姑苏区
+  [540,  60],  // 8: 苏州工业园区
+  [570,  30],  // 9: 终点 苏州·金鸡湖
+];
+
+/**
+ * Build a smooth cubic-bezier SVG path string through NODE_POSITIONS.
+ * Uses Catmull-Rom → Bezier conversion for natural curves.
+ */
+function buildRoutePath(positions) {
+  if (positions.length < 2) return '';
+  const pts = positions.map(([x, y]) => ({ x, y }));
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+
+/** Interpolate avatar position along the route path based on cumKm / totalKm.
+ *  Returns { x, y } in SVG coordinate space. */
+function interpolateAvatarPosition(cumKm, totalKm, positions) {
+  if (!positions || positions.length < 2) return positions?.[0] ?? [30, 220];
+  const ratio = Math.min(cumKm / totalKm, 1.0);
+  const totalSegments = positions.length - 1;
+  const exactPos = ratio * totalSegments;
+  const segIdx = Math.min(Math.floor(exactPos), totalSegments - 1);
+  const t = exactPos - segIdx;
+  const [x0, y0] = positions[segIdx];
+  const [x1, y1] = positions[segIdx + 1];
+  return [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t];
+}
+
+/** Render the SVG map from the loaded map data. */
+function renderRunningMap(mapData, cumKm) {
+  const section = document.getElementById('running-map-section');
+  const svg = document.getElementById('running-map-svg');
+  const routePath = document.getElementById('running-route-path');
+  const nodesGroup = document.getElementById('running-nodes');
+  const avatarGroup = document.getElementById('running-avatar-group');
+  const titleEl = document.getElementById('running-map-title');
+  const progressEl = document.getElementById('running-map-progress');
+  const labelsEl = document.getElementById('running-point-labels');
+
+  if (!section || !svg) return;
+
+  const points = mapData.points || [];
+  const totalKm = mapData.total_km || 95;
+  const ratio = Math.min(cumKm / totalKm, 1.0);
+
+  // Show the section
+  section.hidden = false;
+
+  // Title + progress
+  if (titleEl) titleEl.textContent = mapData.name || '上海 → 苏州';
+  if (progressEl) progressEl.textContent = `${cumKm.toFixed(1)} / ${totalKm} km`;
+
+  // Route path
+  if (routePath) {
+    routePath.setAttribute('d', buildRoutePath(NODE_POSITIONS));
+  }
+
+  // Determine current point index
+  let currentPointIdx = 0;
+  for (let i = 0; i < points.length; i++) {
+    if (cumKm >= (points[i].cum_km || 0)) currentPointIdx = i;
+    else break;
+  }
+
+  // Render nodes
+  nodesGroup.innerHTML = '';
+  points.forEach((pt, idx) => {
+    const pos = NODE_POSITIONS[idx];
+    if (!pos) return;
+    const [x, y] = pos;
+    const ptKm = pt.cum_km || 0;
+    const isReached = cumKm >= ptKm;
+    const isCurrent = idx === currentPointIdx;
+    const stateClass = isCurrent ? 'current' : isReached ? 'reached' : 'unreached';
+
+    // Short label: extract just the city/area name
+    const rawLabel = pt.name || '';
+    const shortLabel = rawLabel
+      .replace(/^🏁\s*/, '')
+      .replace(/^🚩\s*/, '')
+      .replace(/\s*\(起点\)|\(终点\)/g, '')
+      .split('·').pop() || rawLabel;
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.classList.add('running-node', stateClass);
+    g.setAttribute('transform', `translate(${x}, ${y})`);
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('r', isCurrent ? '9' : '7');
+    circle.setAttribute('cx', '0');
+    circle.setAttribute('cy', '0');
+    g.appendChild(circle);
+
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', '0');
+    text.setAttribute('y', '4');
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('font-size', '9');
+    text.setAttribute('font-family', 'Share Tech Mono, monospace');
+    text.textContent = shortLabel.slice(0, 4);
+    g.appendChild(text);
+
+    nodesGroup.appendChild(g);
+  });
+
+  // Position avatar
+  const [ax, ay] = interpolateAvatarPosition(cumKm, totalKm, NODE_POSITIONS);
+  if (avatarGroup) {
+    avatarGroup.setAttribute('transform', `translate(${ax}, ${ay})`);
+  }
+
+  // Point labels below
+  labelsEl.innerHTML = '';
+  points.forEach((pt, idx) => {
+    const div = document.createElement('div');
+    div.className = 'running-point-label';
+    const rawLabel = pt.name || '';
+    div.textContent = rawLabel.replace(/^🏁\s*/, '').replace(/^🚩\s*/, '').split('·').pop() || rawLabel;
+    labelsEl.appendChild(div);
+  });
+
+  // Update state
+  state.running.activeMap = mapData;
+}
+
+/** Animate avatar to a specific point (called after a successful check-in). */
+function animateAvatarToPoint(pointIdx, cumKm, totalKm) {
+  const avatarGroup = document.getElementById('running-avatar-group');
+  if (!avatarGroup) return;
+  const pos = NODE_POSITIONS[pointIdx];
+  if (!pos) return;
+  const [ax, ay] = pos;
+  avatarGroup.setAttribute('transform', `translate(${ax}, ${ay})`);
+  // Update progress text
+  const progressEl = document.getElementById('running-map-progress');
+  if (progressEl) progressEl.textContent = `${cumKm.toFixed(1)} / ${totalKm} km`;
+}
+
+/** Show the gift modal when child reaches a new point. */
+function showGiftModal(point, minutes) {
+  const modal = document.getElementById('running-gift-modal');
+  const amountEl = document.getElementById('running-gift-amount');
+  const titleEl = document.getElementById('running-gift-title');
+  const hintEl = document.getElementById('running-gift-hint');
+  if (!modal) return;
+  if (amountEl) amountEl.textContent = `+${minutes}`;
+  if (titleEl) titleEl.textContent = minutes >= 10 ? '🎁 通关奖励!' : '🎁 到达新地点!';
+  if (hintEl) hintEl.textContent = `恭喜到达 ${point.name || '下一站'}!`;
+  modal.hidden = false;
+}
+
+function closeGiftModal() {
+  const modal = document.getElementById('running-gift-modal');
+  if (modal) modal.hidden = true;
+}
+
+/** Show the completion modal when cumKm >= totalKm. */
+function showCompletionModal(stats) {
+  const modal = document.getElementById('running-completion-modal');
+  const titleEl = document.getElementById('running-completion-title');
+  const runsEl = document.getElementById('completion-total-runs');
+  const kmEl = document.getElementById('completion-total-km');
+  const daysEl = document.getElementById('completion-total-days');
+  const nextBtn = document.getElementById('running-completion-next');
+  const waitingEl = document.getElementById('running-completion-waiting');
+  if (!modal) return;
+  if (titleEl) titleEl.textContent = `🎉 恭喜通关! ${stats.mapName || '上海→苏州'}`;
+  if (runsEl) runsEl.textContent = stats.totalRuns || 0;
+  if (kmEl) kmEl.textContent = (stats.totalKm || 0).toFixed(1);
+  if (daysEl) daysEl.textContent = stats.totalDays || 0;
+  if (nextBtn && waitingEl) {
+    if (stats.hasNextMap) {
+      nextBtn.hidden = false;
+      waitingEl.hidden = true;
+    } else {
+      nextBtn.hidden = true;
+      waitingEl.hidden = false;
+    }
+  }
+  modal.hidden = false;
+  // Fire confetti
+  if (typeof fireConfetti === 'function') fireConfetti();
+}
+
+function closeCompletionModal() {
+  const modal = document.getElementById('running-completion-modal');
+  if (modal) modal.hidden = true;
+}
+
+/** Load running map data from the API and render the map. */
+async function loadAndRenderMap() {
+  try {
+    const r = await api('GET', '/api/running/maps/active');
+    if (!r || !r.map) return;
+    state.running.activeMap = r.map;
+    state.running.cumKm = r.cum_km || 0;
+    renderRunningMap(r.map, r.cum_km || 0);
+  } catch (_) {
+    // Silently skip if map endpoint not available yet
+  }
+}
+
+/** Trigger the map-complete flow: POST /api/running/maps/:id/complete. */
+async function triggerMapComplete(mapId) {
+  try {
+    await api('POST', `/api/running/maps/${mapId}/complete`);
+  } catch (_) {
+    // Non-fatal: completion may already be processed server-side
+  }
+}
+
+/** Initialize the running map section: load map + bind events. */
+function initRunningMap() {
+  // Bind gift modal close button
+  document.getElementById('running-gift-close')?.addEventListener('click', closeGiftModal);
+  document.getElementById('running-gift-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'running-gift-modal') closeGiftModal();
+  });
+
+  // Bind completion modal next-map button
+  document.getElementById('running-completion-next')?.addEventListener('click', async () => {
+    closeCompletionModal();
+    // Reload the map to see if next one is now active
+    await loadAndRenderMap();
+  });
+
+  // Load and render on init
+  loadAndRenderMap();
 }
 
 // ---------- Health Checkin (M3 — RFC §6.3) ----------
@@ -1376,6 +1662,9 @@ function bindEvents() {
   // M4: tap balance-card (3rd, coins) → open /shop.html (Q5 06-11 拍板 (a))
   // CSS uses cursor:pointer (set in app.css balance-card.coins rule) for affordance.
   $('#card-coins')?.addEventListener('click', () => { window.location.href = '/shop.html'; });
+
+  // Item #011 §3: init running map section
+  initRunningMap();
 }
 
 async function boot() {

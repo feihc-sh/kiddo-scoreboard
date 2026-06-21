@@ -15,6 +15,8 @@ import deletedRecordsRoute from './deleted-records.ts';
 import adminHealth from './health.ts';
 // Module 7 (Coin System, M3 — RFC §4.5): PM 手动 confirm kind='custom' 兑换
 import shopFulfill from './shop-fulfill.ts';
+// Item #011 §4: PM admin running records (list + revoke with km/points rollback)
+import adminRunning from './running-records.ts';
 import type { Env } from '../../worker.ts';
 
 const admin = new Hono<{ Bindings: Env }>();
@@ -35,5 +37,10 @@ admin.route('/deleted-records', deletedRecordsRoute);
 admin.route('/health', adminHealth);
 // Module 7 (Coin System, M3): POST /api/admin/shop/fulfill/:id
 admin.route('/shop/fulfill', shopFulfill);
+// Item #011 §4: running_records list + revoke (mounted at /running/records)
+// The recordsRouter inside serves:
+//   GET  /api/admin/running/records          (list)
+//   POST /api/admin/running/records/:id/revoke  (revoke)
+admin.route('/running/records', adminRunning);
 
 export default admin;

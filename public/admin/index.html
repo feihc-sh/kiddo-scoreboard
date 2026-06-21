@@ -216,12 +216,29 @@
       </div>
     </details>
 
+    <!-- ====== I. Running Records (Item #011 §4) ====== -->
+    <details class="pm-section" id="sec-running" open>
+      <summary>🏃 跑步打卡记录 <span class="pm-count" id="count-running">0</span></summary>
+      <div class="pm-section-body">
+        <div class="pm-toolbar">
+          <label style="font-size:13px;color:var(--text-soft);font-weight:600;">筛选</label>
+          <select id="filter-running-status">
+            <option value="all">全部</option>
+            <option value="active">未撤销</option>
+            <option value="revoked">已撤销</option>
+          </select>
+        </div>
+        <div id="running-list"></div>
+        <div class="pm-empty" id="running-empty" hidden>没有跑步记录</div>
+      </div>
+    </details>
+
   </main>
 
   <!-- Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="/shared/emoji-presets.js" defer></script>
-  <script src="/admin/admin.js?v=4" defer></script>
+  <script src="/admin/admin.js?v=5" defer></script>
 </body>
 </html>

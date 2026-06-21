@@ -1072,6 +1072,52 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 
 ---
 
+### 3.18 Running Map — Check-in, SVG UI, Milestone Gifts, Admin Revoke (Item #011)
+
+**Spec files**: `tests/unit/running-schema.test.ts` + `tests/unit/running-prize.test.ts` + `tests/unit/admin-running-revoke.test.ts` + `tests/e2e/ui-running-checkin.spec.ts` + `tests/e2e/ui-running-map.spec.ts`
+
+**Page**: `/` → `#running-checkin-modal` + `#running-map-section` + gift modal; `/admin/` → Section I
+
+#### Unit Tests (running-schema + running-prize, existing)
+
+**`tests/unit/running-schema.test.ts`**:
+- Schema: running_maps / running_points / running_records tables exist
+- Points ordered by order_index ASC
+- Active map selected correctly
+- cum_km aggregation (SUM with revoked_at IS NULL filter)
+
+**`tests/unit/running-prize.test.ts`**:
+- rollPrize: 60% small (1-5), 35% medium (5-10), 5% large (10-20)
+- Rng parameter: fixed 0.5 → small bucket; fixed 0.8 → medium bucket; fixed 0.95 → large bucket
+- Edge: awarded_minutes never negative
+
+#### Unit Tests (admin-running-revoke, new — Item #011 §4)
+
+**`tests/unit/admin-running-revoke.test.ts`**:
+- GET /api/admin/running/records: 401 without cookie, returns all records including revoked
+- POST revoke: confirm: true required (400), invalid id (400), not found (404), already revoked (409)
+- Happy path: UPDATE revoked_at + INSERT -game_time score_event + UPSERT running_progress + audit_log
+- No score_event when awarded_minutes=0
+- Double revoke returns 409
+
+#### E2E Tests
+
+**`tests/e2e/ui-running-checkin.spec.ts`**:
+- **Smoke: Running check-in modal renders and submits**
+  - Steps: Click 🏃 emoji button → modal appears; enter 3.5 km; submit.
+  - Assert: POST /api/running/records returns 200; cum_km updates; balance refreshes.
+
+**`tests/e2e/ui-running-map.spec.ts`**:
+- **Happy: SVG map renders with avatar at correct position after 1 check-in**
+  - Steps: Seed child; check in 3.5 km; open running map section.
+  - Assert: SVG path visible; avatar positioned at ~3.5 km mark (within point tolerance).
+- **Happy: Milestone gift modal appears when reaching new point**
+  - Steps: Check in km that crosses a running_point threshold.
+  - Assert: Gift modal visible; shows awarded minutes; "再跑一次" closes modal.
+- **Happy: Completion modal + next map activation**
+  - Steps: Mock cum_km >= total_km; complete map.
+  - Assert: Large completion modal visible; "🎉 恭喜通关! 上海→苏州"; next map activated.
+
 ### 3.17 Calendar — Month Grid + Day Detail Modal (Item #006, v2.x)
 
 **Spec files**: `tests/unit/calendar-render.test.ts` + `tests/unit/calendar-color.test.ts` + `tests/e2e/ui-calendar-month-nav.spec.ts` + `tests/e2e/ui-calendar-day-detail.spec.ts`

@@ -33,6 +33,9 @@ const state = {
   deletedRecords: {},    // { 'score_event:42': { deleted_at, deleted_by, ... } }
   // M4 §6.5: PM 待发商品列表 (kind=custom redemptions status='pending')
   pendingRedemptions: [],  // AdminRedemption[]
+  // Item #011 §4: running records list (all records, active + revoked)
+  runningRecords: [],
+  runningFilter: 'all',   // 'all' | 'active' | 'revoked'
 };
 
 // ---------- Toast ----------
@@ -148,6 +151,16 @@ async function loadPendingRedemptions() {
     state.pendingRedemptions = [];
   }
 }
+// Item #011 §4: load all running records (active + revoked)
+async function loadRunningRecords() {
+  try {
+    const r = await api('GET', '/api/admin/running/records');
+    state.runningRecords = Array.isArray(r.records) ? r.records : [];
+  } catch (e) {
+    if (e.message === 'UNAUTHORIZED') throw e;
+    state.runningRecords = [];
+  }
+}
 async function loadDeletedRecords() {
   // Best-effort: if the endpoint is missing or the call fails, we just
   // render with no markers. The grey-out is a UX nicety, not a contract.
@@ -181,6 +194,7 @@ async function refreshAll() {
       loadCompletions(),
       loadDeletedRecords(),
       loadPendingRedemptions(),
+      loadRunningRecords(),
     ]);
     renderAll();
   } catch (e) {
@@ -198,6 +212,7 @@ function renderAll() {
   renderAudit();
   renderCompletions();
   renderPendingRedemptions();
+  renderRunningRecords();
 }
 
 // ---------- H. Shop pending fulfill (M4 §6.5) ----------
@@ -253,6 +268,91 @@ async function fulfillRedemption(id) {
     toast(msg, 'error');
   }
 }
+
+// Item #011 §4: Running records list + revoke
+function renderRunningRecords() {
+  const root = $('#running-list');
+  const empty = $('#running-empty');
+  if (!root) return;
+  $('#count-running').textContent = state.runningRecords.length;
+  root.innerHTML = '';
+  const filtered = state.runningFilter === 'all'
+    ? state.runningRecords
+    : state.runningRecords.filter(function(r) {
+        return state.runningFilter === 'revoked'
+          ? r.revoked_at !== null
+          : r.revoked_at === null;
+      });
+  if (filtered.length === 0) {
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  filtered.forEach(function(r) {
+    const isRevoked = r.revoked_at !== null;
+    const childName = escapeHtml(r.child_name || ('user #' + r.child_id));
+    const mapName = escapeHtml(r.map_name || ('map #' + r.map_id));
+    const pointsLabel = (r.awarded_minutes && r.awarded_minutes > 0)
+      ? ' +' + r.awarded_minutes + ' min'
+      : '';
+    const revokedLabel = isRevoked
+      ? ' <span class="pm-badge revoked">↩ 已撤销</span>'
+      : '';
+    const revokedMeta = isRevoked
+      ? ' · ' + fmtTime(r.revoked_at) + ' by ' + escapeHtml(r.revoked_by_name || 'PM')
+      : '';
+    root.appendChild(rowEl(
+      '<div class="pm-row-main">' +
+        '<div class="pm-row-title">' +
+          '🏃 ' + escapeHtml(r.km) + ' km · ' + mapName +
+          '<span class="pm-badge ' + (isRevoked ? 'revoked' : 'approved') + '">' +
+            (isRevoked ? '↩ 已撤销' : '✅ active') +
+          '</span>' +
+        '</div>' +
+        '<div class="pm-row-meta">' +
+          childName +
+          ' · ' + fmtTime(r.created_at) +
+          pointsLabel +
+          revokedMeta +
+          ' · <span class="pm-mono">#' + r.id + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="pm-row-actions">' +
+        (!isRevoked
+          ? '<button class="pm-btn warn" data-act="revoke-running" data-id="' + r.id + '">↩ 撤销</button>'
+          : '') +
+      '</div>'
+    ));
+  });
+}
+
+async function revokeRunningRecordAction(id) {
+  if (!Number.isInteger(id) || id <= 0) return;
+  if (inFlight.has('rr-' + id)) return;
+  inFlight.add('rr-' + id);
+  var ok = window.confirm(
+    '确定要撤销这条跑步记录?\n\n' +
+    '• 积分将扣回 (如有)\n' +
+    '• 累计公里数将回退\n' +
+    '此操作不可撤销。'
+  );
+  if (!ok) { inFlight.delete('rr-' + id); return; }
+  try {
+    await api('POST', '/api/admin/running/records/' + id + '/revoke', { confirm: true });
+    toast('已撤销', 'success');
+    await loadRunningRecords();
+    renderRunningRecords();
+  } catch (e) {
+    if (e.message === 'ALREADY_REVOKED') {
+      toast('这条记录已经被撤销了', 'error');
+    } else if (e.message !== 'UNAUTHORIZED') {
+      toast('撤销失败: ' + e.message, 'error');
+    }
+  } finally {
+    inFlight.delete('rr-' + id);
+  }
+}
+
 function renderHeader() {
   const u = state.user;
   $('#pm-user').textContent = u ? `${actorLabel(u.role)} · ${u.name || '(未命名)'}` : '未登录';
@@ -734,6 +834,7 @@ function bindDelegatedActions() {
     if (act === 'hard-delete-event') return hardDeleteEvent(id);
     if (act === 'hard-delete-completion') return hardDeleteCompletion(id);
     if (act === 'fulfill-redemption') return fulfillRedemption(id);
+    if (act === 'revoke-running') return revokeRunningRecordAction(id);
   });
 }
 
@@ -757,6 +858,10 @@ function bindFilters() {
     state.completionStatus = e.target.value;
     try { await loadCompletions(); renderCompletions(); }
     catch (err) { if (err.message !== 'UNAUTHORIZED') toast('加载失败：' + err.message, 'error'); }
+  });
+  $('#filter-running-status').addEventListener('change', function(e) {
+    state.runningFilter = e.target.value;
+    renderRunningRecords();
   });
 }
 
