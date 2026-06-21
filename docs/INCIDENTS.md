@@ -121,3 +121,12 @@
 - **Backup was OK** (data safe), but deploy/smoke-test broke something
 - **Recovery**: Roll back to last known good deploy via Cloudflare dashboard
 
+## 2026-06-21T18:06:45Z - Pre-deploy D1 backup FAILED
+- **Commit**: 7ce8a637ebffb9b2dc428768da0ee84a09d3309f
+- **Actor**: feihc-sh
+- **Run**: 27912992052
+- **Branch**: refs/heads/main
+- **Action**: Deploy blocked (backup is mandatory)
+- **Check**: GitHub Actions run log
+- **Recovery**: `wrangler d1 export kiddo-scoreboard-db --remote --output=remote-backup/manual-$(date +%Y-%m-%d).sql`
+
