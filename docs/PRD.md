@@ -966,17 +966,28 @@ CREATE INDEX idx_redemptions_user_redeemed ON shop_redemptions(user_id, redeemed
 **API 端点**:
 | Method | Path | 功能 |
 |--------|------|------|
-| GET | `/api/public/calendar/checkins?child_id=&year=&month=` | 返回 `{ checkins: { "2026-06-15": 3, ... } }` 按月聚合打卡数 |
+| GET | `/api/public/calendar/checkins?child_id=&year=&month=[&task_ids=1,3]` | 返回 `{ checkins: { "2026-06-15": [{task_id, task_icon, task_name, count}, ...], ... } }` 按月聚合 **per-task** 打卡明细 (Item #012 §1 改: 从 count 扩展到 array) |
+| GET | `/api/public/calendar/tasks` | 返回 `{ tasks: [{id, name, icon, category, sort_order}, ...] }` 列出所有 `is_active=1` tasks, 供 tab bar 渲染 (Item #012 §1 新增) |
 | GET | `/api/public/calendar/details?child_id=&date=` | 返回 `{ completions: [{ id, task_name, task_icon, completed_at, token_reward, target_account }] }` |
 
-**实现文件**:
-- `src/routes/public/calendar.ts` — `/api/public/calendar/checkins` endpoint
-- `src/routes/public/calendar-details.ts` — `/api/public/calendar/details` endpoint
-- `public/app.js` — `loadMonthCheckins()` + `renderCalendar()` + `getColorTier()` + `showDayDetailModal()`
-- `public/app.css` — `.calendar-cell--tier-0/1/2/3` + `.calendar-panel` + `.calendar-toggle-btn` 样式
-- `public/index.html` — `#calendar-toggle-btn` + `#calendar-panel` + `#calendar-day-detail-modal`
+**Item #012 v2.x** (2026-06-22 拍板, 4 decisions):
+1. **Cell icons (A3+)**: 横排所有 task icon, 无数字无 +N; **当天 5 个 task 都打** → 显示 ⭐ 单 icon (overflow 避免 cell 拥挤)
+2. **Tab 多选 OR (B2)**: 月历顶部加 tab bar, 多选 pill, 选 N 个 task → 显示 N 个 task **任一完成** 的格子 (OR logic, server 端 WHERE filter 避免 client 拿全表再 filter)
+3. **Tab 来源 (C1)**: 所有 `is_active=1` tasks 都成 tab (按 sort_order ASC 排列), 现在 5 个 (刷牙/整理玩具/阅读/运动/帮助做家务); 5+ 时 tab bar 横向滚动 (overflow-x: auto), 未来 10+ task 再考虑 C2 "添加筛选" 按钮
+4. **localStorage 持久化 (D2)**: `localStorage.calendarSelectedTaskIds` 保存选中 task_id 数组 (`[]` = 全部, `[1,3]` = 刷牙 + 阅读), reload 后恢复
 
-**视觉对齐**: 复用 Mecha HUD cyan tokens (`--cyan: #00F5FF` 等), 与 #005 进度条 + #010 sprint modal + #011 running map 同色板
+**实现文件** (Item #012 增量):
+- `src/routes/public/calendar.ts` — 加 `task_ids` query param + JOIN tasks 返 icon/name (Item #012 §1)
+- `src/routes/public/calendar-tasks.ts` — 新 `/api/public/calendar/tasks` endpoint (Item #012 §1)
+- `src/worker.ts` — register `/api/public/calendar` route mount 3 个子路由
+- `public/app.js` — `loadCalendarTasks()` + `renderCalendarTabs()` + localStorage 读写, `renderCalendar()` 改 cell 渲染 (icons 横排, 5+ → ⭐) (Item #012 §2+3)
+- `public/app.css` — `.calendar-tab-bar` + `.calendar-tab` + `.calendar-tab--active` (cyan glow) + `.calendar-cell-icons` + `.calendar-cell-icon` + `.calendar-cell-overflow` (⭐) 样式
+- `public/index.html` — `<div id="calendar-tab-bar">` 加在 `.calendar-grid` 后 (Item #012 §3)
+- `tests/unit/calendar-tasks.test.ts` — 5 tests (新 endpoint, is_active filter, sort)
+- `tests/unit/calendar-checkins-filter.test.ts` — 7 tests (新 response structure, task_ids filter, invalid silent filter)
+- `tests/e2e/ui-calendar-icons.spec.ts` — 8 e2e (icon render + tab interaction + localStorage persistence)
+
+**视觉对齐**: 复用 Mecha HUD cyan tokens (`--cyan: #00F5FF` 等), 与 #005 进度条 + #010 sprint modal + #011 running map 同色板; tab active state cyan glow + 1px border
 
 **可关闭性**: 折叠按钮再次点击收起; ESC 键关闭; localStorage 记忆折叠状态
 

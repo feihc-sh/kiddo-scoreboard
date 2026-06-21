@@ -110,6 +110,70 @@
   position: absolute;
   bottom: 3px;
 }
+/* Item #012 §2: tab bar (task filter pills) */
+.calendar-tab-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
+}
+.calendar-tab {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.05);
+  color: var(--text-secondary, rgba(255,255,255,0.7));
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+.calendar-tab:hover {
+  background: rgba(255,255,255,0.1);
+}
+.calendar-tab--active {
+  background: rgba(0, 245, 255, 0.15);
+  border-color: var(--cyan, #00F5FF);
+  color: var(--cyan, #00F5FF);
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.4);
+}
+.calendar-tab-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.calendar-tab-name {
+  font-size: 13px;
+}
+
+/* Item #012 §2 A3+: 横排所有 task icon, ≥5 → ⭐ overflow */
+.calendar-cell-icons {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
+  margin-top: 2px;
+  min-height: 18px;
+  max-width: 100%;
+  overflow: hidden;
+}
+.calendar-cell-icon {
+  font-size: 14px;
+  line-height: 1;
+  display: inline-block;
+}
+.calendar-cell-overflow {
+  font-size: 18px;
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
+}
 .calendar-cell--tier-0 {
   background: rgba(255, 255, 255, 0.02);
   border-color: rgba(0, 245, 255, 0.06);

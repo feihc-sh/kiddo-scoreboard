@@ -5,7 +5,7 @@
 
 **最后更新**: 2026-06-16
 **总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (19 UI 功能, 含 3.16.1-3.16.4 coin shop v3) ↔ 24 unit + 53 e2e + 21 coin (12 functional + 4 SQL invariant + 5 visual) = **98 测试文件** (v2.2 baseline + 2 P0 + 2 P1 regression + v3 coin shop PR)
-| **3.13** | 打卡日历 (月历 + day detail modal, Item #006) | `src/routes/public/calendar.ts` + `calendar-details.ts` + `public/app.js` + `app.css` | 3.17 | `calendar-render.test.ts` `calendar-color.test.ts` | `ui-calendar-month-nav.spec.ts` `ui-calendar-day-detail.spec.ts` | ✅ 100% |
+| **3.13** | 打卡日历 (月历 + day detail modal + cell icons + tab filter, Item #006/#012) | `src/routes/public/calendar.ts` + `calendar-details.ts` + `calendar-tasks.ts` + `public/app.js` + `app.css` | 3.17 | `calendar-render.test.ts` `calendar-color.test.ts` `calendar-toggle.test.ts` `calendar-tasks.test.ts` `calendar-checkins-filter.test.ts` | `ui-calendar-month-nav.spec.ts` `ui-calendar-day-detail.spec.ts` `ui-calendar-icons.spec.ts` | ✅ 100% |
 
 **最新 Qual 报告**:
 - `QUAL_REPORT_2026-06-09-p0-admin-hard-delete-fk.md` (P0 永久删除 FK 约束, #28)

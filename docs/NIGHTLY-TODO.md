@@ -39,7 +39,7 @@
 
 ---
 
-## 📋 当前清单 (5 个 Item: 1 ⏳ pending, 2 🔧 running stage 1+, 1 ⏸ hold, 1 ✅ done 待归档)
+## 📋 当前清单 (5 个 Item: 0 ⏳ pending, 3 🔧 running, 1 ⏸ hold, 1 ✅ done 已归档)
 
 ## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
 
@@ -394,7 +394,7 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 
 ---
 
-## Item #012 — Calendar icon 渲染 + Tab 筛选 🔧 deferred (等 #008 done)
+## Item #012 — Calendar icon 渲染 + Tab 筛选 ✅ DONE 2026-06-22 (PR 待提)
 
 > 用户原话 (2026-06-20): "日历的地方有一个问题，我不希望只显示数字，而是希望显示那个他任务完成的对应的小图标。并且增加几个Tab，可以单独筛选：1. 看所有的 2. 筛选特定的任务"
 
@@ -468,14 +468,12 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
   - Regression: 跑全套 npx vitest run + npx playwright test
   - `git commit -m "feat(calendar): docs + visual alignment + regression (Item #012 §4)"`
 
-**Status**: ⏳ pending (deferred: queue after #008, 等 cron 自然 file-order 跑到 #012)
-
+**Status**: 🔧 running (manually started 2026-06-20 14:50, branch: `feat/calendar-icon-tabs`, PM 手动启动 — 跨 PR #41 review 单独 work stream)
+**Branch**: `feat/calendar-icon-tabs` (从 `origin/main` HEAD `051b69b` 拉, PR #41 已 merged 2026-06-20; 跟 #008 stage 2-4 / #011 stage 3-4 解耦, 各跑各的)
 **风险**: 🟢 (UI-only + 2 API 端点改动, schema 不变, #006 已 verify pattern)
-
-**Started**: —
+**Started**: 2026-06-20
 **Commit**: —
-
-**预计开始**: 跑完 #008 + #011 后, 大约 2026-06-22 之后 (1 task/晚, #008 stage 2-4 + #011 stage 3-4 各 1 晚)
+**预计完成**: 2026-06-20 当晚 (1 task/约 3h, 4 stages × 15-20 min, #006 同模式 CC spawn)
 
 ---
 
@@ -507,13 +505,15 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 
 ---
 
-## 📊 归档统计 (6 Item)
+## 📊 归档统计 (7 Item, 2026-06-20 累计)
 
 | 状态 | 数量 | Item |
 |---|---:|---|
-| ✅ done | 4 | #001 emoji / #002 睡眠 / #005 三进度条 / #009 硬删 |
+| ✅ done | 5 | #001 emoji / #002 睡眠 / #005 三进度条 / #006 打卡日历 (PR #41 ✅ merged 2026-06-20) / #009 硬删 |
 | 🚫 blocked → 归档 | 2 | #003 英语 / #004 老师投诉 |
-| **总计** | **6** | 全部归档 |
+| **总计** | **7** | 全部归档 |
+
+> #006 2026-06-20 PM-fix: status → ✅ done, NIGHTLY-TODO 归档 (从主清单移到此处, 跟 #001/#002/#005/#009 同档; 完整 commit 历史 `0389c85` / `569e10c` / `c5d8c57` / `5abe507` / `f2c82e6` / `a4eb27b` / `ade11a1` / `064622a`, e2e 12/12 + unit 313/313, Qual verified, Iron Rule #25 added)
 
 **用户拍板日期**: 2026-06-08
 **最后编辑**: PM Agent
