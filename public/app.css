@@ -1200,6 +1200,262 @@ body {
 }
 
 /* ===========================================================================
+ * RUNNING MAP — Item #011 §3
+ * Tech-style hand-drawn SVG map: cyan glow + grid bg + curved path.
+ * ========================================================================== */
+.running-map-section {
+  margin: 16px 0 0;
+  padding: 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--cyan-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 12px var(--cyan-soft), inset 0 0 20px rgba(0, 245, 255, 0.04);
+}
+.running-map-section[hidden] { display: none; }
+
+.running-map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.running-map-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.running-map-progress {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+.running-map-container {
+  background: rgba(0, 245, 255, 0.03);
+  border: 1px solid rgba(0, 245, 255, 0.15);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  position: relative;
+}
+.running-map-container svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* SVG node (circle + label) */
+.running-node {
+  cursor: default;
+}
+.running-node circle {
+  transition: r 0.2s ease;
+}
+.running-node.reached circle {
+  fill: rgba(0, 245, 255, 0.3);
+  stroke: var(--cyan);
+  stroke-width: 2;
+  filter: url(#glow);
+}
+.running-node.reached text {
+  fill: var(--cyan);
+  font-weight: 700;
+}
+.running-node.current circle {
+  fill: rgba(0, 245, 255, 0.4);
+  stroke: var(--cyan);
+  stroke-width: 2.5;
+  filter: url(#glow);
+}
+.running-node.unreached circle {
+  fill: rgba(255, 255, 255, 0.05);
+  stroke: rgba(0, 245, 255, 0.3);
+  stroke-width: 1;
+}
+.running-node.unreached text {
+  fill: var(--text-muted);
+}
+@keyframes pointPulse {
+  0%, 100% { r: 7; opacity: 1; }
+  50% { r: 10; opacity: 0.7; }
+}
+.running-node.current circle {
+  animation: pointPulse 1.5s ease-in-out infinite;
+}
+
+/* Avatar group — animated by JS via transform transition */
+#running-avatar-group {
+  transition: transform 1.5s ease-in-out;
+}
+
+/* Point labels below SVG */
+.running-point-labels {
+  display: flex;
+  gap: 0;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.running-point-label {
+  flex: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===========================================================================
+ * RUNNING GIFT MODAL — Item #011 §3
+ * Shown when child reaches a new point.
+ * ========================================================================== */
+.running-gift-amount {
+  font-family: var(--font-display);
+  font-size: 64px;
+  font-weight: 900;
+  color: var(--cyan);
+  text-align: center;
+  text-shadow: 0 0 30px var(--cyan-glow);
+  margin: 16px 0 4px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.running-gift-unit {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--text-secondary);
+  text-align: center;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+/* ===========================================================================
+ * RUNNING COMPLETION MODAL — Item #011 §3
+ * 80% screen, full-screen confetti, centered card.
+ * NOT a .modal-back (standalone overlay).
+ * ========================================================================== */
+.running-completion-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 9, 13, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 16px;
+  animation: fade-in 0.3s var(--ease);
+}
+.running-completion-back[hidden] { display: none; }
+
+.running-completion-card {
+  position: relative;
+  background: var(--bg-panel);
+  border: 2px solid var(--cyan-border);
+  border-radius: var(--radius-lg);
+  padding: 40px 36px;
+  max-width: 560px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 0 40px var(--cyan-glow), 0 20px 80px rgba(0, 0, 0, 0.9);
+  animation: pop-in 0.4s var(--bounce);
+  text-align: center;
+}
+
+/* Confetti: 20 animated absolute pieces falling across the card */
+.confetti-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  pointer-events: none;
+}
+@keyframes confetti-fall {
+  0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateY(600px) rotate(720deg); opacity: 0; }
+}
+.confetti-piece {
+  position: absolute;
+  top: -20px;
+  left: var(--x, 50%);
+  width: 10px;
+  height: 14px;
+  background: var(--c, #00F5FF);
+  border-radius: 2px;
+  opacity: 0.85;
+  animation: confetti-fall var(--d, 2s) ease-in infinite;
+  animation-delay: calc(var(--x, 0) * -0.01s);
+}
+
+.running-completion-content {
+  position: relative;
+  z-index: 1;
+}
+.running-completion-emoji {
+  font-size: 72px;
+  display: block;
+  margin-bottom: 12px;
+  animation: mecha-idle 2s ease-in-out infinite;
+}
+.running-completion-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--text-primary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0 0 20px;
+  text-shadow: 0 0 20px var(--cyan-glow);
+}
+.running-completion-stats {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+.running-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.running-stat-value {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 900;
+  color: var(--cyan);
+  line-height: 1;
+  text-shadow: 0 0 20px var(--cyan-glow);
+}
+.running-stat-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.running-completion-btn {
+  width: 100%;
+  min-height: 56px;
+  font-size: 16px;
+}
+.running-completion-waiting {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 12px 0 0;
+  letter-spacing: 0.05em;
+}
+
+/* ===========================================================================
  * WELCOME MODAL — 机甲启动界面
  * ========================================================================== */
 .welcome-modal .modal {
