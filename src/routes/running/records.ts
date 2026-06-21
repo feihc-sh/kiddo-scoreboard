@@ -234,6 +234,24 @@ records.post('/', async (c) => {
       )
       .run();
 
+    // Update running_progress cache (write-through): UPSERT cum_km after this record
+    await db
+      .prepare(
+        `INSERT INTO running_progress (child_id, map_id, cum_km, last_updated)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (child_id, map_id)
+         DO UPDATE SET cum_km = ?, last_updated = ?`,
+      )
+      .bind(
+        CHILD_USER_ID,
+        map.id,
+        newCumKm,
+        now,
+        newCumKm,
+        now,
+      )
+      .run();
+
     // 4) Read back balance so the home page can refresh immediately.
     const balance = await readBalance(db, CHILD_USER_ID);
 

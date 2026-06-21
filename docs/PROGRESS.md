@@ -855,6 +855,30 @@ git log --oneline -5  # 看最新进度
 
 ---
 
+## ✅ v2.x — 跑步小地图 (Item #011) — 2026-06-22
+
+**分支**: `feat/running-map-stage3-4` (from `origin/main` HEAD `051b69b`)
+
+**3 个 commit**:
+- `d4be219` feat(running): D1 schema + seed shanghai→suzhou map + points (Item #011 §1)
+- `90c04d1` feat(running): child check-in modal + SVG map + milestone gifts + completion modal (Item #011 §2+3)
+- `b08247c` feat(running): SVG map + avatar animation + milestone gift + completion modal (Item #011 §3, 手动重启 2026-06-22)
+- `???????` feat(running): admin revoke (km+points 回退) + PRD/TEST_PLAN docs (Item #011 §4, 本次 Stage 4)
+
+**新增能力**:
+- **4 张新表**: running_maps / running_points / running_records / running_progress (write-through km cache)
+- **孩子端**: 🏃 打卡 modal → 填 km → 提交 → SVG 地图 + 小人动画 + 礼物 modal + 通关大图
+- **PM 端**: 跑步打卡记录列表 (Section I) + ↩ 撤销按钮 (二次确认) + km 回退 + 积分扣回
+- **审计**: running_checkin + running_map_complete + running_record_revoke 三个 action 写 audit_log
+
+**API**: 5 个端点 (孩子 3 个 + PM 2 个)
+
+**测试**: running-schema.test.ts + running-prize.test.ts (✅) + admin-running-revoke.test.ts (本 Stage 4 新增)
+
+**Push 计划**: Stage 4 commit 完 → PM review → push → merge → deploy。
+
+---
+
 ## ✅ v3 — Coin System 金币系统 (M3-M6 完整闭环) — 2026-06-16
 
 **触发场景**: v2.3 加了数据层但 child 看不到商店, PM 看不到待发商品。本 PR (`feat/coin-shop`) 把 M3 API + M4 UI + M5 e2e + M6 docs 一次补完。

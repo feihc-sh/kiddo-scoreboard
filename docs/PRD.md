@@ -982,6 +982,98 @@ CREATE INDEX idx_redemptions_user_redeemed ON shop_redemptions(user_id, redeemed
 
 **风险**: 🟢 (UI-only, 复用 #010 modal CSS + 现有 task_completions schema)
 
+### 13. 跑步小地图 (Item #011, v2.x)
+
+**用户原话** (2026-06-17): "在 Nightly Todo 里再增加一个功能：记录跑步的每次公里数，并绘制一个小地图。每一次跑了多远的距离，会在一个虚拟的小地图上，从一个点移动到另一个点。当到达一个新的点位时（比如跑到10公里），可以开一个小礼包，礼包里有一个随机的积分"
+
+**已拍板**:
+1. **多张地图 + 第一张 = 上海→苏州**: 起点上海普陀区, 终点苏州. 总距离 ~95 km. **不均距**切 10 个目标.
+2. **风格 = 科技风手绘**: 跟现有 child UI 视觉一致 (cyan glow + 网格底), 路径为自由曲线 SVG.
+3. **推进方式 = C2**: 累计总公里数推进小人位置; 距离增长与本次打卡距离成正比; 一次打卡小人只前进一步.
+4. **积分概率分布 (D3)**: 60% 小奖 1-5, 35% 中奖 5-10, 5% 大奖 10-20. 每到一个**新点位** roll 一次.
+5. **录入 = E1**: 孩子点 🏃 emoji → 弹输入框填公里数 → 提交.
+6. **PM 可撤销** (X1 修订): PM 在 admin UI 看到 running_records 列表, 可点 "↩ 撤销" → 写入 revoked_at + revoked_by + **扣回积分** + **回退累计 km** + 写 audit_log. 二次确认防误操作.
+7. **多图通关**: 第一张跑完后孩子界面弹大图恭喜 modal → 撒花动画 → "查看下一张地图" 按钮 → 自动激活下一张地图 (本期只做第 1 张, 后两张占位 is_active=0).
+
+#### 13.1 数据模型 (4 张表)
+
+```sql
+-- running_maps: 主题地图清单 (多张地图, 可切换 + 通关解锁)
+CREATE TABLE running_maps (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  name           TEXT    NOT NULL,
+  theme          TEXT    NOT NULL,
+  total_km       REAL    NOT NULL CHECK(total_km > 0),
+  is_active      INTEGER NOT NULL DEFAULT 0,
+  display_order  INTEGER NOT NULL DEFAULT 0,
+  created_at     INTEGER NOT NULL
+);
+
+-- running_points: 每张地图的节点 (起点 0 km + 多个 + 终点 total_km)
+CREATE TABLE running_points (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  map_id      INTEGER NOT NULL REFERENCES running_maps(id),
+  name        TEXT    NOT NULL,
+  order_index INTEGER NOT NULL,
+  cum_km      REAL    NOT NULL CHECK(cum_km >= 0)
+);
+
+-- running_records: 每次跑步打卡 (含撤销语义)
+CREATE TABLE running_records (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  child_id          INTEGER NOT NULL REFERENCES users(id),
+  map_id            INTEGER NOT NULL REFERENCES running_maps(id),
+  km                REAL    NOT NULL CHECK(km > 0),
+  awarded_point_id  INTEGER REFERENCES running_points(id),
+  awarded_minutes   INTEGER,
+  created_at        INTEGER NOT NULL,
+  revoked_at        INTEGER,
+  revoked_by        INTEGER REFERENCES users(id)
+);
+
+-- running_progress: child-level cum_km 写穿缓存 (Item #011 §4)
+CREATE TABLE running_progress (
+  child_id      INTEGER NOT NULL,
+  map_id        INTEGER NOT NULL,
+  cum_km        REAL    NOT NULL DEFAULT 0,
+  last_updated  INTEGER NOT NULL,
+  PRIMARY KEY (child_id, map_id)
+);
+```
+
+#### 13.2 API 设计
+
+| Method | Path | 角色 | 说明 |
+|--------|------|------|------|
+| POST | `/api/running/records` | 孩子 | 提交 km → 写 record + score_event + audit + UPSERT running_progress |
+| GET | `/api/running/maps/active` | 孩子 | 返回当前地图 + 点位 + cum_km |
+| POST | `/api/running/maps/:id/complete` | 孩子 | 通关 → 激活下一张地图 |
+| GET | `/api/admin/running/records` | PM | 列表所有 running_records (含已撤销) |
+| POST | `/api/admin/running/records/:id/revoke` | PM | 撤销: UPDATE revoked_at + INSERT -game_time + UPSERT running_progress + audit_log |
+
+#### 13.3 撤销语义 (X1 修订)
+
+PM 撤销跑步记录时, 原子执行:
+1. `UPDATE running_records SET revoked_at=NOW, revoked_by=pm_user_id WHERE id=?`
+2. 若 awarded_minutes > 0: `INSERT INTO score_events (user_id, type='game_time', change_value=-awarded_minutes, reason='跑步打卡撤销', ...)`
+3. 重新计算 cum_km: `SELECT SUM(km) FROM running_records WHERE child_id=? AND map_id=? AND revoked_at IS NULL AND id != ?` → UPSERT running_progress
+4. `INSERT INTO audit_log (action='running_record_revoke', ...)`
+
+#### 13.4 点位设计 (上海→苏州, 10 个)
+
+| # | 名称 | 累计 km |
+|---|------|---------|
+| 0 | 🏁 上海·普陀区 (起点) | 0 |
+| 1 | 嘉定新城 | ~8 |
+| 2 | 太仓 | ~22 |
+| 3 | 昆山花桥 | ~32 |
+| 4 | 昆山城区 | ~45 |
+| 5 | 阳澄湖 | ~58 |
+| 6 | 苏州相城区 | ~72 |
+| 7 | 苏州姑苏区 | ~82 |
+| 8 | 苏州工业园区 | ~89 |
+| 9 | 🚩 苏州·金鸡湖 (终点) | ~95 |
+
 ### 12.9 Reference
 
 - **完整 RFC**：`docs/coin-system-rfc.md`（1527 行详细设计 + DDL + 流程图 + edge case）

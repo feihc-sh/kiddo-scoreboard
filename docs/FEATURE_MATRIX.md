@@ -69,8 +69,11 @@
 | **3.16.2** | Child Balance Card 跳转 (v3) | ✓ | ✓ | — | `coin-system.spec.ts` F12 |
 | **3.16.3** | Child 兑换历史 (v3) | ✓ | ✓ | — | `coin-system.spec.ts` F11 |
 | **3.16.4** | Admin Shop Pending Fulfill (v3) | ✓ | ✓ | — | `coin-system.spec.ts` (F6 admin 部分) + `coin-visual-regression.spec.ts` (visual #2 confirm modal) |
+| **3.17** | Running Map Schema + Checkin (Item #011) | — | — | — | `running-schema.test.ts` `running-prize.test.ts` |
+| **3.18** | Running Map Child UI (Item #011 §2+3) | ✓ | ✓ | — | `ui-running-checkin.spec.ts` `ui-running-map.spec.ts` |
+| **3.19** | Running Map Admin Revoke (Item #011 §4) | ✓ | ✓ | — | `admin-running-revoke.test.ts` |
 
-**UI 功能覆盖率**: **19/19 = 100%** ✅ (3.1-3.15 baseline + 3.16.1-3.16.4 coin shop v3)
+**UI 功能覆盖率**: **22/22 = 100%** ✅ (3.1-3.16.4 baseline + 3.17-3.19 running map)
 
 ---
 
