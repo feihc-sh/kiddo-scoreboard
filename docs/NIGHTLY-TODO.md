@@ -39,7 +39,7 @@
 
 ---
 
-## 📋 当前清单 (5 个 Item: 0 ⏳ pending, 3 🔧 running, 1 ⏸ hold, 1 ✅ done 已归档)
+## 📋 当前清单 (6 个 Item: 1 ⏳ pending, 1 🔧 running, 1 ⏸ hold)
 
 ## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
 
@@ -167,6 +167,224 @@
 **Started**: 2026-06-17
 **Commit (Stage 1)**: `1612a28` (HUD frame CSS 组件库 + 5 单测全过)
 **未做**: Stage 2 (任务按钮升级角括号) / Stage 3 (全屏装备舱 + 任务完成展开动画) / Stage 4 (文档 + regression)
+
+---
+
+## Item #013 — 跑步 Milestone 金币袋 + 重新撤销语义 (Re-derive) ⏳ pending
+
+> 用户原话 (feihao 2026-06-22 飞书 DM):
+> - "我希望的是跑步的 Milestone 可以奖励的是随机的金币, 不是游戏时间"
+> - "在图片上面把这几个 Milestone 显示的秀出来"
+> - "每到一个 Milestone 的时候, 要有一个小动画, 显示出来一个小的金色袋子, 然后突然打开了之后, 得到了一些金币"
+> - "撤回的时候要注意把相关的 Coin 金币也一起撤回"
+> - "这个逻辑可能就比较复杂, 而且有可能会要撤回多次, 因为小朋友会多次点那个记录跑步的这个事件"
+
+**已拍板 (2026-06-22)**:
+1. **Milestone 奖励从 game_time (分钟) 改 coins**: score_event `type='coins'` (原 `type='game_time'`)
+2. **Q1 Tier = A (10 个节点全同档)**: DB 不加 `prize_tier` 列, 所有 milestone 共享 60/35/5 概率分布
+3. **Q2 金币数量 = A (保守)**: 60% 小 [1-2] / 30% 中 [2-4] / 10% 大 [5-10], **avg ≈ 2.55 金币/节点**
+4. **Q3 动画 = B (独立 modal)**: 新建 `#coin-bag-modal` (跟 sprint modal 同级别, 80% 屏), bag drop + 拉链开 + 金币飞溅 + 数字 fade in
+5. **R2 撤销 = Re-derive cascade**: 撤 record 后, 重新算 cum_km; 对**仍 reached** 的 milestone 自动补偿金币, 对**不再 reached** 的 milestone 反向扣金币. **多次撤 record 触发 cascade**
+6. **Admin 审核 = 不加 (默认 A)**: 跟 task 一致, submit 立即 auto-approve + 立即给 coins + 立即弹金币袋; PM 事后 X1 撤销升级为 R2 re-derive
+
+**Clarification** (PM 整理 2026-06-22):
+
+### 数据模型 (re-derive 必须的 schema 改动)
+
+**score_events 改造** (核心):
+- 现有: 1 record → 1 score_event (`type='game_time'`, `change_value=sum_of_minutes`, `source_ref="running:N"`)
+- 改: 1 record 跨 N 个 milestone → **N 个 score_events** (`type='coins'`, per-milestone amount, `source_ref="running:N:point:P"`)
+- 理由: 撤 record N 时, 需逐 milestone 判断是否仍 reached (cascade)
+
+**新 migration 0012** (2 个改动):
+- `ALTER TABLE running_records RENAME COLUMN awarded_minutes TO awarded_coins;` (语义改 coins)
+- score_events 表 schema **不变** (source_ref 本来就是 TEXT, 装新格式 OK)
+- 历史 record 兼容: 改前跑的 record 仍 `type='game_time'` 旧 source_ref, 不迁; 新 record 走新格式; PM 撤老 record 走**旧 X1 简单 reverse**, 撤新 record 走**R2 cascade**
+
+### Re-derive 算法 (Stage 1 核心实现, ~80 LoC)
+
+`src/utils/running-rederive.ts` 新文件, 3 个 export 函数:
+
+```ts
+// 1. Recompute cum_km from non-revoked records
+export async function recomputeCumKm(db, childId, mapId): number
+
+// 2. Re-derive score_events for a single record revoke
+export async function rederiveRecordRevoke(
+  db, recordId, pmUserId
+): { newCumKm, netCoinChange, compensatedMilestones, reversedMilestones }
+
+// 3. Audit log helper
+export async function writeRevokeAuditLog(db, recordId, details): void
+```
+
+**`rederiveRecordRevoke` 步骤** (R2 spec):
+```
+1. UPDATE running_records SET revoked_at=now, revoked_by=pmId WHERE id=N
+2. newCumKm = recomputeCumKm(childId, mapId)  // SUM of non-revoked records
+3. For each milestone P in map (ORDER BY cum_km):
+   a. 找原 score_events: source_ref LIKE "running:N:point:P" (this record's award)
+   b. 找 active score_events: source_ref LIKE "running:%:point:P" WHERE record 在 non-revoked
+   c. P 在 newCumKm 仍 reached (newCumKm >= P.cum_km):
+      - 如果原 award 存在 (a) 但 (b) 无 active: 写 compensation (+coins, source_ref="running:N:point:P:compensation", reason="compensation for revoked record N")
+      - 如果 (b) 已有 active: skip (其他 record 已给过)
+   d. P 不再 reached (newCumKm < P.cum_km):
+      - 写 reverse (-coins, source_ref="running:N:point:P:reverse", reason="reverse milestone P due to record N revoke")
+4. UPDATE running_progress SET cum_km=newCum
+5. audit_log: 写明 cascade 详情
+6. return summary
+```
+
+### Cascade 例子 (4 个 case, 涵盖用户担心的"多次撤回"场景)
+
+**Case 1**: kid 跑 5 次 (3+3+3+3+3=15 km), 跨 8 km 一次 (t3)
+- t3: 跨 8 km, +2 coins (`source_ref="running:3:point:1"`)
+- 撤 t3: cum_km 12, 8 km 仍 reached, **+2 写 compensation** (同 amount, source_ref 加 `:compensation`), 净金币不变 ✓
+
+**Case 2**: 上面 case, PM 撤 t5 (3 km)
+- t3 仍 active, 8 km 仍 reached. 撤 t5: cum_km 12 (没变), **no change** (t3 的 award 仍 valid)
+
+**Case 3**: 上面 case, PM 撤 t3 + t4 + t5 (3 次撤, 串行)
+- 撤 t5: cum_km 12, 8 km 仍 reached (6+3+3=12), no change
+- 撤 t4: cum_km 9, 8 km 仍 reached, no change
+- 撤 t3: cum_km 6, 8 km **不再 reached**, **-2 金币** (写 reverse)
+
+**Case 4** (用户最担心, kid 跑 5 次跨 5 个 milestone): 8+14+10+13+13=58 km
+- 跨 8/22/32/45/58 共 5 个 milestone, +2×5=+10 coins (5 个 score_event)
+- PM 撤 t1 (8 km, 8 km milestone 是 t1 跨的): cum_km 50
+  - milestone 8/22/32/45 仍 reached (cum_km 50 ≥ all): **4 个 compensation**
+  - milestone 58 不再 reached (50 < 58): **1 个 reverse (-2)**
+  - 净: -2 (从 +10 → +8) ✓ (符合"撤 1 个 record, 净 -2" 的直观)
+
+### 视觉: 地图 milestone 节点 (Q1=A 全同档, 但"秀出来")
+
+**视觉方案** (Q1=A 不分 tier, 但明显比当前 #011 默认版):
+- 节点圆 r 从 7 → **10** (放大 1.4x)
+- 节点加 🎯 emoji hint (中心位置, 9px, Share Tech Mono 字体)
+- 当前节点 r=12 + cyan glow (放大 + 高亮)
+- reached 节点 cyan (浅)
+- unreached 节点 灰 + 0.5 opacity (半透, "待发现" 提示)
+- Title 加 progress badge: "🏁 5 / 10 Milestones · 50.0 / 95 km"
+
+### 金币袋动画 (Q3=B 独立 modal, 80% 屏)
+
+**Modal 结构** (跟 sprint modal 同级别):
+```html
+<div id="coin-bag-modal" class="modal-back" hidden>
+  <div class="modal coin-bag-modal">
+    <h2 class="modal-title">🎉 恭喜到达 嘉定新城!</h2>
+    <div class="coin-bag-stage">
+      <div class="coin-bag" id="coin-bag-graphic">👜</div>
+      <div class="coin-bag-coin coin-bag-coin-1">🪙</div>
+      <!-- ... 8-10 coin divs ... -->
+    </div>
+    <div class="coin-bag-amount" id="coin-bag-amount">+2</div>
+    <div class="coin-bag-unit">枚 金币</div>
+    <div class="modal-actions">
+      <button id="coin-bag-close" class="btn btn-primary">继续跑!</button>
+    </div>
+  </div>
+</div>
+```
+
+**3 阶段动画** (总 3s, 全部 CSS keyframes + JS trigger):
+1. **0-0.8s Drop**: bag 从 modal 顶部 `translateY(-200px) → 0`, 落地 bounce (`scale 0.95→1.05→1.0`)
+2. **0.8-1.6s Open**: bag shake (`rotate 2deg ↔ -2deg` × 4 次), 拉链线 ::after pseudo opacity 1→0 (开了)
+3. **1.6-2.5s Scatter**: 8-10 个小金币从袋口飞出 (`translateY(0) → -100px` + random `translateX(±50px)`, opacity 1→0, 不同角度)
+4. **2.5-3.0s Reveal**: "+X 枚" 大数字 fade in (`opacity 0→1`, `scale 0.8→1.0`), 按钮出现
+5. **3.0s+ Close**: 用户点 "继续跑!" → modal fade out 0.3s
+
+**音效 (用户拍板)**: A 不加 / B 加 (开袋 "jingle" + 金币 "ding", 用 `<audio>` tag 自动 play)
+
+### R2 撤销 UI (PM admin)
+
+**入口**: admin UI 跑步记录列表, 每行 "↩ 撤销" 按钮 (现有 X1)
+**点击后**:
+- 二次确认弹窗: "确认撤销 8 km 跑步 (2026-06-22 14:30)? **净金币变化: -2** (5 milestone 中 4 个仍 reached, 自动补偿; 1 个 58 km milestone 不再 reached, 反向扣)"
+- 确认 → POST `/api/admin/running/records/:id/revoke`
+- 后端跑 `rederiveRecordRevoke()`
+- 响应: `{ new_cum_km, net_coin_change, compensated_milestones, reversed_milestones }`
+- UI: toast "撤了 record N, 净 -2 金币" + 更新 balance card
+
+### 兼容性 (跟老 X1 共存)
+
+- **新 record** (Stage 2 之后): `source_ref="running:N:point:P"`, type='coins', 撤走 R2 cascade
+- **老 record** (改前跑的): `source_ref="running:N"` (旧), type='game_time', 撤走**旧 X1 简单 reverse** (无 cascade, 只 reverse 单个 score_event)
+- **production D1 已有数据**: 不迁, 老 record 仍走旧路径; 新 record 走新路径
+- **可观测**: PM 在 admin UI 看到 "已迁移" 标志, 知道哪些 record 走老逻辑 (留 §6 optional migration task)
+
+### Out of Scope (留二期)
+
+- 音效 (等用户拍板)
+- 历史 record 迁移 (Stage 6 之后可选)
+- multi-map 通关跨图 (新 002 苏州→杭州 地图在 #011 二期, 跟 #013 无关)
+- wrangler deploy / git push (cron 红灯规则)
+- PM 主动 add 跑步记录 (admin 手动加 km)
+
+**Action Plan** (6 段, 每段 ≤ 20 min, anti-CC-Timeout):
+
+- [ ] **Stage 1 (≤20 min)**: Re-derive 基础设施 (无 UI 变化)
+  - `src/utils/running-rederive.ts` (新文件, ~80 LoC): `recomputeCumKm()`, `rederiveRecordRevoke()`, `writeRevokeAuditLog()`
+  - `src/routes/running/records.ts` 改: 1 record 写 N score_events (per-milestone, source_ref="running:N:point:P")
+  - 单元测试: `tests/unit/running-rederive.test.ts` (~60 LoC, **8 个 case**: Case 1-4 + 边界: 撤不存在的 record, milestone 在边界 cum_km 上, 老 record 走旧逻辑, audit_log 写入)
+  - **依赖**: Stage 2 之前完成 (改 source_ref 格式, 改 type=coins)
+  - `git commit -m "feat(running): re-derive cascade on revoke (Item #013 §1)"`
+
+- [ ] **Stage 2 (≤15 min)**: prize.ts 改 coins
+  - `src/routes/running/prize.ts` 改: `rollPrize()` → `rollCoinPrize()` (60% [1-2] / 30% [2-4] / 10% [5-10])
+  - `src/routes/running/records.ts` 改: score_event `type='game_time'` → `type='coins'`, `change_value` 改 coins
+  - 新 migration `0012_rename_awarded_coins.sql`: `ALTER TABLE running_records RENAME COLUMN awarded_minutes TO awarded_coins;`
+  - 单元测试: `tests/unit/running-prize.test.ts` (8 个 case 验证分布: 1.0 概率总和, range 正确, 多次抽样 avg 接近 2.55)
+  - **🚫 不做**: 历史 record 迁移 (共存, 老 record 仍 type='game_time')
+  - `git commit -m "feat(running): rollCoinPrize + score_event type=coins + migration 0012 (Item #013 §2)"`
+
+- [ ] **Stage 3 (≤20 min)**: SVG 地图 milestone 视觉
+  - `public/app.js` 改: `renderRunningMap()` 节点 r 7→10, 加 🎯 emoji hint, unreached 0.5 opacity
+  - `public/app.js` 改: title 加 progress badge "🏁 X / 10 Milestones · X.X / 95 km"
+  - `public/app.css` 加: `.running-node.current` r=12 + cyan glow, `.running-node.unreached` opacity 0.5, `.running-node-icon` 9px Share Tech Mono
+  - 单测: `tests/unit/running-map-render.test.ts` (~40 LoC, 5 case: 10 节点生成, badge 文本格式, unreached opacity 0.5, current r=12)
+  - E2E: `tests/e2e/ui-running-map-milestones.spec.ts` (~50 LoC, 验证 iPad 视口 10 节点 visible, badge 文案)
+  - `git commit -m "feat(running): SVG map milestone visual emphasis (Item #013 §3)"`
+
+- [ ] **Stage 4 (≤20 min)**: #coin-bag-modal HTML + CSS
+  - `public/index.html` 加: `#coin-bag-modal` (跟 sprint modal 同级别, 80% 屏, 包含 bag graphic + 8-10 coin slots + 大数字 + 按钮)
+  - `public/app.css` 加: `.coin-bag-*` 全部样式 (~100 LoC), 4 阶段 @keyframes (drop-bounce, bag-shake-open, coin-scatter, number-fade)
+  - 单元测试: `tests/unit/coin-bag-modal.test.ts` (~30 LoC, DOM 节点 + 类名 + hidden default)
+  - **🚫 不做**: 触发逻辑 (Stage 5), 音效 (用户拍板)
+  - `git commit -m "feat(running): coin bag modal HTML + CSS animation (Item #013 §4)"`
+
+- [ ] **Stage 5 (≤20 min)**: 触发逻辑 + 数据绑定
+  - `public/app.js` 改: `showCoinBagModal(point, coins)` 函数 (~50 LoC) — 替代 `showGiftModal()`, 接 award_coins, 触发 3 阶段动画
+  - `public/app.js` 改: `submitRunning()` 成功后, 遍历 `response.new_points_reached[]`, **sequential 队列** (1 个 bag modal 完才弹下 1 个)
+  - `public/app.js` 改: `running-gift-modal` 移除 (or mark deprecated, Stage 6 删)
+  - 单测: `tests/unit/coin-bag-modal-trigger.test.ts` (~40 LoC, 6 case: 1 milestone → 1 modal, 3 milestones → 3 sequential, modal close → next trigger, user close mid-animation)
+  - E2E: `tests/e2e/ui-coin-bag.spec.ts` (~60 LoC, 跑 8 km → 看到 bag drop 动画 + 数字 +2 + 按钮)
+  - **🚫 不做**: 音效, 老 gift modal 兼容 (Stage 6 一并删)
+  - `git commit -m "feat(running): coin bag modal trigger + sequential queue (Item #013 §5)"`
+
+- [ ] **Stage 6 (≤15 min)**: Admin 撤销 UI + cascade summary + 文档
+  - `src/routes/admin/running.ts` (新文件, ~80 LoC): `POST /api/admin/running/records/:id/revoke` 调 `rederiveRecordRevoke()`, 返 cascade summary JSON
+  - `public/admin.html` + `public/admin.js` 加: 跑步记录列表 (table) + "↩ 撤销" 按钮 (每行) + 二次确认弹窗 (显示**净金币变化 + cascade 详情**)
+  - `src/worker.ts` 注册新 route
+  - 单元测试: `tests/unit/admin-running-revoke.test.ts` (~50 LoC, 4 case: cascade 正确性, audit_log, 老 record 走旧 X1, 401 鉴权)
+  - E2E: `tests/e2e/admin-running-revoke.spec.ts` (~60 LoC, PM 撤 1 record, 验证 cum_km 回退 + 金币 cascade + balance card 更新 + list 刷新)
+  - 文档: `docs/PRD.md` §3.6 加 "Milestone 金币袋动画" 段 + `docs/TEST_PLAN.md` §3.18 + `docs/FEATURE_MATRIX.md` 标记 ✅ + `docs/PROGRESS.md` v2.x
+  - 视觉对齐: bag modal 跟 #005/#010/#011 cyan 风格统一
+  - Regression: `npx vitest run` + `npx playwright test` 全套
+  - **🚫 不做**: 音效, 历史 record 迁移 (留二期), wrangler deploy / git push
+  - `git commit -m "feat(running): admin revoke UI + cascade summary + docs (Item #013 §6)"`
+
+**Status**: ⏳ pending
+**风险**: 🔴 (改核心 invariant: reward semantic + revoke 逻辑 + modal flow; 6 stage 跨 5+ 文件, 需全套 regression; re-derive 算法需 careful audit_log 设计; UI 动画 + admin 双向改动, 一个 stage 错影响整体)
+**Started**: —
+**Completed**: —
+**Commit**: —
+**未做**: 全部 6 stage
+**依赖**: 不依赖 #008 (并行可跑); 不依赖 cron (PM 手动按 stage 启 CC, 1 stage 1 PR)
+**估算**: 总 **~400 LoC + ~330 LoC 测试**, 6 PR, **3 晚 cron** (Stage 1+2 一晚, 3+4 一晚, 5+6 一晚; 每晚 ≤2h 预算, ~3-4 stage/晚 实际)
+**音效**: 用户拍板后再加 (Stage 5/6 之间插, ~20 LoC JS)
+**老 record 迁移**: Stage 6 之后可选, 不在 #013 scope
+**跨图 (002 苏州→杭州)**: 留二期, 不在 #013 scope
 
 ---
 
