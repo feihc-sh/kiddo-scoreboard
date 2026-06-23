@@ -1,0 +1,32 @@
+-- Module 9: Running Map — coin semantics rename (Item #013 Stage 2)
+--
+-- 改动:
+--   1. running_records.awarded_minutes → awarded_coins
+--      (语义从"分钟游戏时间"改为"金币",跟 #013 R2 re-derive cascade 配套)
+--   2. 不动数据值 (只是列名,值 5/8/9 等继续代表玩家被奖励的数额)
+--   3. 配合 src/routes/running/prize.ts::rollCoinPrize() 使用:
+--        60% [1-2] / 30% [2-4] / 10% [5-10]  (avg ≈ 2.55)
+--      跟原 rollPrize() 60% [1-5] / 35% [5-10] / 5% [10-20] 的整体均值 (≈5.4) 略低
+--      因为金币单价更值钱,设计保守
+--
+-- 应用顺序: 在 0011 之后,按 wrangler d1 migrations apply 文件名顺序。
+--
+-- 兼容性: SQLite 3.25+ 支持 ALTER TABLE RENAME COLUMN (CF D1 SQLite 3.39+ ✅)
+--         对 INSERT/UPDATE/SELECT 影响: column 名变了,所有 query 改 awarded_coins
+--         旧 running_records 行的值不变 (整数原样保留)
+
+-- =============================================================
+-- 1) Rename column
+-- =============================================================
+ALTER TABLE running_records RENAME COLUMN awarded_minutes TO awarded_coins;
+
+-- =============================================================
+-- 2) 同步更新 column comment (SQLite 没原生 comment, 写文档行)
+-- =============================================================
+-- New semantics (Item #013 §1):
+--   - awarded_coins: 玩家跨过 milestone 时奖励的金币数 (per point)
+--   - 来源: src/routes/running/prize.ts::rollCoinPrize()
+--   - 对应 score_event: type='coins', change_value=awarded_coins
+--   - NULL = 未到新节点, 无奖励
+--   - 0 = 到节点但 roll 出 0 (理论上不可能,rollCoinPrize min=1; 留 0 兼容历史)
+--   - >0 = 实际奖励金币数, 撤销时写 -awarded_coins 反向 score_event

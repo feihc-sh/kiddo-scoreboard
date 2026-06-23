@@ -292,8 +292,8 @@ function renderRunningRecords() {
     const isRevoked = r.revoked_at !== null;
     const childName = escapeHtml(r.child_name || ('user #' + r.child_id));
     const mapName = escapeHtml(r.map_name || ('map #' + r.map_id));
-    const pointsLabel = (r.awarded_minutes && r.awarded_minutes > 0)
-      ? ' +' + r.awarded_minutes + ' min'
+    const pointsLabel = (r.awarded_coins && r.awarded_coins > 0)
+      ? ' +' + r.awarded_coins + ' 枚'
       : '';
     const revokedLabel = isRevoked
       ? ' <span class="pm-badge revoked">↩ 已撤销</span>'

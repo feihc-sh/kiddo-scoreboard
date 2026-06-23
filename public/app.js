@@ -105,14 +105,14 @@ async function submitRunning(km) {
     closeRunningCheckinModal();
 
     const points = r.new_points_reached?.length || 0;
-    const minutes = r.total_awarded_minutes || 0;
+    const coins = r.total_awarded_coins || 0;
 
     // Show gift modal for each newly-reached point.
     if (points > 0 && r.new_points_reached) {
       // Show the first gift modal; the rest (if any) are shown after closing.
       const firstPoint = r.new_points_reached[0];
-      showGiftModal(firstPoint, minutes);
-      toast(`🏃 跑了 ${km} km, 到达 ${points} 个新点位, +${minutes} 分钟`, 'success');
+      showGiftModal(firstPoint, coins);
+      toast(`🏃 跑了 ${km} km, 到达 ${points} 个新点位, +${coins} 枚`, 'success');
     } else {
       toast(`🏃 跑了 ${km} km, 累计 ${state.running.cumKm.toFixed(1)} km`, 'success');
     }

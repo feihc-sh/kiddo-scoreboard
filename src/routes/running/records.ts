@@ -10,7 +10,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env } from '../../worker.ts';
-import { rollPrize, type Rng } from './prize.ts';
+import { rollCoinPrize, type Rng } from './prize.ts';
 
 /**
  * Hardcoded child user id (matches src/routes/me/coins.ts:CHILD_USER_ID).
@@ -100,7 +100,7 @@ interface ReachedPoint {
   point_id: number;
   name: string;
   cum_km: number;
-  awarded_minutes: number;
+  awarded_coins: number;
 }
 
 // ---------- POST / ----------
@@ -124,10 +124,12 @@ records.post('/', async (c) => {
 
   // Test hook: pin the RNG for deterministic e2e prize assertions.
   // Production: never set, always Math.random.
+  // With rollCoinPrize() fixed rng()=0.5: 0.5 < 0.6 → small bucket
+  //   second rng()=0.5 → floor(0.5*2)=0 → 1+0 = 1 coin
   const url = new URL(c.req.url);
   const rng: Rng =
     url.searchParams.get('rng') === 'fixed'
-      ? () => 0.5 // 0.5 < 0.6 → small bucket; floor(0.5*5)=2 → 1+2 = 3
+      ? () => 0.5
       : Math.random;
 
   // 2) Read batch: pick active map + previous cum km + candidate points.
@@ -176,9 +178,9 @@ records.post('/', async (c) => {
     point_id: p.id,
     name: p.name,
     cum_km: p.cum_km,
-    awarded_minutes: rollPrize(rng),
+    awarded_coins: rollCoinPrize(rng),
   }));
-  const totalAwardedMinutes = reached.reduce((s, p) => s + p.awarded_minutes, 0);
+  const totalAwardedCoins = reached.reduce((s, p) => s + p.awarded_coins, 0);
   const firstReachedId = reached.length > 0 ? reached[0].point_id : null;
 
   // 3) Write batch: insert record + score_event (if any) + audit_log.
@@ -187,28 +189,28 @@ records.post('/', async (c) => {
     const recordResult = await db
       .prepare(
         `INSERT INTO running_records
-           (child_id, map_id, km, awarded_point_id, awarded_minutes, created_at)
+           (child_id, map_id, km, awarded_point_id, awarded_coins, created_at)
          VALUES (?, ?, ?, ?, ?, ?)
          RETURNING id`,
       )
-      .bind(CHILD_USER_ID, map.id, km, firstReachedId, totalAwardedMinutes, now)
+      .bind(CHILD_USER_ID, map.id, km, firstReachedId, totalAwardedCoins, now)
       .first<{ id: number }>();
     const recordId = Number(recordIdFromInsert(recordResult));
 
-    let gameTimeEventId: number | null = null;
+    let coinEventId: number | null = null;
 
-    if (totalAwardedMinutes > 0) {
-      // INSERT score_events (+game_time), mirrors src/routes/shop/exchange.ts:166-180
+    if (totalAwardedCoins > 0) {
+      // INSERT score_events (+coins), mirrors src/routes/shop/exchange.ts:166-180
       const evResult = await db
         .prepare(
           `INSERT INTO score_events
              (user_id, type, change_value, reason, status, submitted_by, source, source_ref, created_at)
-           VALUES (?, 'game_time', ?, '跑步打卡积分', 'approved', 'child', 'manual', ?, ?)
+           VALUES (?, 'coins', ?, '跑步打卡积分', 'approved', 'child', 'manual', ?, ?)
            RETURNING id`,
         )
-        .bind(CHILD_USER_ID, totalAwardedMinutes, recordId, now)
+        .bind(CHILD_USER_ID, totalAwardedCoins, recordId, now)
         .first<{ id: number }>();
-      gameTimeEventId = Number(recordIdFromInsert(evResult));
+      coinEventId = Number(recordIdFromInsert(evResult));
     }
 
     // INSERT audit_log
@@ -227,8 +229,8 @@ records.post('/', async (c) => {
           previous_cum_km: previousCumKm,
           new_cum_km: newCumKmRaw,
           new_points_reached: reached,
-          total_awarded_minutes: totalAwardedMinutes,
-          game_time_event_id: gameTimeEventId,
+          total_awarded_coins: totalAwardedCoins,
+          coin_event_id: coinEventId,
         }),
         now,
       )
@@ -264,7 +266,7 @@ records.post('/', async (c) => {
       total_km: map.total_km,
       previous_cum_km: previousCumKm,
       new_points_reached: reached,
-      total_awarded_minutes: totalAwardedMinutes,
+      total_awarded_coins: totalAwardedCoins,
       balance,
       created_at: now,
     });

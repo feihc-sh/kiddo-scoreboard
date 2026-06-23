@@ -41,7 +41,7 @@ interface RunningRecordRow {
   map_name: string;
   km: number;
   awarded_point_id: number | null;
-  awarded_minutes: number | null;
+  awarded_coins: number | null;
   created_at: number;
   revoked_at: number | null;
   revoked_by: number | null;
@@ -63,7 +63,7 @@ async function listRunningRecords(
          rm.name             AS map_name,
          rr.km,
          rr.awarded_point_id,
-         rr.awarded_minutes,
+         rr.awarded_coins,
          rr.created_at,
          rr.revoked_at,
          rr.revoked_by,
@@ -102,7 +102,7 @@ async function revokeRunningRecord(
   // 1) Load the record
   const rec = await db
     .prepare(
-      `SELECT id, child_id, map_id, km, awarded_minutes, revoked_at
+      `SELECT id, child_id, map_id, km, awarded_coins, revoked_at
        FROM running_records WHERE id = ?`,
     )
     .bind(id)
@@ -111,7 +111,7 @@ async function revokeRunningRecord(
       child_id: number;
       map_id: number;
       km: number;
-      awarded_minutes: number | null;
+      awarded_coins: number | null;
       revoked_at: number | null;
     }>();
   if (!rec) throw new Error('NOT_FOUND');
@@ -169,7 +169,7 @@ async function revokeRunningRecord(
           child_id: rec.child_id,
           map_id: rec.map_id,
           km: rec.km,
-          awarded_minutes: rec.awarded_minutes,
+          awarded_coins: rec.awarded_coins,
           cum_km_after: newCumKm,
         }),
         now,
@@ -178,7 +178,7 @@ async function revokeRunningRecord(
 
   // b. Score event for point reversal (only if there were awarded minutes)
   let revokeScoreEventId: number | null = null;
-  if (rec.awarded_minutes && rec.awarded_minutes > 0) {
+  if (rec.awarded_coins && rec.awarded_coins > 0) {
     stmts.splice(
       1,
       0,
@@ -186,9 +186,9 @@ async function revokeRunningRecord(
         .prepare(
           `INSERT INTO score_events
              (user_id, type, change_value, reason, status, submitted_by, source, source_ref, created_at)
-           VALUES (?, 'game_time', ?, '跑步打卡撤销', 'approved', 'pm', 'manual', ?, ?)`,
+           VALUES (?, 'coins', ?, '跑步打卡撤销', 'approved', 'pm', 'manual', ?, ?)`,
         )
-        .bind(rec.child_id, -rec.awarded_minutes, `running_revoke:${id}`, now),
+        .bind(rec.child_id, -rec.awarded_coins, `running_revoke:${id}`, now),
     );
   }
 
@@ -196,7 +196,7 @@ async function revokeRunningRecord(
   const results = await db.batch(stmts);
 
   // Extract last_row_id of the score_event if it was written
-  if (rec.awarded_minutes && rec.awarded_minutes > 0) {
+  if (rec.awarded_coins && rec.awarded_coins > 0) {
     revokeScoreEventId = Number(results[1]?.meta?.last_row_id ?? 0) || null;
   }
 

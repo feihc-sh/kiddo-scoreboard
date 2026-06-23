@@ -11,7 +11,7 @@
 //   - revoke: 404 if not found
 //   - revoke happy path: UPDATE revoked_at/revoked_by + INSERT -game_time
 //     score_event + UPSERT running_progress + INSERT audit_log
-//   - revoke: no score_event INSERT if awarded_minutes=0
+//   - revoke: no score_event INSERT if awarded_coins=0
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import app from '../../src/worker.ts';
@@ -31,7 +31,7 @@ interface RunningRecordRow {
   map_id: number;
   km: number;
   awarded_point_id: number | null;
-  awarded_minutes: number | null;
+  awarded_coins: number | null;
   created_at: number;
   revoked_at: number | null;
   revoked_by: number | null;
@@ -89,7 +89,7 @@ function addRecord(overrides: Partial<RunningRecordRow> = {}): RunningRecordRow 
     map_id: 1,
     km: 3.5,
     awarded_point_id: 1,
-    awarded_minutes: 5,
+    awarded_coins: 5,
     created_at: nowOverride,
     revoked_at: null,
     revoked_by: null,
@@ -159,7 +159,7 @@ function makeMockDb(): D1Database {
           const ev: ScoreEventRow = {
             id: scoreEvents.length + 1,
             user_id: userId,
-            type: 'game_time',
+            type: 'coins',
             change_value: changeValue,
             reason: '跑步打卡撤销', // literal in SQL, not a bind param
             status: 'approved',
@@ -230,8 +230,8 @@ describe('GET /api/admin/running/records', () => {
   it('returns all records including revoked', async () => {
     addUser(2, 'Kiddo', 'child');
     addUser(1, 'PM', 'pm');
-    addRecord({ id: 10, child_id: 2, map_id: 1, km: 3.5, awarded_minutes: 5 });
-    addRecord({ id: 11, child_id: 2, map_id: 1, km: 4.0, awarded_minutes: 0, revoked_at: nowOverride - 10, revoked_by: 1 });
+    addRecord({ id: 10, child_id: 2, map_id: 1, km: 3.5, awarded_coins: 5 });
+    addRecord({ id: 11, child_id: 2, map_id: 1, km: 4.0, awarded_coins: 0, revoked_at: nowOverride - 10, revoked_by: 1 });
     const cookie = await pmCookie();
     const r = await call('/api/admin/running/records', { headers: { cookie } });
     expect(r.status).toBe(200);
@@ -311,8 +311,8 @@ describe('POST /api/admin/running/records/:id/revoke', () => {
     // SUM(km WHERE active AND id != 20) = 7.0 after revoking id=20 (km=3.5).
     // (Endpoint reads SUM FROM running_records per migration 0011 design,
     // not from running_progress cache.)
-    addRecord({ id: 18, child_id: 2, map_id: 1, km: 7.0, awarded_minutes: 0, created_at: nowOverride - 100 });
-    const rec = addRecord({ id: 20, child_id: 2, map_id: 1, km: 3.5, awarded_minutes: 5 });
+    addRecord({ id: 18, child_id: 2, map_id: 1, km: 7.0, awarded_coins: 0, created_at: nowOverride - 100 });
+    const rec = addRecord({ id: 20, child_id: 2, map_id: 1, km: 3.5, awarded_coins: 5 });
     const cookie = await pmCookie();
     const r = await call('/api/admin/running/records/20/revoke', {
       method: 'POST',
@@ -325,7 +325,7 @@ describe('POST /api/admin/running/records/:id/revoke', () => {
     expect(typeof body.revoked_at).toBe('number');
     // cum_km should be 10.5 (initial - this record's 3.5)
     expect(body.cum_km).toBe(7.0);
-    // score_event was inserted (awarded_minutes=5 > 0)
+    // score_event was inserted (awarded_coins=5 > 0)
     expect(body.revoke_score_event_id).toBeGreaterThan(0);
     const ev = scoreEvents.find((e) => e.user_id === 2 && e.change_value === -5);
     expect(ev).toBeDefined();
@@ -345,9 +345,9 @@ describe('POST /api/admin/running/records/:id/revoke', () => {
     expect(details.km).toBe(3.5);
   });
 
-  it('no score_event INSERT when awarded_minutes is 0 or null', async () => {
+  it('no score_event INSERT when awarded_coins is 0 or null', async () => {
     addUser(1, 'PM', 'pm');
-    addRecord({ id: 21, child_id: 2, map_id: 1, km: 2.0, awarded_minutes: 0 });
+    addRecord({ id: 21, child_id: 2, map_id: 1, km: 2.0, awarded_coins: 0 });
     const cookie = await pmCookie();
     const r = await call('/api/admin/running/records/21/revoke', {
       method: 'POST',
@@ -363,7 +363,7 @@ describe('POST /api/admin/running/records/:id/revoke', () => {
 
   it('double revoke returns 409', async () => {
     addUser(1, 'PM', 'pm');
-    const rec1 = addRecord({ id: 30, child_id: 2, map_id: 1, km: 3.0, awarded_minutes: 3 });
+    const rec1 = addRecord({ id: 30, child_id: 2, map_id: 1, km: 3.0, awarded_coins: 3 });
     const cookie = await pmCookie();
     // First revoke succeeds
     const r1 = await call('/api/admin/running/records/30/revoke', {

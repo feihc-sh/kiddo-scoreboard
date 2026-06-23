@@ -91,6 +91,14 @@ async function resetDb() {
     'app_config',
     'score_events',
     'users',
+    // Module 9 (Item #011/#013): running tables — must drop so migration
+    // 0012's `RENAME COLUMN awarded_minutes → awarded_coins` re-applies
+    // cleanly across beforeEach runs (SQLite fails on second RENAME of an
+    // already-renamed column).
+    'running_progress',
+    'running_records',
+    'running_points',
+    'running_maps',
   ]) {
     await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
   }

@@ -170,7 +170,7 @@
 
 ---
 
-## Item #013 — 跑步 Milestone 金币袋 + 重新撤销语义 (Re-derive) ⏳ pending
+## Item #013 — 跑步 Milestone 金币袋 + 重新撤销语义 (Re-derive) 🔧 running (Stage 2 完成 2026-06-24, 等 Stage 1/3-6)
 
 > 用户原话 (feihao 2026-06-22 飞书 DM):
 > - "我希望的是跑步的 Milestone 可以奖励的是随机的金币, 不是游戏时间"
@@ -330,7 +330,7 @@ export async function writeRevokeAuditLog(db, recordId, details): void
   - **依赖**: Stage 2 之前完成 (改 source_ref 格式, 改 type=coins)
   - `git commit -m "feat(running): re-derive cascade on revoke (Item #013 §1)"`
 
-- [ ] **Stage 2 (≤15 min)**: prize.ts 改 coins
+- [ ] **Stage 2 (≤15 min)**: prize.ts 改 coins ✅ (2026-06-24)
   - `src/routes/running/prize.ts` 改: `rollPrize()` → `rollCoinPrize()` (60% [1-2] / 30% [2-4] / 10% [5-10])
   - `src/routes/running/records.ts` 改: score_event `type='game_time'` → `type='coins'`, `change_value` 改 coins
   - 新 migration `0012_rename_awarded_coins.sql`: `ALTER TABLE running_records RENAME COLUMN awarded_minutes TO awarded_coins;`
@@ -374,12 +374,11 @@ export async function writeRevokeAuditLog(db, recordId, details): void
   - **🚫 不做**: 音效, 历史 record 迁移 (留二期), wrangler deploy / git push
   - `git commit -m "feat(running): admin revoke UI + cascade summary + docs (Item #013 §6)"`
 
-**Status**: ⏳ pending
+**Status**: 🔧 running (Stage 2 done 2026-06-24, 等 Stage 1 / 3 / 4 / 5 / 6)
 **风险**: 🔴 (改核心 invariant: reward semantic + revoke 逻辑 + modal flow; 6 stage 跨 5+ 文件, 需全套 regression; re-derive 算法需 careful audit_log 设计; UI 动画 + admin 双向改动, 一个 stage 错影响整体)
-**Started**: —
-**Completed**: —
-**Commit**: —
-**未做**: 全部 6 stage
+**Started**: 2026-06-24
+**Commit (Stage 2)**: — (pending commit this cron run)
+**未做**: Stage 1 (re-derive 基础设施) / Stage 3 (SVG milestone 视觉) / Stage 4 (coin bag modal HTML+CSS) / Stage 5 (触发逻辑 + 数据绑定) / Stage 6 (Admin 撤销 UI + cascade summary + 文档)
 **依赖**: 不依赖 #008 (并行可跑); 不依赖 cron (PM 手动按 stage 启 CC, 1 stage 1 PR)
 **估算**: 总 **~400 LoC + ~330 LoC 测试**, 6 PR, **3 晚 cron** (Stage 1+2 一晚, 3+4 一晚, 5+6 一晚; 每晚 ≤2h 预算, ~3-4 stage/晚 实际)
 **音效**: 用户拍板后再加 (Stage 5/6 之间插, ~20 LoC JS)
@@ -725,11 +724,14 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 
 ## 📊 归档统计 (7 Item, 2026-06-20 累计)
 
-| 状态 | 数量 | Item |
+| Status | Count | Items |
 |---|---:|---|
 | ✅ done | 5 | #001 emoji / #002 睡眠 / #005 三进度条 / #006 打卡日历 (PR #41 ✅ merged 2026-06-20) / #009 硬删 |
 | 🚫 blocked → 归档 | 2 | #003 英语 / #004 老师投诉 |
 | **总计** | **7** | 全部归档 |
+
+> 📌 **当前清单** (active): #007 hold / #008 🔧 running / #011 🔧 running / #012 🔧 running / #013 🔧 running (Stage 2 done 2026-06-24)
+> 当前 ⏳ pending = **0**
 
 > #006 2026-06-20 PM-fix: status → ✅ done, NIGHTLY-TODO 归档 (从主清单移到此处, 跟 #001/#002/#005/#009 同档; 完整 commit 历史 `0389c85` / `569e10c` / `c5d8c57` / `5abe507` / `f2c82e6` / `a4eb27b` / `ade11a1` / `064622a`, e2e 12/12 + unit 313/313, Qual verified, Iron Rule #25 added)
 
