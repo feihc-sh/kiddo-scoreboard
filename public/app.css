@@ -842,7 +842,8 @@ body {
   -webkit-user-select: none;
   user-select: none;
   position: relative;
-  overflow: hidden;
+  /* §2 mecha HUD: overflow visible so corner brackets can bleed out */
+  overflow: visible;
   transition:
     transform 0.2s var(--bounce),
     border-color 0.2s var(--ease),
@@ -914,6 +915,46 @@ body {
   border-color: var(--metal-dark);
   color: #444;
   opacity: 0.4;
+}
+
+/* §2 mecha HUD: task button wrapped in .mecha-frame */
+.task-shortcuts .mecha-frame {
+  flex: 0 0 auto;
+  min-width: 160px;
+  scroll-snap-align: start;
+  padding: 8px; /* frame border padding — corners bleed into this space */
+  /* Let corners slightly overflow the frame edge for mecha HUD feel */
+  position: relative;
+}
+/* Adjust button inside frame: remove redundant border/shadow since frame has them */
+.task-shortcuts .mecha-frame > .task-btn {
+  min-height: 110px;
+  border: none; /* frame provides border */
+  box-shadow: none; /* frame provides shadow */
+}
+.task-shortcuts .mecha-frame:hover > .task-btn {
+  /* hover glow is on the frame — button inherits via cascade */
+  transform: translateY(-3px);
+}
+/* Done state: green glow on frame */
+.task-shortcuts .mecha-frame.frame-done {
+  border-color: var(--green);
+  box-shadow: 0 0 8px var(--green-glow), inset 0 0 12px rgba(0, 255, 136, 0.05);
+}
+/* Locked state: muted frame */
+.task-shortcuts .mecha-frame.frame-locked {
+  border-color: var(--metal-dark);
+  box-shadow: none;
+  opacity: 0.7;
+}
+/* Mobile (max-width: 768px): hide corners to avoid clutter on small screens */
+@media (max-width: 768px) {
+  .task-shortcuts .mecha-corner { display: none; }
+  .task-shortcuts .mecha-frame { padding: 6px; }
+  .task-shortcuts .mecha-frame > .task-btn {
+    min-width: 145px;
+    min-height: 105px;
+  }
 }
 
 .task-btn-icon { font-size: 26px; line-height: 1; }
@@ -1780,7 +1821,7 @@ body {
   .balance-card { padding: 18px 16px 16px; }
   .hero { padding: 22px 20px 18px; }
   .hero-greeting { font-size: 22px; }
-  .task-btn { min-width: 145px; min-height: 105px; }
+  .task-shortcuts .mecha-frame > .task-btn { min-width: 145px; min-height: 105px; }
   .modal { padding: 22px 18px; }
 }
 

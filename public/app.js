@@ -990,7 +990,19 @@ function renderTasks() {
     } else {
       btn.addEventListener('click', () => completeTask(t.id));
     }
-    root.appendChild(btn);
+    // §2 mecha HUD frame: wrap button in .mecha-frame with 4 corner brackets.
+    // .mecha-corner spans sit inside the frame so they can overflow slightly
+    // (overflow:visible on the frame + negative offset) for the mecha look.
+    const frame = document.createElement('div');
+    frame.className = 'mecha-frame mecha-glow'
+      + (done && !revoked ? ' frame-done' : '')
+      + (revoked || isSleepLocked ? ' frame-locked' : '');
+    frame.innerHTML = '<span class="mecha-corner tl"></span>'
+      + '<span class="mecha-corner tr"></span>'
+      + '<span class="mecha-corner bl"></span>'
+      + '<span class="mecha-corner br"></span>';
+    frame.appendChild(btn);
+    root.appendChild(frame);
   });
   // Start the per-second countdown loop. Idempotent.
   startCountdownLoop();
