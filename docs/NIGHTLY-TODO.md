@@ -39,7 +39,10 @@
 
 ---
 
-## 📋 当前清单 (6 个 Item: 1 ⏳ pending, 1 🔧 running, 1 ⏸ hold)
+## 📋 当前清单 (2 个 Item: 0 ⏳ pending, 2 🔧 running, 1 ⏸ hold)
+
+> 📌 **Drift fix 2026-06-24 (PM 修)**: #011 ✅ done (PR #42 已 merged 2026-06-21), #012 ✅ done (PR #43 已 merged 2026-06-21) — 移到下方归档段
+> 当前 active: #007 hold / #008 🔧 running / #013 🔧 running (Stage 2 done)
 
 ## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
 
@@ -391,6 +394,34 @@ export async function writeRevokeAuditLog(db, recordId, details): void
 
 ---
 
+## Item #011 — 跑步小地图 + 积分礼包 (上海→苏州 主题) ✅ done (PR #42 merged 2026-06-21)
+
+**用户原话** (feihao 2026-06-17 飞书 DM):
+> "在 Nightly Todo 里再增加一个功能：记录跑步的每次公里数，并绘制一个小地图。每一次跑了多远的距离，会在一个虚拟的小地图上，从一个点移动到另一个点。当到达一个新的点位时（比如跑到10公里），可以开一个小礼包，礼包里有一个随机的积分"
+
+**Completed**: 2026-06-21 (PR #42 merged, commit `7ce8a63`)
+**Commits**:
+- `d4be219` (Stage 1: 3 张表 schema + 上海→苏州 10 个点位 seed + 8 单测全过)
+- `90c04d1` (Stage 2: child check-in modal + km submission + 7 e2e scenarios)
+- `7ce8a63` (Stage 3-4: SVG map + PM admin revoke, PR #42)
+
+**说明**: 4 个 stage 全部 merged to main, e2e green, Qual verified. Stage 1+2 在 2026-06-17-19 cron 跑, Stage 3-4 在 2026-06-22 PM 手动启动 CC, 后续跟 #013 Stage 2 一起 merged. #013 R2 cascade 是 Stage 3-4 admin revoke 之后的延伸.
+
+---
+
+## Item #012 — Calendar icon 渲染 + Tab 筛选 ✅ done (PR #43 merged 2026-06-21)
+
+**用户原话** (feihao 2026-06-20):
+> "日历的地方有一个问题，我不希望只显示数字，而是希望显示那个他任务完成的对应的小图标。并且增加几个Tab，可以单独筛选：1. 看所有的 2. 筛选特定的任务"
+
+**Completed**: 2026-06-21 (PR #43 merged, commit `8d89de5`)
+**Commits**:
+- `8d89de5` (Stage 1-4: cell icons + tab filter + localStorage, PR #43)
+
+**说明**: 4 个 stage 全部 merged to main, 1 atomic PR. UI-only + 2 API 端点改动, schema 不变, 跟 #006 已 verify pattern 复用. Stage 2 之前 PM 自实现 (CC spawn 401 5次连续 fail 后 pivot, per `cc-pm-spawn-pitfalls` 坑 11).
+
+---
+
 ## Item #001 — Admin 加任务 UI 加 emoji 选择器 (20 个预设) ✅
 
 **用户原话**:
@@ -600,14 +631,13 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
   - **🚫 不做**: wrangler deploy / git push (按 cron 红灯规则)
   - `git commit -m "feat(running): admin revoke (km+points 回退) + PRD/TEST_PLAN docs (Item #011 §4)"`
 
-**Status**: 🔧 running (Stage 1+2 merged to main via PR, Stage 3-4 手动重启 2026-06-22)
-**风险**: 🟡 (新 schema + UI + admin 撤销, 参考 #009 已有 hard-delete / revoke 模式可复用)
-**Branch**: `feat/running-map-stage3-4` (from `origin/main` HEAD `051b69b` after PR #41 merge)
-**Started (Stage 1+2)**: 2026-06-17
-**Restarted (Stage 3+4)**: 2026-06-22 (PM 手动启动)
+**Status**: ✅ done (PR #42 merged 2026-06-21, commit `7ce8a63`)
+**风险**: 🟡
+**Completed**: 2026-06-21
 **Commit (Stage 1)**: `d4be219` (3 张表 schema + 上海→苏州 10 个点位 seed + 8 单测全过)
 **Commit (Stage 2)**: `90c04d1` (child check-in modal + km submission + 7 e2e scenarios)
-**未做**: Stage 3 (SVG 地图 + 小人 + 礼物 + 通关) / Stage 4 (admin 撤销 + 文档)
+**Commit (Stage 3-4)**: `7ce8a63` (SVG map + PM admin revoke, PR #42)
+**说明**: 4 个 stage 全部 merged, 详情见归档段
 
 ---
 
@@ -685,12 +715,11 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
   - Regression: 跑全套 npx vitest run + npx playwright test
   - `git commit -m "feat(calendar): docs + visual alignment + regression (Item #012 §4)"`
 
-**Status**: 🔧 running (manually started 2026-06-20 14:50, branch: `feat/calendar-icon-tabs`, PM 手动启动 — 跨 PR #41 review 单独 work stream)
-**Branch**: `feat/calendar-icon-tabs` (从 `origin/main` HEAD `051b69b` 拉, PR #41 已 merged 2026-06-20; 跟 #008 stage 2-4 / #011 stage 3-4 解耦, 各跑各的)
-**风险**: 🟢 (UI-only + 2 API 端点改动, schema 不变, #006 已 verify pattern)
-**Started**: 2026-06-20
-**Commit**: —
-**预计完成**: 2026-06-20 当晚 (1 task/约 3h, 4 stages × 15-20 min, #006 同模式 CC spawn)
+**Status**: ✅ done (PR #43 merged 2026-06-21, commit `8d89de5`)
+**风险**: 🟢
+**Completed**: 2026-06-21
+**Commit (Stage 1-4)**: `8d89de5` (cell icons + tab filter + localStorage, PR #43)
+**说明**: 4 个 stage 全部 merged, 详情见归档段
 
 ---
 
@@ -722,15 +751,15 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 
 ---
 
-## 📊 归档统计 (7 Item, 2026-06-20 累计)
+## 📊 归档统计 (9 Item, 2026-06-24 累计)
 
 | Status | Count | Items |
 |---|---:|---|
-| ✅ done | 5 | #001 emoji / #002 睡眠 / #005 三进度条 / #006 打卡日历 (PR #41 ✅ merged 2026-06-20) / #009 硬删 |
+| ✅ done | 7 | #001 emoji / #002 睡眠 / #005 三进度条 / #006 打卡日历 (PR #41) / #009 硬删 / #011 跑步地图 (PR #42) / #012 calendar icon tabs (PR #43) |
 | 🚫 blocked → 归档 | 2 | #003 英语 / #004 老师投诉 |
-| **总计** | **7** | 全部归档 |
+| **总计** | **9** | 全部归档 |
 
-> 📌 **当前清单** (active): #007 hold / #008 🔧 running / #011 🔧 running / #012 🔧 running / #013 🔧 running (Stage 2 done 2026-06-24)
+> 📌 **当前清单** (active): #007 hold / #008 🔧 running / #013 🔧 running (Stage 2 done 2026-06-24)
 > 当前 ⏳ pending = **0**
 
 > #006 2026-06-20 PM-fix: status → ✅ done, NIGHTLY-TODO 归档 (从主清单移到此处, 跟 #001/#002/#005/#009 同档; 完整 commit 历史 `0389c85` / `569e10c` / `c5d8c57` / `5abe507` / `f2c82e6` / `a4eb27b` / `ade11a1` / `064622a`, e2e 12/12 + unit 313/313, Qual verified, Iron Rule #25 added)
