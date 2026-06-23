@@ -57,6 +57,86 @@
 }
 
 /* ==========================================================================
+ * Item #008 §3: Fullscreen HUD cockpit — task list background
+ * Scanline + grid overlay for the .task-shortcuts-section container.
+ * ========================================================================== */
+.task-shortcuts-section {
+  position: relative;
+  padding: 16px 0 8px;
+  margin-top: 28px;
+  border-radius: var(--radius-md);
+}
+
+/* Grid dot pattern behind task section (cyan 0.05 opacity) */
+.task-shortcuts-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: var(--radius-md);
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 28px,
+      rgba(0, 245, 255, 0.05) 28px,
+      rgba(0, 245, 255, 0.05) 29px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 28px,
+      rgba(0, 245, 255, 0.05) 28px,
+      rgba(0, 245, 255, 0.05) 29px
+    );
+  z-index: 0;
+}
+
+/* Full-width scanline sweep over task section */
+.task-shortcuts-section::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 212, 255, 0.05) 50%, transparent 100%);
+  background-size: 100% 4px;
+  animation: mecha-scanline-move 2.4s linear infinite;
+  z-index: 0;
+}
+
+/* Ensure section title + content sit above scanline layers */
+.task-shortcuts-section > .section-title,
+.task-shortcuts-section > .task-bonus-hint,
+.task-shortcuts-section > .task-shortcuts {
+  position: relative;
+  z-index: 1;
+}
+
+/* §3: Equip activation — task completion "weapon activate" pulse.
+   Triggered by .mecha-equip-active class added by triggerEquipActivation(). */
+@keyframes mecha-equip-activate {
+  0%   { transform: scale(1.0); box-shadow: 0 0 0px rgba(0, 245, 255, 0.3); }
+  40%  { transform: scale(1.05); box-shadow: 0 0 20px rgba(0, 245, 255, 0.6), 0 0 40px rgba(0, 245, 255, 0.2); }
+  100% { transform: scale(1.0); box-shadow: 0 0 0px rgba(0, 245, 255, 0.3); }
+}
+
+/* .mecha-frame gets the activation pulse when equip-activation fires */
+.mecha-frame.mecha-equip-active {
+  animation: mecha-equip-activate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  border-color: var(--cyan) !important;
+}
+
+/* Mobile (max-width: 768px): kill the scanline sweep, keep corner brackets */
+@media (max-width: 768px) {
+  .task-shortcuts-section::after {
+    animation: none;
+    opacity: 0.15;
+  }
+  /* Scanline via prefers-reduced-motion already handled above */
+}
+
+/* ==========================================================================
  * Item #006 §1: Calendar fold toggle + 7×6 grid scaffold
  * Stage 2+ will populate cells + color tiers. CSS-only scaffold here.
  * ========================================================================== */

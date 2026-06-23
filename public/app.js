@@ -1130,6 +1130,9 @@ async function completeTask(taskId) {
     state.balance = r.new_balance;
     renderBalance();
     renderTasks();
+    // §3 equip activation: "weapon activate" pulse on task completion (after re-render
+    // so it targets the newly rendered .mecha-frame, not the DOM node just replaced)
+    triggerEquipActivation(taskId);
     toast(`+${r.token_awarded} ${taskRewardIcon(r.target_account)} 到账`, 'success');
     // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
@@ -1625,6 +1628,24 @@ function applyCalendarCollapsed(btn, panel, collapsed) {
     btn.setAttribute('aria-expanded', 'true');
     btn.textContent = '📅 收起月历';
   }
+}
+
+// Item #008 §3: Equip activation — "weapon power-up" pulse on task completion.
+// Finds the .mecha-frame for taskId, adds .mecha-equip-active (0.5s animation),
+// then removes it so it can re-fire on the next completion.
+function triggerEquipActivation(taskId) {
+  // Locate the .mecha-frame wrapping the task button
+  const frame = document.querySelector(
+    `.task-shortcuts > .mecha-frame > .task-btn[data-task-id="${taskId}"]`
+  )?.closest('.mecha-frame');
+  if (!frame) return;
+  // Guard: if animation is already running, skip
+  if (frame.classList.contains('mecha-equip-active')) return;
+  frame.classList.add('mecha-equip-active');
+  // Remove after 500ms (matches @keyframes mecha-equip-activate duration)
+  setTimeout(() => {
+    frame.classList.remove('mecha-equip-active');
+  }, 500);
 }
 
 function confettiKey() { return 'lastConfettiAt'; }
