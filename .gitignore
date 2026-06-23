@@ -30,6 +30,8 @@ playwright/.cache/
 
 # Local D1 backups (PII risk + binary noise — never commit)
 remote-backup/
+# Local D1 backup directory (created by PM during F1 verification — 2026-06-24)
+.backups/
 
 # Claude Code agent settings (local-only, not part of repo)
 .claude/

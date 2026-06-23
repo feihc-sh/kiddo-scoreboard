@@ -80,6 +80,21 @@ jobs:
           wrangler d1 migrations apply kiddo-scoreboard-db --remote
           echo "✅ Migrations applied"
 
+      - name: "🩹 Data migration: rewrite old running score_events (game_time → coins)"
+        # Item #013 Stage 2: F1 commit df42182 changed running rewards to type='coins'
+        # (was type='game_time' under the old #011 spec). Old running score_events
+        # still have type='game_time' — they need to be rewritten to type='coins'
+        # so the operation log displays them as "枚" (not "分钟") consistent with
+        # the new spec. Idempotent: WHERE filter ensures no-op on re-run.
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "🩹 Rewriting old running score_events (type='game_time' → 'coins')..."
+          wrangler d1 execute kiddo-scoreboard-db --remote --command \
+            "UPDATE score_events SET type='coins' WHERE reason LIKE '跑步%' AND type='game_time';"
+          echo "✅ Data migration complete (idempotent — no-op on re-run)"
+
       - name: Deploy to Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
