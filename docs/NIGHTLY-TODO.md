@@ -115,7 +115,7 @@
 
 ---
 
-## Item #008 — 任务装备/机甲化 (任务视觉) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
+## Item #008 — 任务装备/机甲化 (任务视觉) 🔧 running (Stage 1 done 2026-06-17, restart 2026-06-24, 等 Stage 2/3/4)
 
 > 用户原话 (2026-06-08): "先 hold 一下"
 > 用户提到"小朋友喜欢机甲风格" → 当时推荐 B 方案
@@ -165,10 +165,12 @@
   - **🚫 不做**: 跟 #007 同步 (Q2 独立); 经典模式 toggle (留二期); wrangler deploy / git push
   - `git commit -m "feat(mecha): docs + perf + regression test (Item #008 §4)"`
 
-**Status**: 🔧 running (Stage 1 done, 等 Stage 2-4)
+**Status**: 🔧 running (Stage 1 done 2026-06-17, restart 2026-06-24 PM, branch: `feat/008-mecha-stage2-4` from `origin/main` HEAD `c5cfcd7`, 等 Stage 2/3/4)
 **风险**: 🔴 (UI-only 但全屏 HUD 改 child UI 主区域, 跟 #005/#006/#010/#011 视觉有冲突, 需全量 regression; 选 C 方案需改 navigation)
 **Started**: 2026-06-17
+**Restarted**: 2026-06-24 (PM 手动启动, per `multi-working-tree-management` P19)
 **Commit (Stage 1)**: `1612a28` (HUD frame CSS 组件库 + 5 单测全过)
+**Commit (PM-pickup)**: (pending, in `feat/008-mecha-stage2-4`)
 **未做**: Stage 2 (任务按钮升级角括号) / Stage 3 (全屏装备舱 + 任务完成展开动画) / Stage 4 (文档 + regression)
 
 ---
