@@ -993,6 +993,49 @@ CREATE INDEX idx_redemptions_user_redeemed ON shop_redemptions(user_id, redeemed
 
 **风险**: 🟢 (UI-only, 复用 #010 modal CSS + 现有 task_completions schema)
 
+### 3.14 任务装备/机甲化 (Item #008, v2.x)
+
+**用户原话** (2026-06-08): "在 NIGHTLY-TODO 里加个 idea: 把任务做成机甲风格, 小朋友喜欢机甲"
+
+**已拍板** (feihao 2026-06-17):
+1. **方案 = B (机甲 HUD)**: 任务按钮框做成**机甲 HUD 角括号** + 霓虹青边框 + 扫描线
+2. **Q1 冲击 = 夸张**: **全屏 HUD 风格**, 任务像"装备舱", 改 child UI 任务区主布局
+3. **Q2 关联 #007 = 独立**: #008 自己一套, 跟 #007 Pacific Rim Jaeger 解耦, 不等 #007 拍板
+
+**设计元素** (全屏覆盖 child UI 任务区):
+- **角括号 (Corner Brackets)**: 任务卡片四角加 ◢◤◣◥ 装饰 (`.mecha-corner.tl/tr/bl/br`), CSS clip-path + cyan glow
+- **扫描线 (Scanline)**: 任务区背景 `@keyframes mecha-scanline-move` 上下移动 (cyan 0.05 opacity, 跟 #011 running map 同套)
+- **霓虹青光 (Neon Glow)**: 边框 `box-shadow: 0 0 8px #00d4ff` + hover 加深到 `0 0 12px + 0 0 24px`
+- **数据流背景 (Data Flow)**: 任务区背景 `repeating-linear-gradient` 网格底 (跟 #011 running map 同色板)
+
+**装备激活动画** ("装备舱"模式):
+- 任务完成时按钮**展开** → 显示"装备激活"动画 (类似机甲开机) → 短暂 hold 0.5s → 折回
+- `.mecha-equip-active` class 触发: `transform: scale(1.0) → scale(1.05) → scale(1.0)` + `box-shadow: 0 0 0px → 0 0 20px → 0 0 0px` (0.5s)
+- 触发顺序: 装备激活 → 现有 🎉 confetti (per #005 进度条) → balance card 更新
+
+**视觉对齐**:
+- cyan 调色板 (`--cyan: #00F5FF`) 跟 #005 进度条 + #010 sprint modal + #011 running map 一致
+- mobile (max-width: 480px): 关闭全屏 scanline 保留 corner (60fps 性能)
+- mobile (max-width: 480px): 隐藏 corner (避免小屏挤压)
+
+**实现文件** (Item #008 Stage 1-4):
+- `public/app.css` — `.mecha-frame` + `.mecha-corner` + `.mecha-scanline` + `.mecha-glow` + `.mecha-equip-active` + 4 个 `@keyframes`
+- `public/app.js` — `renderTasks()` 渲染 .mecha-frame + 4 corner divs (per task), `triggerEquipActivation(taskId)` 在 submitTask 成功 callback
+- `tests/unit/task-mecha-button.test.ts` (11 tests): 4 state DOM 验证 + 4 corner 元素 + mecha-glow class + happy-dom click test
+- `tests/unit/mecha-equip-activation.test.ts` (8 tests): triggerEquipActivation 4 state + setTimeout 500ms
+- `tests/e2e/ui-task-mecha-frame.spec.ts` (4 spec): iPad viewport 768x1024, 2 tasks → 2 frames → 8 corners, hover shadow 改变
+- `tests/e2e/ui-equip-activation.spec.ts` (6 spec): 装备激活 + confetti 顺序 + CSS transition + mobile 降级
+
+**可关闭性**: 视觉风格本身没有 toggle 按钮 (PM 拍板: 全屏总是开, 关闭可加 "🔧 经典模式" toggle 留二期)
+
+**风险**: 🔴 (UI-only 但全屏 HUD 改 child UI 任务区主区域, 跟 #005/#006/#010/#011 视觉有冲突, 需全量 regression; 跟 #007 解耦, 不等 #007 拍板)
+
+**Commit 序列**:
+- `1612a28` (Stage 1: HUD frame CSS 组件库, on main)
+- `e813339` (Stage 2: apply HUD frame to task buttons, feat/008-mecha-stage2-4)
+- `c6647fd` (Stage 3: fullscreen HUD cockpit + equip activation)
+- (pending Stage 4: docs + visual alignment + perf + regression)
+
 ### 13. 跑步小地图 (Item #011, v2.x)
 
 **用户原话** (2026-06-17): "在 Nightly Todo 里再增加一个功能：记录跑步的每次公里数，并绘制一个小地图。每一次跑了多远的距离，会在一个虚拟的小地图上，从一个点移动到另一个点。当到达一个新的点位时（比如跑到10公里），可以开一个小礼包，礼包里有一个随机的积分"

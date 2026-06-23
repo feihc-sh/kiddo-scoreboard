@@ -3,8 +3,8 @@
 > 一张大表看清"业务规则 / UI 功能 / 测试覆盖"三件套。
 > 给 agent / 用户看: **每个功能点有没有测, 测了什么, 还有什么 gap。**
 
-**最后更新**: 2026-06-16
-**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (19 UI 功能, 含 3.16.1-3.16.4 coin shop v3) ↔ 24 unit + 53 e2e + 21 coin (12 functional + 4 SQL invariant + 5 visual) = **98 测试文件** (v2.2 baseline + 2 P0 + 2 P1 regression + v3 coin shop PR)
+**最后更新**: 2026-06-24
+**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (23 UI 功能, 含 3.16.1-3.16.4 coin shop v3 + 3.17-3.19 running map + 3.20 mecha) ↔ 24 unit + 53 e2e baseline + 21 coin (12 functional + 4 SQL invariant + 5 visual) + 2 mecha unit + 2 mecha e2e = **102 测试文件** (v2.2 baseline + 2 P0 + 2 P1 regression + v3 coin shop + #011 running map PR + #012 calendar icons PR + #008 mecha)
 | **3.13** | 打卡日历 (月历 + day detail modal + cell icons + tab filter, Item #006/#012) | `src/routes/public/calendar.ts` + `calendar-details.ts` + `calendar-tasks.ts` + `public/app.js` + `app.css` | 3.17 | `calendar-render.test.ts` `calendar-color.test.ts` `calendar-toggle.test.ts` `calendar-tasks.test.ts` `calendar-checkins-filter.test.ts` | `ui-calendar-month-nav.spec.ts` `ui-calendar-day-detail.spec.ts` `ui-calendar-icons.spec.ts` | ✅ 100% |
 
 **最新 Qual 报告**:
@@ -72,8 +72,9 @@
 | **3.17** | Running Map Schema + Checkin (Item #011) | — | — | — | `running-schema.test.ts` `running-prize.test.ts` |
 | **3.18** | Running Map Child UI (Item #011 §2+3) | ✓ | ✓ | — | `ui-running-checkin.spec.ts` `ui-running-map.spec.ts` |
 | **3.19** | Running Map Admin Revoke (Item #011 §4) | ✓ | ✓ | — | `admin-running-revoke.test.ts` |
+| **3.20** | 任务装备/机甲化 (Item #008 Stage 1-4) | ✓ | ✓ | — | `task-mecha-button.test.ts` (11) + `mecha-equip-activation.test.ts` (8) + `ui-task-mecha-frame.spec.ts` (4) + `ui-equip-activation.spec.ts` (6) |
 
-**UI 功能覆盖率**: **22/22 = 100%** ✅ (3.1-3.16.4 baseline + 3.17-3.19 running map)
+**UI 功能覆盖率**: **23/23 = 100%** ✅ (3.1-3.16.4 baseline + 3.17-3.19 running map + 3.20 mecha)
 
 ---
 

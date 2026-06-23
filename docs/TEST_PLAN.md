@@ -1302,6 +1302,75 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 
 ---
 
+### 3.20 任务装备/机甲化 (Item #008, v2.x)
+
+> **来源**: NIGHTLY-TODO Item #008 Stage 1-4, PRD §3.14, 2026-06-24 PM 拍板.
+> **Scope**: Child UI 任务区视觉升级 (HUD 角括号 + 装备激活), UI-only 无 schema 改动.
+
+**Spec files (2 unit + 2 e2e, 19 unit + 10 e2e = 29 cases)**:
+
+#### Unit Tests
+
+**`tests/unit/task-mecha-button.test.ts`** (11 tests, Item #008 §2):
+- 4 state DOM 验证 (done/active/locked/countdown): 每个 task button 都包在 .mecha-frame
+- 4 corner 元素 (tl/tr/bl/br): 验证存在 + visible
+- .mecha-glow class: hover box-shadow 改变 (0 0 8px → 0 0 12px + 0 0 24px)
+- happy-dom click test: 真 fire 验证 frame 包裹 (非 regex-only, per Iron Rule #25)
+- 4 state × 3 assertion (frame + corners + class) = 12 cases
+
+**`tests/unit/mecha-equip-activation.test.ts`** (8 tests, Item #008 §3):
+- triggerEquipActivation(taskId) 加 .mecha-equip-active class
+- setTimeout 500ms 后移除 class (auto-cleanup)
+- 4 state 全部覆盖 (done/active/locked/countdown)
+- 装备激活在 confetti 之前触发 (per #005 spec 顺序)
+- mobile (max-width: 480px): scanline animation 关闭 + corner 隐藏
+
+#### E2E Tests (Playwright, iPad 768x1024 + mobile 375x667)
+
+**`tests/e2e/ui-task-mecha-frame.spec.ts`** (4 spec, Item #008 §2):
+- 2 tasks → 2 frames → 8 corners (4 per frame) visible
+- 每 frame .mecha-glow class
+- hover 触发 box-shadow 改变 (实测 deeper)
+- empty task list → 0 frames (no false positives)
+
+**`tests/e2e/ui-equip-activation.spec.ts`** (6 spec, Item #008 §3):
+- 任务完成 → .mecha-equip-active 加上 → 500ms 后移除
+- 装备激活在 confetti 之前触发 (timestamp 验证)
+- CSS transition 触发 box-shadow 改变
+- 任务区 scanline ::after pseudo 动画 (mecha-scanline-move 2.4s linear infinite)
+- mobile viewport: scanline 关闭 (animation: none) + opacity 降低
+- mobile viewport: 装备激活仍 fire (cross-viewport consistency)
+
+#### Visual / UX (manual QA, 跟 #005/#010/#011 对齐)
+- V16: 任务按钮四角的 ◢◤◣◥ 装饰 visible, cyan glow + drop-shadow
+- V17: 任务区背景 scanline 动 (cyan 0.05 opacity), 跟 running map 风格统一
+- V18: hover 触发 neon glow 增强 (8px → 24px box-shadow)
+- V19: 任务完成时按钮展开 + scale(1.05) bounce, 0.5s hold + 折回
+- V20: 装备激活跟 🎉 confetti 顺序: 装备先 → confetti 后 (0.5s 间隔)
+- V21: mobile 视图 (≤ 480px): scanline 关 + corner 隐藏, button 内容不挤压
+- V22: cyan 调色板跟 #005 进度条 + #010 sprint modal + #011 running map 风格统一
+
+#### 跨 stage 影响 (regression)
+- ✅ #005 进度条: 仍 daily-once confetti, 装备激活不破坏
+- ✅ #006 月历: 折叠 + day detail 仍工作, 跟 mecha 风格共存
+- ✅ #010 sprint modal: 弹窗仍正常 open/close
+- ✅ #011 running map: SVG 节点 + 礼物 modal 仍渲染
+- ✅ #012 calendar icons: cell icons + tab 仍工作
+
+#### 风险 + Out of Scope
+- 🔴 全屏 HUD 改 child UI 任务区主布局, 需全量 regression
+- 🚫 跟 #007 同步 (Q2 独立, 不等 #007 拍板)
+- 🚫 经典模式 toggle (留二期)
+- 🚫 wrangler deploy / git push (cron 红灯规则)
+
+#### 实施 commit 序列 (4 个)
+- `1612a28` (Stage 1: HUD frame CSS 组件库, on main)
+- `e813339` (Stage 2: apply HUD frame to task buttons)
+- `c6647fd` (Stage 3: fullscreen HUD cockpit + equip activation)
+- (pending Stage 4: docs + visual alignment + perf + regression)
+
+---
+
 ## 4. Cross-Cutting E2E Flows
 
 These flows span multiple features and are higher value than per-feature tests. Each flow is a single spec file with a single `test()` that walks the full scenario step by step, asserting along the way.
