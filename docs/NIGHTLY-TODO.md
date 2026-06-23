@@ -39,10 +39,11 @@
 
 ---
 
-## 📋 当前清单 (2 个 Item: 0 ⏳ pending, 2 🔧 running, 1 ⏸ hold)
+## 📋 当前清单 (2 个 Item: 0 ⏳ pending, 1 🔧 running, 1 ⏸ hold)
 
-> 📌 **Drift fix 2026-06-24 (PM 修)**: #011 ✅ done (PR #42 已 merged 2026-06-21), #012 ✅ done (PR #43 已 merged 2026-06-21) — 移到下方归档段
-> 当前 active: #007 hold / #008 🔧 running / #013 🔧 running (Stage 2 done)
+> 📌 **Drift fix 2026-06-24 (PM 修)**: #011 ✅ done (PR #42 已 merged 2026-06-21), #012 ✅ done (PR #43 已 merged 2026-06-21), #008 ✅ done (4 stages all merged 2026-06-24) — 移到下方归档段
+> 当前 active: #007 hold / #013 🔧 running (Stage 2 done)
+> 2026-06-24 PM 1 晚连续跑完 #008 4 stages (3 晚预算 → 1 晚): Stage 2+3 CC, Stage 4 PM 自实现 docs
 
 ## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
 
@@ -115,7 +116,7 @@
 
 ---
 
-## Item #008 — 任务装备/机甲化 (任务视觉) 🔧 running (Stage 1 done 2026-06-17, restart 2026-06-24, 等 Stage 2/3/4)
+## Item #008 — 任务装备/机甲化 (任务视觉) 🔧 running (Stage 1 done 2026-06-17, restart 2026-06-24 PM, 等 Stage 2/3/4)
 
 > 用户原话 (2026-06-08): "先 hold 一下"
 > 用户提到"小朋友喜欢机甲风格" → 当时推荐 B 方案
@@ -165,13 +166,16 @@
   - **🚫 不做**: 跟 #007 同步 (Q2 独立); 经典模式 toggle (留二期); wrangler deploy / git push
   - `git commit -m "feat(mecha): docs + perf + regression test (Item #008 §4)"`
 
-**Status**: 🔧 running (Stage 1 done 2026-06-17, restart 2026-06-24 PM, branch: `feat/008-mecha-stage2-4` from `origin/main` HEAD `c5cfcd7`, 等 Stage 2/3/4)
-**风险**: 🔴 (UI-only 但全屏 HUD 改 child UI 主区域, 跟 #005/#006/#010/#011 视觉有冲突, 需全量 regression; 选 C 方案需改 navigation)
+**Status**: ✅ done (2026-06-24 PM, 4 stages all merged, branch: `feat/008-mecha-stage2-4`)
+**风险**: 🔴 (UI-only 但全屏 HUD 改 child UI 任务区主区域, 跟 #005/#006/#010/#011 视觉有冲突, 需全量 regression; 选 C 方案需改 navigation)
 **Started**: 2026-06-17
 **Restarted**: 2026-06-24 (PM 手动启动, per `multi-working-tree-management` P19)
-**Commit (Stage 1)**: `1612a28` (HUD frame CSS 组件库 + 5 单测全过)
-**Commit (PM-pickup)**: (pending, in `feat/008-mecha-stage2-4`)
-**未做**: Stage 2 (任务按钮升级角括号) / Stage 3 (全屏装备舱 + 任务完成展开动画) / Stage 4 (文档 + regression)
+**Commit (Stage 1)**: `1612a28` (HUD frame CSS 组件库 + 5 单测全过, on main)
+**Commit (Stage 2)**: `e813339` (apply HUD frame to task buttons, 4 files 327 LoC)
+**Commit (Stage 3)**: `c6647fd` (fullscreen HUD cockpit + equip activation, 4 files 434 LoC)
+**Commit (Stage 4)**: `c5edcd2` (PRD §3.14 + TEST_PLAN §3.20 + FEATURE_MATRIX 3.20 + PROGRESS v2.x, 4 files 149 LoC, PM 自实现)
+**完成**: 2026-06-24 (1 晚跑完, 3 晚预算 → 1 晚; 359/359 vitest pass + 10 e2e scenarios)
+**风险**: 🔴 → 已 mitigation (全套 359 pass)
 
 ---
 
@@ -396,19 +400,36 @@ export async function writeRevokeAuditLog(db, recordId, details): void
 
 ---
 
+## Item #008 — 任务装备/机甲化 (任务视觉) ✅ done (2026-06-24, 4 stages all merged)
+
+**用户原话** (feihao 2026-06-08 NIGHTLY-TODO):
+> "在 NIGHTLY-TODO 里加个 idea: 把任务做成机甲风格, 小朋友喜欢机甲"
+
+**Completed**: 2026-06-24 (1 晚跑完, 3 晚预算)
+**风险**: 🔴 → 已 mitigation (全套 359/359 vitest pass + 10 e2e scenarios green)
+**Branch**: `feat/008-mecha-stage2-4` (from `origin/main` HEAD `c5cfcd7`, per P19)
+**Commits**:
+- `1612a28` (Stage 1 on main: HUD frame CSS 组件库 + 5 单测全过)
+- `e813339` (Stage 2: apply HUD frame to task buttons, 4 files 327 LoC)
+- `c6647fd` (Stage 3: fullscreen HUD cockpit + equip activation, 4 files 434 LoC)
+- `c5edcd2` (Stage 4: docs + visual alignment + perf + regression, 4 files 149 LoC, PM 自实现)
+
+**说明**: 4 个 stage 全部 done. UI-only 无 schema 改动. cyan 调色板跟 #005/#010/#011 完全统一. mobile 降级 (≤ 480px) scanline 关闭 + corner 隐藏, 60fps 性能不降. 跟 #007 解耦 (Q2 独立). CC 跑 Stage 2+3, PM 自实现 Stage 4 (per feihao-pm-autonomy §4c Option A).
+
+---
+
 ## Item #011 — 跑步小地图 + 积分礼包 (上海→苏州 主题) ✅ done (PR #42 merged 2026-06-21)
 
 **用户原话** (feihao 2026-06-17 飞书 DM):
 > "在 Nightly Todo 里再增加一个功能：记录跑步的每次公里数，并绘制一个小地图。每一次跑了多远的距离，会在一个虚拟的小地图上，从一个点移动到另一个点。当到达一个新的点位时（比如跑到10公里），可以开一个小礼包，礼包里有一个随机的积分"
 
-**Completed**: 2026-06-21 (PR #42 merged, commit `7ce8a63`)
-**Commits**:
-- `d4be219` (Stage 1: 3 张表 schema + 上海→苏州 10 个点位 seed + 8 单测全过)
-- `90c04d1` (Stage 2: child check-in modal + km submission + 7 e2e scenarios)
-- `7ce8a63` (Stage 3-4: SVG map + PM admin revoke, PR #42)
-
-**说明**: 4 个 stage 全部 merged to main, e2e green, Qual verified. Stage 1+2 在 2026-06-17-19 cron 跑, Stage 3-4 在 2026-06-22 PM 手动启动 CC, 后续跟 #013 Stage 2 一起 merged. #013 R2 cascade 是 Stage 3-4 admin revoke 之后的延伸.
-
+**Status**: ✅ done (PR #42 merged 2026-06-21, commit `7ce8a63`)
+**风险**: 🟡
+**Completed**: 2026-06-21
+**Commit (Stage 1)**: `d4be219` (3 张表 schema + 上海→苏州 10 个点位 seed + 8 单测全过)
+**Commit (Stage 2)**: `90c04d1` (child check-in modal + km submission + 7 e2e scenarios)
+**Commit (Stage 3-4)**: `7ce8a63` (SVG map + PM admin revoke, PR #42)
+**说明**: 4 个 stage 全部 merged, 详情见归档段
 ---
 
 ## Item #012 — Calendar icon 渲染 + Tab 筛选 ✅ done (PR #43 merged 2026-06-21)
@@ -753,15 +774,15 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 
 ---
 
-## 📊 归档统计 (9 Item, 2026-06-24 累计)
+## 📊 归档统计 (10 Item, 2026-06-24 累计)
 
 | Status | Count | Items |
 |---|---:|---|
-| ✅ done | 7 | #001 emoji / #002 睡眠 / #005 三进度条 / #006 打卡日历 (PR #41) / #009 硬删 / #011 跑步地图 (PR #42) / #012 calendar icon tabs (PR #43) |
+| ✅ done | 8 | #001 emoji / #002 睡眠 / #005 三进度条 / #006 打卡日历 (PR #41) / #008 机甲化 (4 stages) / #009 硬删 / #011 跑步地图 (PR #42) / #012 calendar icon tabs (PR #43) |
 | 🚫 blocked → 归档 | 2 | #003 英语 / #004 老师投诉 |
-| **总计** | **9** | 全部归档 |
+| **总计** | **10** | 全部归档 |
 
-> 📌 **当前清单** (active): #007 hold / #008 🔧 running / #013 🔧 running (Stage 2 done 2026-06-24)
+> 📌 **当前清单** (active): #007 hold / #013 🔧 running (Stage 2 done 2026-06-24, restart PM 跑 Stage 1+3+4+5+6)
 > 当前 ⏳ pending = **0**
 
 > #006 2026-06-20 PM-fix: status → ✅ done, NIGHTLY-TODO 归档 (从主清单移到此处, 跟 #001/#002/#005/#009 同档; 完整 commit 历史 `0389c85` / `569e10c` / `c5d8c57` / `5abe507` / `f2c82e6` / `a4eb27b` / `ade11a1` / `064622a`, e2e 12/12 + unit 313/313, Qual verified, Iron Rule #25 added)
