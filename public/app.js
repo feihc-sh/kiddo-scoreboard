@@ -1124,15 +1124,17 @@ function eventUnit(type) {
 
 // ---------- Actions ----------
 async function completeTask(taskId) {
+  // §3 equip activation (optimistic UI): fire BEFORE await so user gets instant
+  // visual feedback even if API hangs/fails (e.g., --local tunnel without D1).
+  // Animation runs on the *current* .mecha-frame; renderTasks() after await will
+  // replace it with a new node (without the class) — that's fine, the pulse already played.
+  triggerEquipActivation(taskId);
   try {
     const r = await api('POST', `/api/me/tasks/${taskId}/complete`);
     state.completedTaskIds.add(taskId);
     state.balance = r.new_balance;
     renderBalance();
     renderTasks();
-    // §3 equip activation: "weapon activate" pulse on task completion (after re-render
-    // so it targets the newly rendered .mecha-frame, not the DOM node just replaced)
-    triggerEquipActivation(taskId);
     toast(`+${r.token_awarded} ${taskRewardIcon(r.target_account)} 到账`, 'success');
     // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
@@ -1642,10 +1644,10 @@ function triggerEquipActivation(taskId) {
   // Guard: if animation is already running, skip
   if (frame.classList.contains('mecha-equip-active')) return;
   frame.classList.add('mecha-equip-active');
-  // Remove after 500ms (matches @keyframes mecha-equip-activate duration)
+  // Remove after 800ms (matches @keyframes mecha-equip-activate duration)
   setTimeout(() => {
     frame.classList.remove('mecha-equip-active');
-  }, 500);
+  }, 800);
 }
 
 function confettiKey() { return 'lastConfettiAt'; }
