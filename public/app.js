@@ -990,7 +990,19 @@ function renderTasks() {
     } else {
       btn.addEventListener('click', () => completeTask(t.id));
     }
-    root.appendChild(btn);
+    // §2 mecha HUD frame: wrap button in .mecha-frame with 4 corner brackets.
+    // .mecha-corner spans sit inside the frame so they can overflow slightly
+    // (overflow:visible on the frame + negative offset) for the mecha look.
+    const frame = document.createElement('div');
+    frame.className = 'mecha-frame mecha-glow'
+      + (done && !revoked ? ' frame-done' : '')
+      + (revoked || isSleepLocked ? ' frame-locked' : '');
+    frame.innerHTML = '<span class="mecha-corner tl"></span>'
+      + '<span class="mecha-corner tr"></span>'
+      + '<span class="mecha-corner bl"></span>'
+      + '<span class="mecha-corner br"></span>';
+    frame.appendChild(btn);
+    root.appendChild(frame);
   });
   // Start the per-second countdown loop. Idempotent.
   startCountdownLoop();
@@ -1112,6 +1124,11 @@ function eventUnit(type) {
 
 // ---------- Actions ----------
 async function completeTask(taskId) {
+  // §3 equip activation (optimistic UI): fire BEFORE await so user gets instant
+  // visual feedback even if API hangs/fails (e.g., --local tunnel without D1).
+  // Animation runs on the *current* .mecha-frame; renderTasks() after await will
+  // replace it with a new node (without the class) — that's fine, the pulse already played.
+  triggerEquipActivation(taskId);
   try {
     const r = await api('POST', `/api/me/tasks/${taskId}/complete`);
     state.completedTaskIds.add(taskId);
@@ -1613,6 +1630,24 @@ function applyCalendarCollapsed(btn, panel, collapsed) {
     btn.setAttribute('aria-expanded', 'true');
     btn.textContent = '📅 收起月历';
   }
+}
+
+// Item #008 §3: Equip activation — "weapon power-up" pulse on task completion.
+// Finds the .mecha-frame for taskId, adds .mecha-equip-active (0.5s animation),
+// then removes it so it can re-fire on the next completion.
+function triggerEquipActivation(taskId) {
+  // Locate the .mecha-frame wrapping the task button
+  const frame = document.querySelector(
+    `.task-shortcuts > .mecha-frame > .task-btn[data-task-id="${taskId}"]`
+  )?.closest('.mecha-frame');
+  if (!frame) return;
+  // Guard: if animation is already running, skip
+  if (frame.classList.contains('mecha-equip-active')) return;
+  frame.classList.add('mecha-equip-active');
+  // Remove after 800ms (matches @keyframes mecha-equip-activate duration)
+  setTimeout(() => {
+    frame.classList.remove('mecha-equip-active');
+  }, 800);
 }
 
 function confettiKey() { return 'lastConfettiAt'; }

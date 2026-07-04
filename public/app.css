@@ -57,6 +57,86 @@
 }
 
 /* ==========================================================================
+ * Item #008 §3: Fullscreen HUD cockpit — task list background
+ * Scanline + grid overlay for the .task-shortcuts-section container.
+ * ========================================================================== */
+.task-shortcuts-section {
+  position: relative;
+  padding: 16px 0 8px;
+  margin-top: 28px;
+  border-radius: var(--radius-md);
+}
+
+/* Grid dot pattern behind task section (cyan 0.05 opacity) */
+.task-shortcuts-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: var(--radius-md);
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 28px,
+      rgba(0, 245, 255, 0.05) 28px,
+      rgba(0, 245, 255, 0.05) 29px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 28px,
+      rgba(0, 245, 255, 0.05) 28px,
+      rgba(0, 245, 255, 0.05) 29px
+    );
+  z-index: 0;
+}
+
+/* Full-width scanline sweep over task section */
+.task-shortcuts-section::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 212, 255, 0.05) 50%, transparent 100%);
+  background-size: 100% 4px;
+  animation: mecha-scanline-move 2.4s linear infinite;
+  z-index: 0;
+}
+
+/* Ensure section title + content sit above scanline layers */
+.task-shortcuts-section > .section-title,
+.task-shortcuts-section > .task-bonus-hint,
+.task-shortcuts-section > .task-shortcuts {
+  position: relative;
+  z-index: 1;
+}
+
+/* §3: Equip activation — task completion "weapon activate" pulse.
+   Triggered by .mecha-equip-active class added by triggerEquipActivation(). */
+@keyframes mecha-equip-activate {
+  0%   { transform: scale(1.0); box-shadow: 0 0 0px rgba(0, 245, 255, 0.3); }
+  40%  { transform: scale(1.10); box-shadow: 0 0 24px rgba(0, 245, 255, 0.8), 0 0 56px rgba(0, 245, 255, 0.3); }
+  100% { transform: scale(1.0); box-shadow: 0 0 0px rgba(0, 245, 255, 0.3); }
+}
+
+/* .mecha-frame gets the activation pulse when equip-activation fires */
+.mecha-frame.mecha-equip-active {
+  animation: mecha-equip-activate 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  border-color: var(--cyan) !important;
+}
+
+/* Mobile (max-width: 768px): kill the scanline sweep, keep corner brackets */
+@media (max-width: 768px) {
+  .task-shortcuts-section::after {
+    animation: none;
+    opacity: 0.15;
+  }
+  /* Scanline via prefers-reduced-motion already handled above */
+}
+
+/* ==========================================================================
  * Item #006 §1: Calendar fold toggle + 7×6 grid scaffold
  * Stage 2+ will populate cells + color tiers. CSS-only scaffold here.
  * ========================================================================== */
@@ -842,7 +922,8 @@ body {
   -webkit-user-select: none;
   user-select: none;
   position: relative;
-  overflow: hidden;
+  /* §2 mecha HUD: overflow visible so corner brackets can bleed out */
+  overflow: visible;
   transition:
     transform 0.2s var(--bounce),
     border-color 0.2s var(--ease),
@@ -914,6 +995,46 @@ body {
   border-color: var(--metal-dark);
   color: #444;
   opacity: 0.4;
+}
+
+/* §2 mecha HUD: task button wrapped in .mecha-frame */
+.task-shortcuts .mecha-frame {
+  flex: 0 0 auto;
+  min-width: 160px;
+  scroll-snap-align: start;
+  padding: 8px; /* frame border padding — corners bleed into this space */
+  /* Let corners slightly overflow the frame edge for mecha HUD feel */
+  position: relative;
+}
+/* Adjust button inside frame: remove redundant border/shadow since frame has them */
+.task-shortcuts .mecha-frame > .task-btn {
+  min-height: 110px;
+  border: none; /* frame provides border */
+  box-shadow: none; /* frame provides shadow */
+}
+.task-shortcuts .mecha-frame:hover > .task-btn {
+  /* hover glow is on the frame — button inherits via cascade */
+  transform: translateY(-3px);
+}
+/* Done state: green glow on frame */
+.task-shortcuts .mecha-frame.frame-done {
+  border-color: var(--green);
+  box-shadow: 0 0 8px var(--green-glow), inset 0 0 12px rgba(0, 255, 136, 0.05);
+}
+/* Locked state: muted frame */
+.task-shortcuts .mecha-frame.frame-locked {
+  border-color: var(--metal-dark);
+  box-shadow: none;
+  opacity: 0.7;
+}
+/* Mobile (max-width: 768px): hide corners to avoid clutter on small screens */
+@media (max-width: 768px) {
+  .task-shortcuts .mecha-corner { display: none; }
+  .task-shortcuts .mecha-frame { padding: 6px; }
+  .task-shortcuts .mecha-frame > .task-btn {
+    min-width: 145px;
+    min-height: 105px;
+  }
 }
 
 .task-btn-icon { font-size: 26px; line-height: 1; }
@@ -1780,7 +1901,7 @@ body {
   .balance-card { padding: 18px 16px 16px; }
   .hero { padding: 22px 20px 18px; }
   .hero-greeting { font-size: 22px; }
-  .task-btn { min-width: 145px; min-height: 105px; }
+  .task-shortcuts .mecha-frame > .task-btn { min-width: 145px; min-height: 105px; }
   .modal { padding: 22px 18px; }
 }
 

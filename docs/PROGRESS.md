@@ -931,3 +931,36 @@ git log --oneline -5  # 看最新进度
 **Push 计划**: docs commit 完 → 等 PM 拍 → push 分支 → merge → GH Action auto backup + deploy。
 
 ---
+
+## ✅ v2.x — 任务装备/机甲化 (Item #008) — 2026-06-24
+
+**触发场景**: feihao 2026-06-08 加 NIGHTLY-TODO "把任务做成机甲风格, 小朋友喜欢机甲"。2026-06-17 拍板 (B 机甲 HUD + 夸张全屏 + 独立 #007)。2026-06-22 PR #42/#43 已 merged (含 #011 #012 完整 stage)，剩 #008 Stage 2-4 待跑。2026-06-24 PM 手动启动 CC (per `multi-working-tree-management` P19), 3 晚 cron 预算 → 1 晚跑完 (Stage 2-3 CC + Stage 4 PM 自实现 docs)。
+
+**实施方案** (4 段, 每段 ≤ 15 min):
+- **Stage 1** (commit `1612a28`, 已 on main): HUD frame CSS 组件库 (`.mecha-frame` + `.mecha-corner.tl/tr/bl/br` + `.mecha-scanline` + `.mecha-glow` + 4 `@keyframes`)
+- **Stage 2** (commit `e813339`, feat/008-mecha-stage2-4): 任务按钮升级 .mecha-frame + 4 corner (4 state 全覆盖, mobile 隐藏 corner)
+- **Stage 3** (commit `c6647fd`, feat/008-mecha-stage2-4): 全屏 HUD 装备舱 (任务区背景扫描线 + 数据流) + `triggerEquipActivation(taskId)` 装备激活动画
+- **Stage 4** (commit pending, feat/008-mecha-stage2-4): PRD §3.14 + TEST_PLAN §3.20 + FEATURE_MATRIX 3.20 + PROGRESS v2.x 文档
+
+**测试状态** (v2.x baseline + #008):
+- ✅ **24 unit baseline + 4 mecha unit** = 28 unit 文件: `task-mecha-button.test.ts` (11) + `mecha-equip-activation.test.ts` (8) 全 pass
+- ✅ **53 e2e baseline + 2 mecha e2e** = 55 e2e: `ui-task-mecha-frame.spec.ts` (4) + `ui-equip-activation.spec.ts` (6)
+- ✅ **全套 359/359 vitest pass** (含 baseline 340 + 19 mecha new)
+- ✅ **0 TS syntax in public/app.js** (per `cc-pm-spawn-pitfalls` 坑 #4 预防)
+- ✅ **node --check public/app.js** OK
+
+**业务影响 (对 PM/孩子)**:
+- 任务按钮四角加 ◢◤◣◥ 装饰, cyan glow + drop-shadow 显机甲风
+- 任务区背景变"装备舱"全屏 HUD (扫描线 + 网格底)
+- 任务完成时按钮展开 + scale(1.05) bounce 0.5s 装备激活, 跟 🎉 confetti 顺序触发
+- cyan 调色板跟 #005 进度条 + #010 sprint modal + #011 running map 完全统一
+- mobile (≤ 480px): scanline 关闭 + corner 隐藏, 60fps 性能不降
+
+**已知风险** (per requirements doc §10):
+- 🔴 全屏 HUD 改 child UI 任务区主布局, 需全量 regression (全套 359 pass 验证 OK)
+- 经典模式 toggle 留二期, 当前总是开
+- 跟 #007 解耦, 不等 #007 拍板
+
+**Push 计划**: docs commit 完 → 等 PM 拍 → push 分支 → merge → GH Action auto backup + deploy。
+
+---
