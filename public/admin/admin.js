@@ -508,10 +508,19 @@ function renderTasks() {
         </div>
       </div>
       <div class="pm-row-actions">
+        <button class="pm-toggle ${active ? 'pm-toggle--active' : 'pm-toggle--inactive'}"
+                data-act="toggle-task"
+                data-id="${t.id}"
+                data-task-name="${escapeHtml(t.name)}"
+                data-active="${active ? '1' : '0'}"
+                aria-label="${active ? '暂停' : '恢复'}: ${escapeHtml(t.name)}"
+                title="${active ? '暂停任务' : '恢复任务'}">
+          <span class="pm-toggle-thumb"></span>
+        </button>
         <button class="pm-btn ghost" data-act="edit-task"   data-id="${t.id}">编辑</button>
         <button class="pm-btn danger" data-act="delete-task" data-id="${t.id}">删除</button>
       </div>
-    `));
+    `, active ? '' : 'pm-task-suspended'));
   });
 }
 
@@ -680,6 +689,52 @@ async function deleteTask(id) {
   }
 }
 
+// Item #014 §2: optimistic toggle with rollback on failure
+async function toggleTaskAction(id, taskName, currentActive) {
+  if (inFlight.has('toggle-' + id)) return;
+  inFlight.add('toggle-' + id);
+  var newActive = currentActive === '1' ? '0' : '1';
+  // Optimistic: immediately flip the UI
+  var toggleBtn = document.querySelector('[data-act="toggle-task"][data-id="' + id + '"]');
+  if (toggleBtn) {
+    toggleBtn.dataset.active = newActive;
+    toggleBtn.className = 'pm-toggle ' + (newActive === '1' ? 'pm-toggle--active' : 'pm-toggle--inactive');
+    toggleBtn.setAttribute('aria-label', newActive === '1' ? '暂停' : '恢复');
+  }
+  // Also toggle the pm-task-suspended class on the row
+  var row = toggleBtn ? toggleBtn.closest('.pm-row') : null;
+  if (row) {
+    if (newActive === '0') {
+      row.classList.add('pm-task-suspended');
+    } else {
+      row.classList.remove('pm-task-suspended');
+    }
+  }
+  try {
+    await api('POST', '/api/admin/tasks/' + id + '/toggle');
+    toast('已' + (newActive === '1' ? '恢复' : '暂停') + ': ' + taskName, 'success');
+    // Reload tasks + audit to keep state in sync
+    await Promise.all([loadTasks(), loadAudit()]);
+  } catch (e) {
+    // Rollback optimistic UI on failure
+    if (toggleBtn) {
+      toggleBtn.dataset.active = currentActive;
+      toggleBtn.className = 'pm-toggle ' + (currentActive === '1' ? 'pm-toggle--active' : 'pm-toggle--inactive');
+      toggleBtn.setAttribute('aria-label', currentActive === '1' ? '暂停' : '恢复');
+    }
+    if (row) {
+      if (currentActive === '0') {
+        row.classList.add('pm-task-suspended');
+      } else {
+        row.classList.remove('pm-task-suspended');
+      }
+    }
+    if (e.message !== 'UNAUTHORIZED') toast('操作失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete('toggle-' + id);
+  }
+}
+
 async function submitNewTask(form) {
   const body = {
     name: form.name.value.trim(),
@@ -835,6 +890,7 @@ function bindDelegatedActions() {
     if (act === 'hard-delete-completion') return hardDeleteCompletion(id);
     if (act === 'fulfill-redemption') return fulfillRedemption(id);
     if (act === 'revoke-running') return revokeRunningRecordAction(id);
+    if (act === 'toggle-task') return toggleTaskAction(id, btn.dataset.taskName, btn.dataset.active);
   });
 }
 
