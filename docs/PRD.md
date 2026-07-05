@@ -1168,6 +1168,55 @@ PM 撤销跑步记录时, 原子执行:
 | 8 | 苏州工业园区 | ~89 |
 | 9 | 🚩 苏州·金鸡湖 (终点) | ~95 |
 
+### 3.15 Kid Coin Request (审批流) — Item #015 (v2.x)
+
+**用户原话** (2026-07-04 拍板): "kid 觉得自己做了好事 → 想申请金币奖励 → 提交申请 → 等 PM 审核 → 通过后自动到账 + 流水记录"
+
+**已拍板**:
+1. **入口**: kid UI 主页顶部 "🪙 申请金币" 按钮 → modal (数量 1-999 + 理由 1-200 字)
+2. **状态机**: `pending → approved` (写 score_events) / `pending → rejected` (驳回,无 score_events)
+3. **PM 端**: admin 后台 "🪙 金币申请" section, 待审 list + approve/reject 按钮 + confirm modal
+4. **写 score_events**: `type='coins'`, `source='manual'`, `source_ref='coin_request:<id>'` — 复用现有 coin 余额计算
+5. **拒绝必填理由**: 防止 PM 随意拒绝, 留 audit trail
+6. **无 daily/weekly 上限**: PM 审核时自行判断合理性
+
+**API** (5 个端点):
+| Method | Path | 角色 | 说明 |
+|--------|------|------|------|
+| POST | `/api/coins/request` | 儿子 | 提交申请, body: `{amount, reason}` |
+| GET | `/api/coins/requests` | 儿子 | 历史, ≤50 条, 按 requested_at DESC |
+| GET | `/api/admin/coin-requests?status=pending` | PM | 待审 list |
+| POST | `/api/admin/coin-requests/:id/approve` | PM | 批准, body: `{note?}` |
+| POST | `/api/admin/coin-requests/:id/reject` | PM | 驳回, body: `{note REQUIRED}` |
+
+**Database**: `coin_requests` 表
+```sql
+CREATE TABLE coin_requests (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  amount        INTEGER NOT NULL CHECK(amount BETWEEN 1 AND 999),
+  reason        TEXT    NOT NULL CHECK(length(reason) BETWEEN 1 AND 200),
+  status        TEXT    NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+  requested_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+  reviewed_at   INTEGER,
+  reviewed_by   INTEGER REFERENCES users(id),
+  review_note   TEXT
+);
+CREATE INDEX idx_coin_requests_user ON coin_requests(user_id, requested_at DESC);
+CREATE INDEX idx_coin_requests_status ON coin_requests(status, requested_at DESC);
+```
+
+**audit_log 动作**:
+- `coin_request_approved`: `details = {request_id, user_id, amount, reason, approver_id, approved_at, note?}`
+- `coin_request_rejected`: `details = {request_id, user_id, amount, reason, rejector_id, rejected_at, note REQUIRED}`
+
+**关联**:
+- 跟 #014 (admin task toggle) 风格一致: admin 后台 inline UI + optimistic update + audit_log
+- 复用现有 `score_events` 表 + `audit_log` 表, 无新核心表
+- coin 余额计算复用 `SUM(change_value) WHERE type='coins' AND status='approved'`, 无 balance 缓存
+
+**风险**: 🟡 (新 schema + 多 endpoint + kid/admin UI 都改, 但 PM 拍板后 5 阶段无重大返工)
+
 ### 12.9 Reference
 
 - **完整 RFC**：`docs/coin-system-rfc.md`（1527 行详细设计 + DDL + 流程图 + edge case）

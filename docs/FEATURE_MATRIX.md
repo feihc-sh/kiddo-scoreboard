@@ -23,8 +23,10 @@
 | **3.12** | 准时上床 (self-lockout 任务类型, v2.1) | `tasks.cutoff_time` + `tasks.is_self_lockout` | 3.14 | (覆盖在 me-tasks-complete.test.ts) | `sleep-lockout.spec.ts` `ui-child-main.spec.ts` | ✅ 100% |
 | **3.15** | Task Lifecycle — Suspend/Resume (Item #014, v2.x) | `routes/admin/tasks.ts :: POST /:id/toggle` | 3.21 | `admin-task-toggle.test.ts` | `admin-task-toggle.spec.ts` | ✅ 100% |
 | **3.5** | 边界 case (软删/审计/锁 + **硬删 v2.2**) | `utils/audit.ts` + `auth/lockout.ts` + `utils/deleted-records.ts` + `routes/admin/events.ts` + `routes/admin/task-completions.ts` + `routes/admin/deleted-records.ts` | 3.1, 3.6, **3.15** | `lockout.test.ts` `audit.test.ts` `deleted-records.test.ts` `admin-events-hard-delete.test.ts` `admin-task-completions-hard-delete.test.ts` | `flow-pm-lockout.spec.ts` `smoke-admin-audit.spec.ts` **`ui-admin-hard-delete.spec.ts`** **`ui-admin-hard-delete-fk.spec.ts`** ⚠️ NEW (P0, FK 约束, 2026-06-09) | ⚠️ 95% — FK 路径未覆盖 (新 spec RED 待 PM 修) |
+| **3.15** | Kid Coin Request (审批流, Item #015) | `routes/me/coin-request.ts` + `routes/admin/coin-requests.ts` + `coin_requests` 表 | **3.21** | `coin-request-helpers.test.ts` (17) `coin-request-api.test.ts` (39) `coin-request-kid-ui.test.ts` (15) `admin-coin-requests-ui.test.ts` (7) | `coin-request-kid-modal.spec.ts` (5) `admin-coin-requests.spec.ts` (5) | ✅ 100% |
 
-| **业务规则侧覆盖率**: **7/7 = 100%** ✅ (含 Item #014 §3.15 Task Lifecycle)
+| **业务规则侧覆盖率**: **7/7 = 100%** ✅ (含 Item #014 §3.15 Task Lifecycle)| **业务规则侧覆盖率**: **7/7 = 100%** ✅ (业务侧 OK; 已知 1 P0 bug: 硬删 FK 路径, 新 spec RED)
+
 **gap (已补)**: PRD 3.5 新增硬删 (v2.2) — 物理删 event/completion + `deleted_records` snapshot + audit log, 全部由 §3.15 e2e + 2 unit spec 覆盖。
 **gap (待补)**: PRD 3.5 硬删 FK 路径 — `task_completions.awarded_event_id → score_events.id` 的 FK 约束导致硬删 event 失败 (500)。新增 `ui-admin-hard-delete-fk.spec.ts` (3 case, 1 通过/2 RED) 等 PM 修。
 **gap (已补)**: PRD §3.15 Task Lifecycle (Item #014) — §3.21 + §3.5 交叉覆盖, 业务规则侧 +7/7。
@@ -43,8 +45,9 @@
 | **5.6** | PM 审批 | PM | `POST /api/admin/events/:id/approve\|reject\|revoke` | `ui-admin-pending.spec.ts` `smoke-admin-pending.spec.ts` `flow-deduct-revoke.spec.ts` |
 | **5.7** | 双账户兑换 | PM | `POST /api/admin/exchange` | `ui-admin-exchange.spec.ts` `smoke-admin-exchange-grant.spec.ts` `flow-exchange.spec.ts` |
 | **5.8** | 周额度发放 | PM | `POST /api/admin/weekly-grant` | `ui-admin-grant.spec.ts` `flow-weekly-payout.spec.ts` |
+| **5.9** | Kid 申请金币 (审批流) | 儿子 + PM | `POST /api/coins/request` `GET /api/coins/requests` `GET /api/admin/coin-requests?status=pending` `POST /api/admin/coin-requests/:id/approve` `POST /api/admin/coin-requests/:id/reject` | `coin-request-kid-modal.spec.ts` `admin-coin-requests.spec.ts` |
 
-**交互流程侧覆盖率**: **8/8 = 100%** ✅ (每流程都有专属 e2e spec)
+**交互流程侧覆盖率**: **9/9 = 100%** ✅ (每流程都有专属 e2e spec)
 
 ---
 
@@ -75,9 +78,10 @@
 | **3.18** | Running Map Child UI (Item #011 §2+3) | ✓ | ✓ | — | `ui-running-checkin.spec.ts` `ui-running-map.spec.ts` |
 | **3.19** | Running Map Admin Revoke (Item #011 §4) | ✓ | ✓ | — | `admin-running-revoke.test.ts` |
 | **3.20** | 任务装备/机甲化 (Item #008 Stage 1-4) | ✓ | ✓ | — | `task-mecha-button.test.ts` (11) + `mecha-equip-activation.test.ts` (8) + `ui-task-mecha-frame.spec.ts` (4) + `ui-equip-activation.spec.ts` (6) |
-| **3.21** | Task Suspend/Resume — Admin Toggle (Item #014) | ✓ | ✓ | — | `admin-task-toggle.test.ts` (6) + `admin-toggle-ui.test.ts` (5) | `admin-task-toggle.spec.ts` (4 e2e) |
+| **3.21** | Task Suspend/Resume — Admin Toggle (Item #014) | ✓ | ✓ | — | `admin-task-toggle.test.ts` (6) + `admin-toggle-ui.test.ts` (5) | `admin-task-toggle.spec.ts` (4 e2e) || **3.21** | Kid Coin Request — 审批流 (Item #015) | `routes/me/coin-request.ts` + `routes/admin/coin-requests.ts` + `coin_requests` table | 3.21 | `coin-request-helpers.test.ts` (17) + `coin-request-api.test.ts` (39) + `coin-request-kid-ui.test.ts` (15) + `admin-coin-requests-ui.test.ts` (7) | `coin-request-kid-modal.spec.ts` (5) + `admin-coin-requests.spec.ts` (5) | ✅ 100% |
 
-**UI 功能覆盖率**: **23/23 = 100%** ✅ (3.1-3.16.4 baseline + 3.17-3.19 running map + 3.20 mecha)
+
+**UI 功能覆盖率**: **24/24 = 100%** ✅ (3.1-3.16.4 baseline + 3.17-3.19 running map + 3.20 mecha + 3.21 coin-request)
 
 ---
 

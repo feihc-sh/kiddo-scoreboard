@@ -1302,6 +1302,95 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 
 ---
 
+### 3.21 Kid Coin Request Flow (审批流) — Item #015 (v2.x)
+
+> **来源**: NIGHTLY-TODO Item #015, 2026-07-04 拍板.
+> **Scope**: 5 endpoints + kid modal + admin 待审 + audit_log.
+
+#### 单元测试 (4 个文件, 共 78 cases)
+
+**`tests/unit/coin-request-helpers.test.ts`** (17 cases):
+- `createCoinRequest`: happy path (amount=1/500/999) + validation (amount=0 / amount>999 / empty reason / reason>200 chars)
+- `listCoinRequestsForKid`: returns ≤50 ordered by requested_at DESC + empty list
+- `listPendingCoinRequests`: returns all pending ordered by requested_at ASC
+- `reviewCoinRequest`: approve → status approved + reviewed_at set; reject → status rejected + reviewed_at set; idempotent (409 already reviewed)
+
+**`tests/unit/coin-request-api.test.ts`** (39 cases, 5 endpoints):
+
+_`POST /api/coins/request` (kid 提交)_:
+- 201 + return {id, status: 'pending', amount, reason} (happy)
+- 400 amount=0 / amount>999 / empty reason / reason>200
+- 400 amount negative / non-integer / reason whitespace-only
+
+_`GET /api/coins/requests` (kid 历史)_:
+- 200 + array (≤50, ordered DESC) (happy)
+- 200 + empty array (no prior requests)
+
+_`GET /api/admin/coin-requests?status=pending` (PM 待审)_:
+- 200 + array ordered by requested_at ASC (happy)
+- 200 + empty array (no pending)
+- 401 (unauthenticated)
+
+_`POST /api/admin/coin-requests/:id/approve` (PM 批准)_:
+- 200 + {status: 'approved'} + score_events row written + audit_log row written (happy)
+- 404 (request not found)
+- 409 (already approved/rejected)
+- 401 (unauthenticated)
+
+_`POST /api/admin/coin-requests/:id/reject` (PM 驳回)_:
+- 200 + {status: 'rejected'} + no score_events row + audit_log row written (happy)
+- 400 (missing note — REQUIRED)
+- 404 (request not found)
+- 409 (already reviewed)
+- 401 (unauthenticated)
+
+**`tests/unit/coin-request-kid-ui.test.ts`** (15 cases):
+- modal open/close (button click → modal visible; × / ESC → modal hidden)
+- submit: amount=1-999 + reason filled → API 201 called → modal closes + toast shown
+- submit: amount=0 → inline validation error shown, no API call
+- submit: amount>999 → inline validation error shown, no API call
+- submit: reason empty → inline validation error shown, no API call
+- submit: reason>200 → character counter shows overflow, submit blocked
+- history tab: renders ≤50 requests with status badge (pending ✅/approved/rejected)
+- history: approved badge shows "✅ 已通过", rejected badge shows "❌ 已驳回"
+- API 400: shows error toast, modal stays open
+- API network error: shows error toast, modal stays open
+
+**`tests/unit/admin-coin-requests-ui.test.ts`** (7 cases):
+- pending section renders list of coin_requests (empty state: "暂无待审申请")
+- each row shows: kid name + amount + reason + time + [批准] [驳回] buttons
+- click [批准] → confirm modal opens → confirm → optimistic flip to approved + toast
+- click [驳回] → confirm modal opens (reason input required) → confirm → optimistic flip to rejected + toast
+- confirm: empty note → confirm button disabled, validation error shown
+- approve already-reviewed → shows 409 error toast
+- reject already-reviewed → shows 409 error toast
+
+**覆盖率**: 78 unit cases total
+
+#### E2E 测试 (2 个文件, 共 10 scenarios)
+
+**`tests/e2e/coin-request-kid-modal.spec.ts`** (5 scenarios):
+1. **smoke**: kid UI loads → "🪙 申请金币" button visible → click → modal opens
+2. **happy-path approve**: fill amount=5 + reason → submit → 201 → modal closes → history shows pending → PM approve → history updates to approved badge
+3. **happy-path reject**: fill amount=50 + reason → submit → 201 → PM reject (with note) → history shows rejected badge
+4. **validation**: amount=0 + submit → validation error, no API call
+5. **boundary**: amount=999 + 200-char reason → submits successfully
+
+**`tests/e2e/admin-coin-requests.spec.ts`** (5 scenarios):
+1. **smoke**: PM logs in → admin dashboard → "🪙 金币申请" section visible → no pending → empty state
+2. **approve flow**: kid submits → PM sees pending → click approve → confirm → approved badge → audit_log contains 'coin_request_approved'
+3. **reject flow**: kid submits → PM sees pending → click reject → fill note → confirm → rejected badge → audit_log contains 'coin_request_rejected'
+4. **double-click guard**: rapid click approve → only 1 API call (inFlight guard)
+5. **regression — kid history after PM action**: kid submits → PM approves → kid refreshes → history shows approved badge
+
+#### Cross-cutting
+- All 5 endpoints require auth (kid: CHILD_USER_ID=2 hardcoded; PM: session cookie)
+- score_events written on approve: `type='coins'`, `source='manual'`, `source_ref='coin_request:<id>'`, `status='approved'`
+- No score_events written on reject
+- audit_log written on both approve and reject (coin_request_approved / coin_request_rejected)
+
+---
+
 ### 3.20 任务装备/机甲化 (Item #008, v2.x)
 
 > **来源**: NIGHTLY-TODO Item #008 Stage 1-4, PRD §3.14, 2026-06-24 PM 拍板.

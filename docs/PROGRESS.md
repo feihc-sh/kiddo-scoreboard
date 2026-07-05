@@ -992,6 +992,36 @@ git log --oneline -5  # 看最新进度
 **风险**: 🟢
 - 复用现有 `is_active` 字段，无 schema 改动
 - toggle 操作幂等，PM 可随时切换
-- child UI 已原生过滤 is_active=0
+- child UI 已原生过滤 is_active=0## ✅ v2.x — Kid 申请金币 (审批流, Item #015) — 2026-07-05
+
+**分支**: `feat/015-coin-request` (from `origin/main`)
+
+**7 个 commit** (Stage 1-5):
+- `685da11` feat(coin-request): D1 schema + helpers (Item #015 §1)
+- `18a0710` feat(coin-request): kid submit/list + admin review endpoints (Item #015 §2)
+- `433acf1` feat(coin-request): kid UI submit modal + history (Item #015 §3)
+- `6176b1e` test(coin-request): kid UI unit tests (Item #015 §3)
+- `8b18283` feat(coin-request): admin UI pending section + approve/reject (Item #015 §4)
+- `deb4353` docs(nightly-todo): add #016 暑假作业 modal 临时功能 with 2026-07-04 拍板
+- `2aa04aa` docs(nightly-todo): add #014 suspend task + #015 申请金币 with 2026-07-04 拍板
+- (本 commit) docs(coin-request): PRD §3.15 + TEST_PLAN §3.21 + FEATURE_MATRIX 3.21 + PROGRESS v2.x (Item #015 §5)
+
+**新增能力**:
+- **`coin_requests` 表**: kid 提交 → PM 审批 (approve/reject) → 批准后写 score_events (type='coins')
+- **5 个 API 端点**: `POST /api/coins/request` + `GET /api/coins/requests` + `GET /api/admin/coin-requests?status=pending` + `POST /api/admin/coin-requests/:id/approve` + `POST /api/admin/coin-requests/:id/reject`
+- **Kid UI**: 主页 "🪙 申请金币" button → modal (amount 1-999 + reason 1-200 chars) + history tab with status badges
+- **Admin UI**: "🪙 金币申请" section → pending list + [批准] [驳回] buttons + confirm modal (reject requires note)
+- **audit_log**: `coin_request_approved` + `coin_request_rejected` actions
+
+**风险等级**: 🟡 (新 schema + 多 endpoint + kid/admin UI 都改, 但 PM 拍板后 5 阶段无重大返工)
+- 复用现有 `score_events` 表 + `audit_log` 表, 无新核心表
+- coin 余额计算复用现有 SUM, 无 balance 缓存
+- 拒绝必填理由防滥用
+
+**测试状态** (Stage 5 baseline):
+- ✅ **78 unit cases** (4 files): `coin-request-helpers.test.ts` (17) + `coin-request-api.test.ts` (39) + `coin-request-kid-ui.test.ts` (15) + `admin-coin-requests-ui.test.ts` (7)
+- ✅ **10 e2e scenarios** (2 files): `coin-request-kid-modal.spec.ts` (5) + `admin-coin-requests.spec.ts` (5)
+- ✅ **Full regression**: vitest 435/437 pass (2 pre-existing fail in mecha-equip-activation, 非 #015)
+
 
 **Push 计划**: PM 跑最终 verify (5 步 + tunnel smoke test) → report feihao → 等 4 options push。
