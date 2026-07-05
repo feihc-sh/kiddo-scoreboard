@@ -3,6 +3,10 @@
 //   GET /api/coins/balance      — 当前 child 的金币余额
 //   GET /api/coins/redemptions  — 当前 child 的兑换历史 (desc by redeemed_at, limit 50)
 //
+// Item #015 §2 (Coin Request Workflow — kid side):
+//   POST /api/coins/request  — 提交金币申请
+//   GET  /api/coins/requests — 查看自己的申请历史
+//
 // Auth: child user_id is HARDCODED to 2 (CHILD_USER_ID) to match
 // seeds/local.sql + src/routes/me/* pattern. M5 will replace with real auth.
 //
@@ -14,6 +18,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../../worker.ts';
 import { getCoinBalance, getCoinBalanceUpdatedAt } from '../../utils/coin.ts';
+import { createCoinRequest, listCoinRequestsForKid } from '../../utils/coin-request.ts';
 
 /**
  * Hardcoded child user id. M5 will replace with a real auth lookup.
@@ -95,6 +100,103 @@ coins.get('/redemptions', async (c) => {
   }));
 
   return c.json({ redemptions });
+});
+
+// ---------------- POST /api/coins/request (kid submit coin request) ----------------
+
+interface CoinRequestBody {
+  amount?: unknown;
+  reason?: unknown;
+}
+
+coins.post('/request', async (c) => {
+  const db = c.env.DB;
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'invalid JSON body' } },
+      400,
+    );
+  }
+
+  const body = raw as CoinRequestBody;
+
+  // Validate amount: must be integer > 0 (1-999 range)
+  if (
+    typeof body.amount !== 'number' ||
+    !Number.isInteger(body.amount) ||
+    body.amount < 1 ||
+    body.amount > 999
+  ) {
+    return c.json(
+      {
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'amount must be an integer between 1 and 999',
+        },
+      },
+      400,
+    );
+  }
+
+  // Validate reason: non-empty string, 1-200 chars after trim
+  if (typeof body.reason !== 'string') {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'reason must be a string' } },
+      400,
+    );
+  }
+  const trimmedReason = body.reason.trim();
+  if (trimmedReason.length === 0 || trimmedReason.length > 200) {
+    return c.json(
+      {
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'reason must be 1–200 non-whitespace characters',
+        },
+      },
+      400,
+    );
+  }
+
+  try {
+    const result = await createCoinRequest(db, CHILD_USER_ID, body.amount, trimmedReason);
+    // Fetch the freshly-inserted row to return the server-assigned fields.
+    const row = await db
+      .prepare(
+        `SELECT id, status, amount, requested_at
+         FROM coin_requests WHERE id = ?`,
+      )
+      .bind(result.id)
+      .first();
+    return c.json(
+      {
+        id: row!.id,
+        status: row!.status,
+        amount: row!.amount,
+        requested_at: row!.requested_at,
+      },
+      201,
+    );
+  } catch (err) {
+    return c.json(
+      { error: { code: 'INTERNAL_ERROR', message: String(err) } },
+      500,
+    );
+  }
+});
+
+// ---------------- GET /api/coins/requests (kid list own request history) ----------------
+
+const KID_REQUEST_HISTORY_LIMIT = 50;
+
+coins.get('/requests', async (c) => {
+  const db = c.env.DB;
+  const requests = await listCoinRequestsForKid(db, CHILD_USER_ID, KID_REQUEST_HISTORY_LIMIT);
+  return c.json({ requests });
 });
 
 export default coins;

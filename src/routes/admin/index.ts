@@ -17,6 +17,8 @@ import adminHealth from './health.ts';
 import shopFulfill from './shop-fulfill.ts';
 // Item #011 §4: PM admin running records (list + revoke with km/points rollback)
 import adminRunning from './running-records.ts';
+// Item #015 §2: kid coin request + admin review endpoints
+import coinRequests from './coin-requests.ts';
 import type { Env } from '../../worker.ts';
 
 const admin = new Hono<{ Bindings: Env }>();
@@ -42,5 +44,7 @@ admin.route('/shop/fulfill', shopFulfill);
 //   GET  /api/admin/running/records          (list)
 //   POST /api/admin/running/records/:id/revoke  (revoke)
 admin.route('/running/records', adminRunning);
+// Item #015 §2: GET + POST /api/admin/coin-requests (list, approve, reject)
+admin.route('/coin-requests', coinRequests);
 
 export default admin;
