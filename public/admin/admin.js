@@ -713,8 +713,10 @@ async function toggleTaskAction(id, taskName, currentActive) {
   try {
     await api('POST', '/api/admin/tasks/' + id + '/toggle');
     toast('已' + (newActive === '1' ? '恢复' : '暂停') + ': ' + taskName, 'success');
-    // Reload tasks + audit to keep state in sync
+    // Reload tasks + audit + re-render to keep state in sync
     await Promise.all([loadTasks(), loadAudit()]);
+    renderTasks();
+    renderAudit();
   } catch (e) {
     // Rollback optimistic UI on failure
     if (toggleBtn) {
