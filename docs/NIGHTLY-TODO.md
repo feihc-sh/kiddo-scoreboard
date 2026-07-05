@@ -157,9 +157,62 @@
     **Commit**: —
     **Branch**: 未建 (等拍板后 PM 按 #013 pattern 建 `feat/015-coin-request`)
 
-    ---
+---
 
-    ## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
+## Item #016 — 暑假作业 Modal (临时, 开学后下线) ⏳ pending
+
+> 用户原话 (2026-07-04 DM): "我想新加一个界面 — 当用户点击'暑假每日打卡'的时候，要弹出来一个确认框。确认框中包含他的几项暑假作业，他要挨个确认是否都完成了，然后才算是打卡成功。"
+
+**核心设计 (临时功能, 不值得大投资)**:
+- **触发**: kid UI 点 task #7 "每日完成暑假作业" (现有 task) → 弹 modal (override 原有"直接打卡"逻辑)
+- **Modal 内容**: 6 项暑假作业 list + checkboxes
+- **必填行为**: 全部勾 才算打卡成功 (用户原话 "挨个确认是否都完成了")
+- **提交后**: 写入 `task_completions` (跟现有 task 打卡同路径) + award token_reward (task #7 = 1 金币)
+- **开学后清理**: 删 task #7 + 删 1 个 modal 触发 file + 删 modal UI code (~5 min cleanup)
+
+**已拍板 (2026-07-04)**:
+1. Q1 (作业 item 来源) = **A1 hardcoded** (前端常量, 6 items 写死在 `public/app.js`) — 临时 → 不值得 DB schema 改动
+2. Q2 (拍照) = **B2 不要** — 临时 → 减少 infra (R2 setup 30 min)
+3. Q3 (拍照存储) = N/A (Q2=不要)
+4. Q4 (拍照必填) = N/A (Q2=不要)
+5. 项目 = kiddo-scoreboard
+
+**6 项暑假作业 (PM 整理 2026-07-04)**:
+
+**学校作业 (3 项)**:
+1. 📝 **语文词语** — 抄写 2 遍,默写 1 遍
+2. 🔢 **数学** — 1 天 1 [题/课/页, 语义模糊,需跟 kid 确认]
+3. 📖 **英语单词** — 每天默写 1 课 (用 豆包 报听写)
+
+**课外 (3 项)**:
+4. 📚 **英语绘本** — 每天打卡 3 本,听 1 小时以上
+5. 🧮 **数学举一反三** — A 册:课内没做完做半周,做完后一天一周。B 册:周末一天基础一天提高
+6. 🗓️ **英语外教课** — 每周六 4:15-6:15 (可调到周三/五晚上),课后两天内完成作业
+
+**Action Plan** (临时功能, 1 段 ≤ 30 min 草案, 等拍板后细化)**:
+- [ ] **Stage 1 (≤30 min)**: kid UI modal
+  - `public/app.js`: 6 items 硬编码常量 `SUMMER_HOMEWORK_ITEMS = [...]` (含 name + displayHint 字段)
+  - `public/index.html`: `#summer-homework-modal` 容器 (默认 hidden)
+  - `public/app.css`: `.homework-modal` 样式 (复用什么? #010 sprint modal 同款 CSS)
+  - `public/app.js`: 拦截 task #7 点击 → 弹 modal → 全勾才能点"提交" → POST /api/task-completions 复用现有 task 打卡 endpoint
+  - 单测: `tests/unit/summer-homework-modal.test.ts` (6 items 全勾 + 提交逻辑)
+  - e2e: `tests/e2e/summer-homework-modal.spec.ts` (iPad viewport: 点 task #7 → 弹 modal → 全勾 → 提交 → 打卡成功)
+  - `git commit -m "feat(homework): 暑假作业 modal 临时功能 (Item #016 §1)"`
+- [ ] **Stage 2 (≤10 min, 可选)**: docs (临时功能,优先级低)
+  - PRD §3.X + TEST_PLAN §3.X (1 段, ~50 LoC)
+  - 跟 #008/#013 PM 自实现 docs pattern 一致
+  - `git commit -m "feat(homework): docs (Item #016 §2)"`
+
+**Status**: ⏳ pending (2026-07-04 已拍板 Q1=A1 Q2=B2, 🟢, 等 0:00 cron pickup 或 PM 主动派跑)
+**风险**: 🟢 (临时功能, hardcoded 无 schema 改动)
+**Started**: —
+**Completed**: —
+**Commit**: —
+**Branch**: 未建 (等拍板后 PM 按 #013 pattern 建 `feat/016-summer-homework`)
+
+---
+
+## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
     49|
     50|> 用户原话 (2026-06-08): "先 hold 一下这个 idea 放 todo 里吧, 后面我再来拍"
     51|> 2026-06-17 DM 拍板: "B + 折叠 + 所有日期, 可切月份"
