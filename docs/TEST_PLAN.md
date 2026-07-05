@@ -1369,6 +1369,59 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 - `c6647fd` (Stage 3: fullscreen HUD cockpit + equip activation)
 - (pending Stage 4: docs + visual alignment + perf + regression)
 
+### 3.21 Toggle Task Lifecycle — Suspend/Resume (Item #014, v2.x)
+
+> **来源**: NIGHTLY-TODO Item #014, 2026-07-04 拍板 (Q1=A1 Q2=B1 Q3-5=默认).
+> **Scope**: Admin toggle switch (is_active 0↔1) + audit_log action names + child UI auto-hide.
+
+#### Unit Tests
+
+**`tests/unit/admin-task-toggle.test.ts`** (6 tests):
+- TC1: POST /toggle active→suspended → is_active=0 + audit action `task_suspended`
+- TC2: POST /toggle suspended→active → is_active=1 + audit action `task_resumed`
+- TC3: toggle on non-existent task → 404
+- TC4: toggle without PM session → 401
+- TC5: toggle twice (active→suspended→active) → audit log has both `task_suspended` and `task_resumed`
+- TC6: toggle task with active completion → completion unaffected (is_active toggle doesn't cascade)
+
+**`tests/unit/admin-toggle-ui.test.ts`** (5 tests):
+- TC7: toggle switch DOM renders with correct on/off state (active=cyan glow, suspended=grey)
+- TC8: toggle switch fires POST /toggle on click
+- TC9: toggle success → task list reloads
+- TC10: toggle error → shows error toast (no UI mutation on failure)
+- TC11: suspended task still shows in admin list (admin sees all, child filtered)
+
+#### E2E Tests (Playwright)
+
+**`tests/e2e/admin-task-toggle.spec.ts`** (4 scenarios):
+- E2E-1 (Smoke): PM login → navigate to task config → verify toggle switch visible on each task row
+- E2E-2 (Happy): click toggle → task goes suspended → child UI refresh → task button disappears
+- E2E-3 (Resume): click toggle again → task goes active → child UI refresh → task button reappears
+- E2E-4 (Audit): suspend → verify audit_log contains `action=task_suspended` with correct task_id; resume → verify `action=task_resumed`
+
+#### Visual / UX (manual QA)
+- V-T1: Active task row: toggle switch shows "ON" position with cyan glow
+- V-T2: Suspended task row: toggle switch shows "OFF" position (grey, no glow)
+- V-T3: Child UI: suspended task button absent (verify via `GET /api/public/tasks?user_id=2&active=true`)
+- V-T4: Admin list: suspended task still visible with toggle in OFF position
+
+#### Child UI Auto-hide Verification
+- C1: Suspended task does NOT appear in `GET /api/public/tasks?user_id=2&active=true` (server-side filter)
+- C2: Suspended task does NOT appear in child UI task shortcut row (client-side renderTasks filters active)
+- C3: Toggle back to active → task reappears in child UI on next refresh
+
+#### Cross-cutting Regression
+- ✅ §3.5 PM Task Config: toggle does NOT affect task fields (name/token_reward/category unchanged)
+- ✅ §3.11 Child Task Complete: suspended task cannot be completed (server 404 / not in public list)
+- ✅ §3.14 Sleep Lockout: cutoff logic unaffected by is_active toggle
+- ✅ §3.15 Hard Delete: hard delete on suspended task still works
+
+#### 实施 commit 序列 (4 个)
+- `5fbf43a` (Stage 1: admin toggle endpoint + audit_log task_suspended/task_resumed)
+- `c523b6d` (Stage 2: admin inline toggle switch UI)
+- `dad77d7` (Stage 3: e2e + renderTasks re-render fix)
+- (pending Stage 4: docs + regression — 本 commit)
+
 ---
 
 ## 4. Cross-Cutting E2E Flows

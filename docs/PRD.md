@@ -1036,6 +1036,46 @@ CREATE INDEX idx_redemptions_user_redeemed ON shop_redemptions(user_id, redeemed
 - `c6647fd` (Stage 3: fullscreen HUD cockpit + equip activation)
 - (pending Stage 4: docs + visual alignment + perf + regression)
 
+### 3.15 Task Lifecycle — Suspend/Resume (Item #014, v2.x)
+
+**用户场景** (NIGHTLY-TODO Item #014, 2026-07-04 拍板):
+暑假来了，孩子不用每天打卡"按时上床"了，但不想删除这个任务（历史记录要保留）。PM 可以**暂停**任务，暂停后 child UI 不显示该任务；开学后 PM 再**恢复**，child UI 重新显示。
+
+**核心设计**:
+- **State machine**: `active` (is_active=1) ↔ `suspended` (is_active=0)
+- **PM 操作**: toggle switch inline in admin task list
+- **Child UI**: `is_active=0` 自动隐藏（`me/tasks.ts` L63 + L254 已有逻辑）
+- **Audit**: `task_suspended` / `task_resumed` 写入 `audit_log`
+
+**API**:
+- `POST /api/admin/tasks/:id/toggle` — PM 切换 is_active 状态（0→1 或 1→0）
+  - Request body: `{}` (空)
+  - Response 200: `{ id, name, is_active, updated_at }`
+  - Response 401: 未登录
+  - Response 403: 非 PM
+
+**audit_log action**:
+| 操作 | action |
+|------|--------|
+| active → suspended | `task_suspended` |
+| suspended → active | `task_resumed` |
+
+**Child UI 行为**:
+- `GET /api/public/tasks?user_id=2&active=true` 默认只返回 `is_active=1` 任务（已有逻辑，无需改动）
+- `GET /api/admin/tasks` 返回所有任务（含 suspended），admin 列表可见 toggle switch
+- suspended 任务若有 active completion，PM 可正常撤销（不受 is_active 影响）
+
+**Admin UI**:
+- Task list 每行右侧 inline toggle switch（cyan glow on/off 对应 active/suspended）
+- Toggle 即时触发 POST /toggle + reload 任务列表
+
+**风险**: 🟢
+- 复用现有 `is_active` 字段，无 schema 改动
+- toggle 操作幂等，PM 可随时切换
+- child UI 已原生过滤 `is_active=0`
+
+**引用**: Item #014 / NIGHTLY-TODO §
+
 ### 13. 跑步小地图 (Item #011, v2.x)
 
 **用户原话** (2026-06-17): "在 Nightly Todo 里再增加一个功能：记录跑步的每次公里数，并绘制一个小地图。每一次跑了多远的距离，会在一个虚拟的小地图上，从一个点移动到另一个点。当到达一个新的点位时（比如跑到10公里），可以开一个小礼包，礼包里有一个随机的积分"

@@ -41,11 +41,125 @@
     41|
     42|## 📋 当前清单 (2 个 Item: 0 ⏳ pending, 1 🔧 running, 1 ⏸ hold)
     43|
-    44|> 📌 **Drift fix 2026-06-24 (PM 修)**: #011 ✅ done (PR #42 已 merged 2026-06-21), #012 ✅ done (PR #43 已 merged 2026-06-21), #008 ✅ done (4 stages all merged 2026-06-24) — 移到下方归档段
-    45|> 当前 active: #007 hold / #013 🔧 running (Stage 2 done)
-    46|> 2026-06-24 PM 1 晚连续跑完 #008 4 stages (3 晚预算 → 1 晚): Stage 2+3 CC, Stage 4 PM 自实现 docs
-    47|
-    48|## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
+    > 📌 **Drift fix 2026-06-24 (PM 修)**: #011 ✅ done (PR #42 已 merged 2026-06-21), #012 ✅ done (PR #43 已 merged 2026-06-21), #008 ✅ done (4 stages all merged 2026-06-24) — 移到下方归档段
+    > 当前 active: #007 hold / #013 🔧 running (Stage 2 done)
+    > 2026-06-24 PM 1 晚连续跑完 #008 4 stages (3 晚预算 → 1 晚): Stage 2+3 CC, Stage 4 PM 自实现 docs
+    >
+    > 📌 **2026-07-04 新需求入池**: #014 (suspend task) + #015 (申请金币), 当日已拍板 (Q1=A1 Q2=B1 + Q3-5 默认), 详情见下方 Item 段
+
+    ## Item #014 — Admin 暂停任务 (suspend / 恢复, 不删) ⏳ pending
+
+    > 用户原话 (2026-07-04 DM): "我要 admin 可以 suspend 一个任务, 比如暑假期间打卡任务需要替换但不想删掉"
+    > 用户补充: "这个需求我好像记在 night todo 里了" — **PM 已 grep 全文件, 0 匹配 suspend/暂停/停用/暑假/disable/deactivate**, 不存在旧记录, 现新增
+
+    **现状 (PM 调查)**:
+    - `tasks.is_active` 字段已存在 (0 | 1, db/types.ts L93/L177)
+    - admin DELETE 走 soft-delete: `UPDATE tasks SET is_active = 0, updated_at = ? WHERE id = ?` (admin/tasks.ts L550-562)
+    - admin PATCH 支持 `is_active` 字段 (admin/tasks.ts L340-344, 439-441)
+    - child UI 自动隐藏 `is_active=0` 任务 (me/tasks.ts L63, L254)
+    - admin UI 已渲染 "已停用" badge (`t.is_active === 1` 反向 → badge) (public/admin/admin.js L497-502)
+    - **缺口**: admin task 列表**没暴露 toggle 按钮** — 当前只能"编辑"或"删除"; 要"恢复"得手动 PATCH
+
+    **已拍板 (2026-07-04)**:
+    1. 需求 = admin 可暂停 + 恢复任务, 不删 (暑假打卡任务替换场景)
+    2. 项目 = kiddo-scoreboard
+
+    **Clarification (PM 整理 2026-07-04, 当日已拍板)**:
+    - ✅ **Q1 = A1 (简单 toggle)** 🟢 — 复用现有 `tasks.is_active` 字段, 新加 `POST /api/admin/tasks/:id/toggle` endpoint (内部 is_active=0↔1), 无新 schema
+    - ✅ **Q2 = B1 (inline toggle switch)** — admin task 列表每行右侧放 iOS 风格 switch, 一键切换; admin.js renderTasks 加 toggle 元素 + click handler + optimistic UI + toast
+    - ✅ **Q3 = 是** — toggle 时写 `audit_log`, action=`task_suspended` (1→0) 或 `task_resumed` (0→1), details 含 task_id + 操作时间 + 操作人; 跟 shop-fulfill / exchange 同 audit pattern
+    - ✅ **Q4 = 现状已 OK** — 暂停后 kid UI 完全隐藏 (复用 `is_active=0` 现成逻辑, me/tasks.ts L63/L254), 无需改
+
+    **Action Plan** (A1+B1+Q3=是 假设下的 4 段草案, 等拍板后细化)**:
+    - [ ] **Stage 1 (≤15 min)**: API toggle endpoint + 单测
+      - `src/routes/admin/tasks.ts`: `POST /api/admin/tasks/:id/toggle` (requirePm guard 已生效), 写 audit_log
+      - `tests/unit/admin-task-toggle.test.ts` (toggle 1↔0, audit 写对, 权限校验)
+      - `git commit -m "feat(tasks): admin toggle is_active endpoint + audit log (Item #014 §1)"`
+    - [ ] **Stage 2 (≤15 min)**: admin UI toggle 按钮 + 视觉
+      - `public/admin/admin.js` renderTasks 加 toggle switch + click handler + optimistic UI + toast
+      - `public/admin/admin.css` `.pm-toggle` switch style (cyan glow, 跟 #008/#010/#011 风格统一)
+      - 单测: `tests/unit/admin-toggle-ui.test.ts` (DOM 渲染 + click flow)
+      - `git commit -m "feat(tasks): admin inline toggle switch (Item #014 §2)"`
+    - [ ] **Stage 3 (≤10 min)**: e2e + 视觉对齐
+      - `tests/e2e/admin-task-toggle.spec.ts` (toggle on → 看 badge + audit log entry)
+      - 视觉对齐: toggle switch 跟 #008 mecha HUD 同色板
+      - `git commit -m "feat(tasks): toggle e2e + visual alignment (Item #014 §3)"`
+    - [ ] **Stage 4 (≤10 min)**: 文档 + regression
+      - `docs/PRD.md` §X 新增 "Task Lifecycle (active/suspended)" 段
+      - `docs/TEST_PLAN.md` §X 加 toggle 测试章节
+      - `docs/FEATURE_MATRIX.md` 标记 ✅
+      - `docs/PROGRESS.md` v2.X
+      - 跑全套 `npx vitest run` + `npx playwright test`
+      - `git commit -m "feat(tasks): docs + regression (Item #014 §4)"`
+
+    **Status**: ⏳ pending (2026-07-04 已拍板 Q1=A1 Q2=B1 Q3=是, 🟢, 等 0:00 cron pickup 或 PM 主动派跑)
+    **风险**: 🟢 (简单 toggle, 复用现有 is_active, 无 schema 改动)
+    **Started**: —
+    **Completed**: —
+    **Commit**: —
+    **Branch**: 未建 (等拍板后 PM 按 #013 pattern 建 `feat/014-suspend-task`)
+
+    ---
+
+    ## Item #015 — Kid 申请金币 (审批流, kid 端 + admin 端) ⏳ pending
+
+    > 用户原话 (2026-07-04 DM): "我要在 user 界面里增加申请金币的功能"
+
+    **现状 (PM 调查)**:
+    - `coin_balances` 表 + `getCoinBalance` / `getCoinBalanceUpdatedAt` utils (utils/coin.ts)
+    - kid 端 API: `GET /api/coins/balance` + `GET /api/coins/redemptions` (src/routes/me/coins.ts), CHILD_USER_ID hardcoded = 2
+    - admin 已有"兑换待发"流程参考: `src/routes/admin/shop-fulfill.ts` (GET list + POST approve), 状态机 `pending → approved` 已实现 (L119-194) + audit_log 写好
+    - **缺口**: 没有 kid 主动"申请金币"通道, 现有金币只能通过任务完成/兑换入账
+
+    **已拍板 (2026-07-04)**:
+    1. 流程 = **A1 审批流**: kid 填理由+数量 → 提交 → parent admin 审批 → 通过后到账 + 写流水
+    2. 项目 = kiddo-scoreboard
+    3. 入口位置 (默认假设) = 主页 `/` kid 端顶部加按钮 "🪙 申请金币" → modal
+
+    **Clarification (PM 整理 2026-07-04, 当日已拍板)**:
+    - ✅ **Q1 = A1 (无上限)** — kid 想申请多少填多少, admin 审批时判断合不合理; 防滥用靠 PM 审核, 不靠系统硬卡
+    - ✅ **Q2 = B1 (输入框自填)** — modal 给一个数字输入框, kid 自己填 1-999, 客户端做基础校验 (必须数字 + 1-999 范围)
+    - ✅ **Q3 = 默认** — audit_log action=`coin_request_approved` (或 `coin_request_rejected`), details 含 request_id + user_id + amount + reason + approver_id + approved_at; 跟 shop-fulfill 同 pattern
+    - ✅ **Q4 = 默认** — 通过后直接写 `coin_balances` 表 (跟任务完成奖励金币走同一条路径), 不绕 weekly_grant
+    - ✅ **Q5 = 默认 (是)** — kid 端加 "我的申请" 区, 显示 ⏳ pending / ✅ approved / ❌ rejected 三种状态, 复用 `/api/coins/redemptions` section 模式
+
+    **Action Plan** (A1+B1+Q3-5 默认假设下 5 段草案, 等拍板后细化)**:
+    - [ ] **Stage 1 (≤20 min)**: D1 migration + coin_requests 表 + helpers
+      - `migrations/XXXX_coin_requests.sql`: 新表 (`id` / `user_id` / `amount` / `reason` / `status` ('pending'|'approved'|'rejected') / `requested_at` / `reviewed_at` / `reviewed_by` / `review_note`)
+      - `src/utils/coin-request.ts`: 新 helpers `createCoinRequest` / `listCoinRequests` / `reviewCoinRequest`
+      - 单测: `tests/unit/coin-request-helpers.test.ts`
+      - `git commit -m "feat(coin-request): D1 schema + helpers (Item #015 §1)"`
+    - [ ] **Stage 2 (≤20 min)**: kid API + admin API endpoints
+      - `src/routes/me/coin-request.ts`: `POST /api/coins/request` (kid 提交) + `GET /api/coins/requests` (kid 历史)
+      - `src/routes/admin/coin-requests.ts`: `GET /api/admin/coin-requests?status=pending` (admin 待审) + `POST /api/admin/coin-requests/:id/approve|reject`
+      - 复用 requirePm guard (admin) + CHILD_USER_ID hardcoded (kid)
+      - 单测: 4 endpoint 各一文件 (submit / list-kid / list-admin / approve-reject)
+      - `git commit -m "feat(coin-request): kid submit/list + admin review endpoints (Item #015 §2)"`
+    - [ ] **Stage 3 (≤20 min)**: kid UI 申请 modal + 提交反馈 + 历史显示
+      - `public/index.html` + `public/app.js`: 主页加 "🪙 申请金币" 按钮 → modal (理由 textarea + 数量 input) → 提交 → toast
+      - kid 端历史: 跟 `/api/coins/redemptions` 复用 section, 加 "申请记录" 子区
+      - 单测 + e2e
+      - `git commit -m "feat(coin-request): kid UI submit modal + history (Item #015 §3)"`
+    - [ ] **Stage 4 (≤15 min)**: admin UI "金币申请" section
+      - `public/admin/admin.js`: 加 renderCoinRequests + loadPendingCoinRequests (跟 shop-fulfill 待发同款 pattern)
+      - approve/reject 按钮 + confirm modal + audit 写
+      - 单测 + e2e
+      - `git commit -m "feat(coin-request): admin UI 待审 section + approve/reject (Item #015 §4)"`
+    - [ ] **Stage 5 (≤10 min)**: 文档 + regression
+      - docs 4 件套 (PRD + TEST_PLAN + FEATURE_MATRIX + PROGRESS) 按 #008/#013 pattern 写
+      - 跑全套 vitest + playwright
+      - `git commit -m "feat(coin-request): docs + regression (Item #015 §5)"`
+
+    **Status**: ⏳ pending (2026-07-04 已拍板 Q1=A1 Q2=B1 Q3-5 默认, 🟡, 等 0:00 cron pickup 或 PM 主动派跑)
+    **风险**: 🟡 (新 schema `coin_requests` 表 + 4 endpoint + kid/admin UI 都改)
+    **Started**: —
+    **Completed**: —
+    **Commit**: —
+    **Branch**: 未建 (等拍板后 PM 按 #013 pattern 建 `feat/015-coin-request`)
+
+    ---
+
+    ## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
     49|
     50|> 用户原话 (2026-06-08): "先 hold 一下这个 idea 放 todo 里吧, 后面我再来拍"
     51|> 2026-06-17 DM 拍板: "B + 折叠 + 所有日期, 可切月份"

@@ -562,4 +562,56 @@ tasksRoute.delete('/:id', async (c) => {
   return c.json({ id, is_active: 0 as const });
 });
 
+// ---------------- POST /:id/toggle (suspend/resume) ----------------
+
+tasksRoute.post('/:id/toggle', async (c) => {
+  const pmUserId = await getPmUserId(c);
+  if (pmUserId == null) return unauthorized(c);
+
+  const id = badId(c.req.param('id'));
+  if (id == null) {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'id must be a positive integer' } },
+      400,
+    );
+  }
+
+  const db = c.env.DB;
+  const existing = await loadTask(db, id);
+  if (!existing) {
+    return c.json(
+      { error: { code: 'NOT_FOUND', message: 'task not found' } },
+      404,
+    );
+  }
+
+  const oldIsActive = existing.is_active;
+  const newIsActive = oldIsActive === 1 ? 0 : 1;
+  const action = newIsActive === 1 ? 'task_resumed' : 'task_suspended';
+  const now = Math.floor(Date.now() / 1000);
+
+  await db.batch([
+    db
+      .prepare(`UPDATE tasks SET is_active = ?, updated_at = ? WHERE id = ?`)
+      .bind(newIsActive, now, id),
+    db
+      .prepare(
+        `INSERT INTO audit_log
+           (actor, action, target_event_id, target_user_id, details, created_at)
+         VALUES ('pm', '${action}', NULL, NULL, ?, ?)`,
+      )
+      .bind(
+        JSON.stringify({
+          task_id: id,
+          old_is_active: oldIsActive,
+          new_is_active: newIsActive,
+          toggled_at: now,
+        }),
+        now,
+      ),
+  ]);
+
+  return c.json({ id, is_active: newIsActive as 0 | 1, action, toggled_at: now });
+});
+
 export default tasksRoute;

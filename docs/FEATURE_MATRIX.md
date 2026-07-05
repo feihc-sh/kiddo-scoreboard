@@ -21,11 +21,13 @@
 | **3.3** | 奖励机制 (周额度发工资) | `routes/admin/weekly-grant.ts` | 3.8 | `admin-weekly-grant.test.ts` | `flow-weekly-payout.spec.ts` `ui-admin-grant.spec.ts` | ✅ 100% |
 | **3.4** | 任务系统 (CRUD + 完成 + 撤销) | `routes/admin/tasks.ts` + `routes/me/tasks.ts` | 3.5, 3.11 | `admin-tasks-config.test.ts` `me-tasks-complete.test.ts` `public-tasks.test.ts` | `ui-admin-tasks.spec.ts` `ui-child-task-complete.spec.ts` `ui-admin-emoji-picker.spec.ts` `flow-task-lifecycle.spec.ts` **`ui-admin-revoke-event-sync.spec.ts`** ⚠️ NEW (P0, event 撤销 → child UI, 2026-06-09) | ⚠️ 95% — event 撤销 child UI 路径未覆盖 |
 | **3.12** | 准时上床 (self-lockout 任务类型, v2.1) | `tasks.cutoff_time` + `tasks.is_self_lockout` | 3.14 | (覆盖在 me-tasks-complete.test.ts) | `sleep-lockout.spec.ts` `ui-child-main.spec.ts` | ✅ 100% |
+| **3.15** | Task Lifecycle — Suspend/Resume (Item #014, v2.x) | `routes/admin/tasks.ts :: POST /:id/toggle` | 3.21 | `admin-task-toggle.test.ts` | `admin-task-toggle.spec.ts` | ✅ 100% |
 | **3.5** | 边界 case (软删/审计/锁 + **硬删 v2.2**) | `utils/audit.ts` + `auth/lockout.ts` + `utils/deleted-records.ts` + `routes/admin/events.ts` + `routes/admin/task-completions.ts` + `routes/admin/deleted-records.ts` | 3.1, 3.6, **3.15** | `lockout.test.ts` `audit.test.ts` `deleted-records.test.ts` `admin-events-hard-delete.test.ts` `admin-task-completions-hard-delete.test.ts` | `flow-pm-lockout.spec.ts` `smoke-admin-audit.spec.ts` **`ui-admin-hard-delete.spec.ts`** **`ui-admin-hard-delete-fk.spec.ts`** ⚠️ NEW (P0, FK 约束, 2026-06-09) | ⚠️ 95% — FK 路径未覆盖 (新 spec RED 待 PM 修) |
 
-| **业务规则侧覆盖率**: **6/6 = 100%** ✅ (业务侧 OK; 已知 1 P0 bug: 硬删 FK 路径, 新 spec RED)
+| **业务规则侧覆盖率**: **7/7 = 100%** ✅ (含 Item #014 §3.15 Task Lifecycle)
 **gap (已补)**: PRD 3.5 新增硬删 (v2.2) — 物理删 event/completion + `deleted_records` snapshot + audit log, 全部由 §3.15 e2e + 2 unit spec 覆盖。
 **gap (待补)**: PRD 3.5 硬删 FK 路径 — `task_completions.awarded_event_id → score_events.id` 的 FK 约束导致硬删 event 失败 (500)。新增 `ui-admin-hard-delete-fk.spec.ts` (3 case, 1 通过/2 RED) 等 PM 修。
+**gap (已补)**: PRD §3.15 Task Lifecycle (Item #014) — §3.21 + §3.5 交叉覆盖, 业务规则侧 +7/7。
 
 ---
 
@@ -73,6 +75,7 @@
 | **3.18** | Running Map Child UI (Item #011 §2+3) | ✓ | ✓ | — | `ui-running-checkin.spec.ts` `ui-running-map.spec.ts` |
 | **3.19** | Running Map Admin Revoke (Item #011 §4) | ✓ | ✓ | — | `admin-running-revoke.test.ts` |
 | **3.20** | 任务装备/机甲化 (Item #008 Stage 1-4) | ✓ | ✓ | — | `task-mecha-button.test.ts` (11) + `mecha-equip-activation.test.ts` (8) + `ui-task-mecha-frame.spec.ts` (4) + `ui-equip-activation.spec.ts` (6) |
+| **3.21** | Task Suspend/Resume — Admin Toggle (Item #014) | ✓ | ✓ | — | `admin-task-toggle.test.ts` (6) + `admin-toggle-ui.test.ts` (5) | `admin-task-toggle.spec.ts` (4 e2e) |
 
 **UI 功能覆盖率**: **23/23 = 100%** ✅ (3.1-3.16.4 baseline + 3.17-3.19 running map + 3.20 mecha)
 
@@ -114,7 +117,7 @@
 - `me-events-submit.test.ts` (提交)
 - `me-tasks-complete.test.ts` (完成/撤销)
 
-### PM 端 API (10)
+### PM 端 API (12)
 - `admin-auth.test.ts` (登录)
 - `admin-events-actions.test.ts` (审批/拒绝/撤销/改分)
 - `admin-tasks-config.test.ts` (任务 CRUD)
@@ -125,6 +128,8 @@
 - `admin-weekly-grant.test.ts`
 - `admin-events-hard-delete.test.ts` (v2.2)
 - `admin-task-completions-hard-delete.test.ts` (v2.2)
+- `admin-task-toggle.test.ts` (v2.x, Item #014)
+- `admin-toggle-ui.test.ts` (v2.x, Item #014)
 
 ### Utils (5)
 - `week.test.ts` (时区 + ISO 周)
@@ -133,7 +138,7 @@
 - `deleted-records.test.ts` (v2.2 snapshot 写入 + JSON 序列化)
 - (Me-events-submit 等覆盖)
 
-**单元测试总数**: 24 文件 / ~135 用例 (v2.2 baseline)
+**单元测试总数**: 26 文件 / ~147 用例 (v2.2 baseline + #014)
 
 ---
 
@@ -180,8 +185,8 @@
 | 业务侧功能点总数 (去重) | **15** |
 | unit 测试文件 | 24 |
 | e2e spec 文件 | 50 |
-| **测试文件总数** | **74** |
-| 测试用例 (估算) | ~215+ |
+| **测试文件总数** | **77** |
+| 测试用例 (估算) | ~230+ |
 | **覆盖率** | **15/15 = 100%** ✅ |
 | **当前状态** (2026-06-09) | **205 pass + 2 pre-existing flaky + 2 NEW regression RED (admin edit prefill + child submit race, 待 PM 修)** ⚠️ |
 
