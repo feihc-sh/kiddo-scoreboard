@@ -72,7 +72,7 @@ export function clearAllData(): void {
     'DELETE FROM auth_attempts; DELETE FROM audit_log; DELETE FROM task_completions; ' +
     'DELETE FROM score_events; DELETE FROM tasks; DELETE FROM users; ' +
     'DELETE FROM running_records; DELETE FROM running_points; DELETE FROM running_maps; ' +
-    'DELETE FROM running_progress;'
+    'DELETE FROM running_progress; DELETE FROM coin_requests;'
   );
 }
 
@@ -192,6 +192,29 @@ export function seedEvent(overrides: Partial<{
   const sql =
     `INSERT INTO score_events (id, user_id, type, change_value, reason, status, submitted_by, source, week_of, created_at) ` +
     `VALUES (${sqlNum(id)}, ${sqlNum(user_id)}, ${sqlStr(type)}, ${sqlNum(change_value)}, ${sqlStr(reason)}, ${sqlStr(status)}, ${sqlStr(submitted_by)}, ${sqlStr(source)}, ${sqlStr(week_of)}, ${sqlNum(now)});`;
+  d1Exec(sql);
+  return id;
+}
+
+/** Seed a coin request. Returns the request id. */
+export function seedCoinRequest(overrides: Partial<{
+  id: number;
+  user_id: number;
+  amount: number;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requested_at: number;
+}> = {}): number {
+  const id = overrides.id ?? 10000 + Math.floor(Math.random() * 100000);
+  const user_id = overrides.user_id ?? 2;
+  const amount = overrides.amount ?? 10;
+  const reason = overrides.reason ?? 'test coin request';
+  const status = overrides.status ?? 'pending';
+  const requested_at = overrides.requested_at ?? Math.floor(Date.now() / 1000);
+  const sql =
+    `INSERT INTO coin_requests (id, user_id, amount, reason, status, requested_at, reviewed_at, reviewed_by, review_note) ` +
+    `VALUES (${sqlNum(id)}, ${sqlNum(user_id)}, ${sqlNum(amount)}, ${sqlStr(reason)}, ${sqlStr(status)}, ${sqlNum(requested_at)}, NULL, NULL, NULL) ` +
+    `ON CONFLICT(id) DO UPDATE SET status=excluded.status, requested_at=excluded.requested_at;`;
   d1Exec(sql);
   return id;
 }

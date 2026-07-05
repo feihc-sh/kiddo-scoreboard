@@ -23,6 +23,7 @@ const state = {
   selectedDir: 1,                 // for submit modal
   health: { activeType: 'cough', currentMonth: null, events: [] },
   running: { activeMap: null, cumKm: 0 },
+  coinRequests: [],
 };
 // Expose state for e2e introspection (read-only).
 if (typeof window !== 'undefined') window.__kiddoState = state;
@@ -1591,7 +1592,10 @@ function initCalendar() {
     if (e.target === modal) closeCalendarDayModal();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeCalendarDayModal();
+    if (e.key === 'Escape') {
+      closeCalendarDayModal();
+      closeCoinRequestModal();
+    }
   });
   document.getElementById('calendar-day-close')?.addEventListener('click', closeCalendarDayModal);
 
@@ -1689,6 +1693,118 @@ function fireConfetti() {
     else ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
   tick();
+}
+
+// ---------- Coin Request — Item #015 §3 ----------
+async function loadCoinRequests() {
+  try {
+    const r = await api('GET', '/api/coins/requests');
+    state.coinRequests = r.requests ?? [];
+  } catch (_) {
+    state.coinRequests = [];
+  }
+  renderCoinRequests();
+}
+
+function renderCoinRequests() {
+  const root = $('#coin-request-list');
+  const empty = $('#coin-request-empty');
+  const count = $('#coin-request-count');
+  if (!root) return;
+  count.textContent = state.coinRequests.length;
+  root.innerHTML = '';
+  if (state.coinRequests.length === 0) {
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  state.coinRequests.forEach((req) => {
+    const el = document.createElement('div');
+    el.className = 'coin-request-item coin-request-' + req.status;
+    const statusBadge = {
+      pending: '<span class="badge pending">⏳ 待审核</span>',
+      approved: '<span class="badge approved">✅ 已通过</span>',
+      rejected: '<span class="badge rejected">❌ 已拒绝</span>',
+    }[req.status] || req.status;
+    const time = new Date(req.requested_at * 1000).toLocaleString('zh-CN', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    });
+    el.innerHTML = `
+      <div class="coin-request-icon">🪙</div>
+      <div class="coin-request-body">
+        <div class="coin-request-amount">+${req.amount} 枚</div>
+        <div class="coin-request-reason">${escapeHtml(req.reason)}</div>
+        <div class="coin-request-meta">${time} · ${statusBadge}</div>
+      </div>
+    `;
+    root.appendChild(el);
+  });
+}
+
+// ---------- Coin Request Modal ----------
+function openCoinRequestModal() {
+  const modal = document.getElementById('coin-request-modal');
+  const form = document.getElementById('coin-request-form');
+  const err = document.getElementById('coin-request-error');
+  const amountInput = document.getElementById('coin-request-amount');
+  const reasonInput = document.getElementById('coin-request-reason');
+  const submitBtn = document.getElementById('coin-request-submit');
+  if (!modal || !form) return;
+  if (err) { err.hidden = true; err.textContent = ''; }
+  if (form) form.reset();
+  if (submitBtn) submitBtn.disabled = false;
+  modal.hidden = false;
+  if (amountInput) { amountInput.focus(); amountInput.select(); }
+}
+
+function closeCoinRequestModal() {
+  const modal = document.getElementById('coin-request-modal');
+  const form = document.getElementById('coin-request-form');
+  if (form) form.reset();
+  const err = document.getElementById('coin-request-error');
+  if (err) { err.hidden = true; err.textContent = ''; }
+  if (modal) modal.hidden = true;
+}
+
+function showCoinRequestError(msg) {
+  const err = document.getElementById('coin-request-error');
+  if (!err) return;
+  err.textContent = msg;
+  err.hidden = false;
+}
+
+async function submitCoinRequest() {
+  const amountInput = document.getElementById('coin-request-amount');
+  const reasonInput = document.getElementById('coin-request-reason');
+  const submitBtn = document.getElementById('coin-request-submit');
+  const err = document.getElementById('coin-request-error');
+  if (err) { err.hidden = true; err.textContent = ''; }
+
+  const amount = parseInt(amountInput?.value ?? '', 10);
+  const reason = (reasonInput?.value ?? '').trim();
+
+  // Client-side validation
+  if (!Number.isInteger(amount) || amount < 1 || amount > 999) {
+    showCoinRequestError('金币数必须是 1-999 之间的整数');
+    return;
+  }
+  if (reason.length < 1 || reason.length > 200) {
+    showCoinRequestError('理由不能为空，最多 200 字');
+    return;
+  }
+
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    await api('POST', '/api/coins/request', { amount, reason });
+    closeCoinRequestModal();
+    toast('申请已提交，等待 PM 审核', 'success');
+    await loadCoinRequests();
+  } catch (e) {
+    showCoinRequestError('提交失败：' + e.message);
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
 }
 
 // ---------- Boot ----------
@@ -1822,6 +1938,17 @@ function bindEvents() {
 
   // Item #011 §3: init running map section
   initRunningMap();
+
+  // Item #015 §3: coin request modal
+  $('#btn-coin-request')?.addEventListener('click', openCoinRequestModal);
+  $('#coin-request-cancel')?.addEventListener('click', closeCoinRequestModal);
+  $('#coin-request-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'coin-request-modal') closeCoinRequestModal();
+  });
+  $('#coin-request-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitCoinRequest();
+  });
 }
 
 async function boot() {
@@ -1835,7 +1962,7 @@ async function boot() {
       refreshAll();
       return;
     }
-    await refreshAll();
+    await Promise.all([refreshAll(), loadCoinRequests()]);
   } catch (e) {
     showError('启动异常：' + e.message, boot);
   }

@@ -153,6 +153,8 @@
       <button id="btn-refresh" class="btn btn-secondary action-btn">🔄 刷新</button>
       <!-- Item #011 §2: 🏃 跑步打卡按钮 — opens #running-checkin-modal -->
       <button id="btn-running" class="btn btn-secondary action-btn" type="button" aria-label="跑步打卡">🏃 跑步</button>
+      <!-- Item #015 §3: 🪙 申请金币按钮 — opens #coin-request-modal -->
+      <button id="btn-coin-request" class="btn btn-secondary action-btn" type="button" aria-label="申请金币">🪙 申请金币</button>
     </section>
 
     <!-- Item #011 §2: cum-km ticker (filled by loadRunningState + submitRunning) -->
@@ -237,6 +239,16 @@
       <button id="health-checkin-btn" class="btn btn-primary health-checkin-btn" type="button">
         + 打卡
       </button>
+    </section>
+
+    <!-- Item #015 §3: 我的金币申请 history -->
+    <section class="section coin-request-section" aria-label="我的金币申请">
+      <h2 class="section-title">🪙 我的金币申请 <span class="count" id="coin-request-count">0</span></h2>
+      <div id="coin-request-list" class="coin-request-list"></div>
+      <div id="coin-request-empty" class="empty" hidden>
+        <div class="empty-icon">🪙</div>
+        <div>暂无申请记录</div>
+      </div>
     </section>
 
     <section class="section events-section" aria-label="操作日志">
@@ -398,6 +410,29 @@
 
   <!-- ====== Toast ====== -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Item #015 §3: 🪙 申请金币 modal -->
+  <div id="coin-request-modal" class="modal-back" hidden>
+    <div class="modal">
+      <h2 class="modal-title">🪙 申请金币</h2>
+      <p class="modal-hint">说明你为什么想申请金币，PM 审核后通过就到你账上</p>
+      <form id="coin-request-form" class="form">
+        <div class="field">
+          <label for="coin-request-amount">金币数</label>
+          <input type="number" id="coin-request-amount" min="1" max="999" step="1" placeholder="例如: 50" required>
+        </div>
+        <div class="field">
+          <label for="coin-request-reason">理由</label>
+          <textarea id="coin-request-reason" rows="3" maxlength="200" required placeholder="例如: 数学考 100 分, 想奖励自己"></textarea>
+        </div>
+        <p id="coin-request-error" class="modal-error" role="alert" hidden></p>
+        <div class="modal-actions">
+          <button type="button" id="coin-request-cancel" class="btn btn-secondary">取消</button>
+          <button type="submit" id="coin-request-submit" class="btn btn-primary">提交申请</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- ====== Confetti canvas ====== -->
   <canvas id="confetti" class="confetti-canvas" aria-hidden="true"></canvas>
