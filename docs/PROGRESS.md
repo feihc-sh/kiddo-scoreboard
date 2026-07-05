@@ -964,3 +964,34 @@ git log --oneline -5  # 看最新进度
 **Push 计划**: docs commit 完 → 等 PM 拍 → push 分支 → merge → GH Action auto backup + deploy。
 
 ---
+
+## ✅ v2.x — Task Suspend/Resume (Item #014) — 2026-07-04
+
+**触发场景**: 暑假来了，孩子不用每天打卡"按时上床"了，但不想删除任务（历史记录保留）。PM 可**暂停**任务，暂停后 child UI 不显示；开学后再**恢复**。
+
+**分支**: `feat/014-suspend-task` (4 个 commit)
+
+**4 个 commit**:
+- `5fbf43a` feat(tasks): admin toggle is_active endpoint + audit log (Item #014 §1)
+- `c523b6d` feat(tasks): admin inline toggle switch (Item #014 §2)
+- `dad77d7` feat(tasks): admin task toggle e2e + renderTasks re-render fix (Item #014 §3)
+- (本 commit) docs: PRD §3.15 + TEST_PLAN §3.21 + FEATURE_MATRIX + PROGRESS (Item #014 §4)
+
+**新增能力**:
+- **API**: `POST /api/admin/tasks/:id/toggle` — PM 切换 is_active 状态（0↔1）
+- **Audit**: `task_suspended` / `task_resumed` 写入 audit_log
+- **Admin UI**: inline toggle switch（cyan glow on/off）
+- **Child UI**: is_active=0 自动隐藏（已有逻辑，无需改动）
+
+**测试状态**:
+- ✅ 26 unit 文件 (含 `admin-task-toggle.test.ts` 6 tests + `admin-toggle-ui.test.ts` 5 tests)
+- ✅ 48 e2e (含 `admin-task-toggle.spec.ts` 4 scenarios)
+- ✅ 全套 regression pass (vitest + playwright)
+- ✅ `npx tsc --noEmit` 0 error
+
+**风险**: 🟢
+- 复用现有 `is_active` 字段，无 schema 改动
+- toggle 操作幂等，PM 可随时切换
+- child UI 已原生过滤 is_active=0
+
+**Push 计划**: PM 跑最终 verify (5 步 + tunnel smoke test) → report feihao → 等 4 options push。
