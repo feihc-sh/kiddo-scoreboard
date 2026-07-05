@@ -2708,6 +2708,21 @@ body {
   letter-spacing: 0.03em;
 }
 
+/* Item #015 §4: coin request amount in admin row */
+.coin-request-amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cyan);
+  text-shadow: 0 0 8px var(--cyan-glow);
+}
+.coin-request-reason {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 /* Stage 4 (NIGHTLY-TODO #009): hard-delete button + soft-delete row marker. */
 .pm-btn.hard-delete {
   background: rgba(231, 76, 60, 0.18);

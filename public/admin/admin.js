@@ -36,6 +36,8 @@ const state = {
   // Item #011 §4: running records list (all records, active + revoked)
   runningRecords: [],
   runningFilter: 'all',   // 'all' | 'active' | 'revoked'
+  // Item #015 §4: pending coin requests (status='pending')
+  coinRequests: [],
 };
 
 // ---------- Toast ----------
@@ -151,6 +153,17 @@ async function loadPendingRedemptions() {
     state.pendingRedemptions = [];
   }
 }
+// Item #015 §4: load pending coin requests
+async function loadCoinRequests() {
+  try {
+    const r = await api('GET', '/api/admin/coin-requests?status=pending');
+    state.coinRequests = Array.isArray(r.requests) ? r.requests : [];
+  } catch (e) {
+    if (e.message === 'UNAUTHORIZED') throw e;
+    state.coinRequests = [];
+  }
+}
+
 // Item #011 §4: load all running records (active + revoked)
 async function loadRunningRecords() {
   try {
@@ -195,6 +208,7 @@ async function refreshAll() {
       loadDeletedRecords(),
       loadPendingRedemptions(),
       loadRunningRecords(),
+      loadCoinRequests(),
     ]);
     renderAll();
   } catch (e) {
@@ -213,6 +227,7 @@ function renderAll() {
   renderCompletions();
   renderPendingRedemptions();
   renderRunningRecords();
+  renderCoinRequests();
 }
 
 // ---------- H. Shop pending fulfill (M4 §6.5) ----------
@@ -266,6 +281,91 @@ async function fulfillRedemption(id) {
     if (e.message === 'UNAUTHORIZED') return;
     const msg = e.message === 'INVALID_STATUS' ? '该兑换已发货或被撤销' : '发货失败: ' + e.message;
     toast(msg, 'error');
+  }
+}
+
+// ---------- J. Coin Requests (Item #015 §4) ----------
+function renderCoinRequests() {
+  const root = $('#coin-request-list');
+  const empty = $('#coin-request-empty');
+  if (!root) return;
+  $('#count-coin-requests').textContent = state.coinRequests.length;
+  root.innerHTML = '';
+  if (state.coinRequests.length === 0) {
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  state.coinRequests.forEach(function(req) {
+    const childName = req.child_name ? escapeHtml(req.child_name) : ('user #' + req.user_id);
+    const reason = escapeHtml(req.reason || '—');
+    const amount = Number(req.amount) || 0;
+    root.appendChild(rowEl(
+      '<div class="pm-row-main">' +
+        '<div class="pm-row-title">' +
+          '<span class="coin-request-amount">+' + amount + ' 🪙</span>' +
+          ' ' + childName +
+          ' <span class="pm-badge pending">⏳ 待审</span>' +
+        '</div>' +
+        '<div class="pm-row-meta coin-request-reason">' +
+          reason +
+          ' · ' + fmtTime(req.requested_at) +
+          ' · <span class="pm-mono">#' + req.id + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="pm-row-actions">' +
+        '<button class="pm-btn primary pm-approve-btn" data-act="approve-coin-request" data-id="' + req.id + '">✅ 批准</button>' +
+        '<button class="pm-btn danger pm-reject-btn" data-act="reject-coin-request" data-id="' + req.id + '">❌ 驳回</button>' +
+      '</div>'
+    ));
+  });
+}
+
+async function approveCoinRequest(id) {
+  if (inFlight.has('cr-approve-' + id)) return;
+  inFlight.add('cr-approve-' + id);
+  var childName = '';
+  var amount = 0;
+  var req = state.coinRequests.find(function(r) { return r.id === id; });
+  if (req) {
+    childName = req.child_name || ('user #' + req.user_id);
+    amount = Number(req.amount) || 0;
+  }
+  var ok = window.confirm('批准 ' + childName + ' 申请 ' + amount + ' 金币?');
+  if (!ok) { inFlight.delete('cr-approve-' + id); return; }
+  try {
+    await api('POST', '/api/admin/coin-requests/' + id + '/approve', { note: '' });
+    toast('已批准', 'success');
+    await loadCoinRequests();
+    renderCoinRequests();
+  } catch (e) {
+    if (e.message === 'UNAUTHORIZED') { inFlight.delete('cr-approve-' + id); return; }
+    toast('操作失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete('cr-approve-' + id);
+  }
+}
+
+async function rejectCoinRequest(id) {
+  if (inFlight.has('cr-reject-' + id)) return;
+  inFlight.add('cr-reject-' + id);
+  var note = window.prompt('驳回理由 (必填):');
+  if (note === null) { inFlight.delete('cr-reject-' + id); return; }
+  if (note.trim() === '') {
+    toast('驳回理由不能为空', 'error');
+    inFlight.delete('cr-reject-' + id);
+    return;
+  }
+  try {
+    await api('POST', '/api/admin/coin-requests/' + id + '/reject', { note: note.trim() });
+    toast('已驳回', 'success');
+    await loadCoinRequests();
+    renderCoinRequests();
+  } catch (e) {
+    if (e.message === 'UNAUTHORIZED') { inFlight.delete('cr-reject-' + id); return; }
+    toast('操作失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete('cr-reject-' + id);
   }
 }
 
@@ -893,6 +993,8 @@ function bindDelegatedActions() {
     if (act === 'fulfill-redemption') return fulfillRedemption(id);
     if (act === 'revoke-running') return revokeRunningRecordAction(id);
     if (act === 'toggle-task') return toggleTaskAction(id, btn.dataset.taskName, btn.dataset.active);
+    if (act === 'approve-coin-request') return approveCoinRequest(id);
+    if (act === 'reject-coin-request') return rejectCoinRequest(id);
   });
 }
 
