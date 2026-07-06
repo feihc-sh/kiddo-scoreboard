@@ -258,8 +258,8 @@ function parseEditBody(raw: unknown): { ok: true; value: EditBody } | { ok: fals
   const out: EditBody = {};
 
   if ('type' in body) {
-    if (body.type !== 'game_time' && body.type !== 'pocket_money') {
-      return { ok: false, code: 'BAD_REQUEST', message: 'type must be game_time or pocket_money' };
+    if (body.type !== 'game_time' && body.type !== 'pocket_money' && body.type !== 'coins') {
+      return { ok: false, code: 'BAD_REQUEST', message: 'type must be game_time, pocket_money, or coins' };
     }
     out.type = body.type;
   }

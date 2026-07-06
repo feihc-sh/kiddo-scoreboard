@@ -24,7 +24,7 @@ const events = new Hono<{ Bindings: Env }>();
  */
 const CHILD_USER_ID = 2;
 
-const VALID_TYPES = new Set<string>(['game_time', 'pocket_money']);
+const VALID_TYPES = new Set<string>(['game_time', 'pocket_money', 'coins']);
 
 events.post('/', async (c) => {
   // 1. Parse JSON body — null means missing / malformed.
@@ -45,7 +45,7 @@ events.post('/', async (c) => {
       {
         error: {
           code: 'BAD_REQUEST',
-          message: 'type must be "game_time" or "pocket_money"',
+          message: 'type must be "game_time", "pocket_money", or "coins"',
         },
       },
       400,

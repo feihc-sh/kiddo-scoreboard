@@ -316,4 +316,37 @@ describe('POST /api/me/events', () => {
     expect(details.change_value).toBe(-3);
     expect(details.reason).toBe('Broke a rule');
   });
+  // Item #015 M1: 🪙 金币 as 3rd type option in existing submit modal.
+  // Verifies the endpoint accepts type='coins' (not rejected by VALID_TYPES check)
+  // and writes the score_event with type='coins' so it flows through the same
+  // approval pipeline as game_time / pocket_money (no separate coin_requests table).
+  it('Item #015 M1: accepts type=coins and writes score_event with type=coins', async () => {
+    const res = await call('/api/me/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'coins',
+        change_value: 25,
+        reason: '申请 25 金币看动画',
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json() as { id: number; status: string };
+    expect(body.id).toBeGreaterThan(0);
+    expect(body.status).toBe('pending');
+
+    // score_events row written with type='coins'
+    expect(scoreEvents).toHaveLength(1);
+    expect(scoreEvents[0].type).toBe('coins');
+    expect(scoreEvents[0].change_value).toBe(25);
+    expect(scoreEvents[0].status).toBe('pending');
+    expect(scoreEvents[0].submitted_by).toBe('child');
+
+    // audit_log records type='coins' in details
+    expect(auditLog).toHaveLength(1);
+    const details = JSON.parse(auditLog[0].details) as Record<string, unknown>;
+    expect(details.type).toBe('coins');
+    expect(details.change_value).toBe(25);
+  });
+
 });

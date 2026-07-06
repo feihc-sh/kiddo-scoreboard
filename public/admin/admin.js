@@ -16,7 +16,7 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 // ---------- State ----------
 const state = {
   user: null,            // { id, name, role }
-  balance: { game_time: 0, pocket_money: 0 },
+  balance: { game_time: 0, pocket_money: 0, coins: 0 },
   pendingEvents: [],     // ScoreEvent[] (status=pending)
   allEvents: [],         // ScoreEvent[] (all statuses, latest)
   eventFilter: 'all',
@@ -92,8 +92,12 @@ function statusLabel(s) {
     revoked:  '↩️ 已撤销',
   })[s] || s;
 }
-function accountIcon(t) { return t === 'game_time' ? '🎮' : '💰'; }
-function accountUnit(t) { return t === 'game_time' ? '分钟' : '元'; }
+// Item #015 M1: align with kid UI submit-modal option icons (⚡/⚙️/🪙)
+// for visual consistency across kid + admin.
+const ACCOUNT_ICON = { game_time: '⚡', pocket_money: '💰', coins: '🪙' };
+const ACCOUNT_UNIT = { game_time: '分钟', pocket_money: '元', coins: '枚' };
+function accountIcon(t) { return ACCOUNT_ICON[t] || '💰'; }
+function accountUnit(t) { return ACCOUNT_UNIT[t] || ''; }
 function actorLabel(a) {
   return ({ pm: '🧑‍💼 PM', child: '🧒 child', system: '⚙️ system' })[a] || a;
 }
@@ -358,7 +362,7 @@ function renderHeader() {
   $('#pm-user').textContent = u ? `${actorLabel(u.role)} · ${u.name || '(未命名)'}` : '未登录';
   const b = state.balance;
   $('#pm-balance').textContent =
-    `kiddo: 🎮 ${b.game_time} 分钟 · 💰 ${b.pocket_money} 元`;
+    `kiddo: ⚡ ${b.game_time} 分钟 · 💰 ${b.pocket_money} 元 · 🪙 ${b.coins} 枚`;
 }
 
 // ---------- A. Pending ----------
