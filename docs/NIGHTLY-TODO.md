@@ -39,15 +39,17 @@
     39|
     40|---
     41|
-    42|## 📋 当前清单 (2 个 Item: 0 ⏳ pending, 1 🔧 running, 1 ⏸ hold)
-    43|
+    ## 📋 当前清单 (2 个 Item: 1 ⏳ pending, 0 🔧 running, 1 ⏸ hold)
+
     > 📌 **Drift fix 2026-06-24 (PM 修)**: #011 ✅ done (PR #42 已 merged 2026-06-21), #012 ✅ done (PR #43 已 merged 2026-06-21), #008 ✅ done (4 stages all merged 2026-06-24) — 移到下方归档段
-    > 当前 active: #007 hold / #013 🔧 running (Stage 2 done)
+    > 当前 active: #007 hold / #013 ⏳ pending (Stage 2 claim 完成但 commit 实际从未存在,见下方 📌 2026-07-06 注释)
     > 2026-06-24 PM 1 晚连续跑完 #008 4 stages (3 晚预算 → 1 晚): Stage 2+3 CC, Stage 4 PM 自实现 docs
     >
     > 📌 **2026-07-04 新需求入池**: #014 (suspend task) + #015 (申请金币), 当日已拍板 (Q1=A1 Q2=B1 + Q3-5 默认), 详情见下方 Item 段
+    >
+    > 📌 **Drift fix 2026-07-06 (PM 修)**: #014 ✅ done (PR #45 merged 2026-07-05) → 移到归档段; #015 ✅ done (PR #47 merged 2026-07-06) → 移到归档段; #006 / #008 section header 修 (旧 header 还写 🔧 running, body Status 已 ✅ done, 现统一修); #013 从 🔧 running 修回 ⏳ pending (Stage 2 commit 实际未存在, 需 re-evaluate 再开跑)
 
-    ## Item #014 — Admin 暂停任务 (suspend / 恢复, 不删) ⏳ pending
+    ## Item #014 — Admin 暂停任务 (suspend / 恢复, 不删) ✅ done (2026-07-05, PR #45 merged)
 
     > 用户原话 (2026-07-04 DM): "我要 admin 可以 suspend 一个任务, 比如暑假期间打卡任务需要替换但不想删掉"
     > 用户补充: "这个需求我好像记在 night todo 里了" — **PM 已 grep 全文件, 0 匹配 suspend/暂停/停用/暑假/disable/deactivate**, 不存在旧记录, 现新增
@@ -92,16 +94,16 @@
       - 跑全套 `npx vitest run` + `npx playwright test`
       - `git commit -m "feat(tasks): docs + regression (Item #014 §4)"`
 
-    **Status**: ⏳ pending (2026-07-04 已拍板 Q1=A1 Q2=B1 Q3=是, 🟢, 等 0:00 cron pickup 或 PM 主动派跑)
+    **Status**: ✅ done (PR #45 merged 2026-07-05, 4 stages all merged: 5fbf43a endpoint+audit / c523b6d UI toggle / dad77d7 e2e+renderTasks / 2e809b8 docs)
     **风险**: 🟢 (简单 toggle, 复用现有 is_active, 无 schema 改动)
-    **Started**: —
-    **Completed**: —
-    **Commit**: —
-    **Branch**: 未建 (等拍板后 PM 按 #013 pattern 建 `feat/014-suspend-task`)
+    **Started**: 2026-07-04
+    **Completed**: 2026-07-05
+    **Commit (4 stages)**: `5fbf43a` §1 endpoint+audit / `c523b6d` §2 UI toggle / `dad77d7` §3 e2e+renderTasks / `2e809b8` §4 docs (PR #45 merged 2026-07-05)
+    **Branch**: `feat/014-suspend-task` (merged to main 2026-07-05, branch kept per `--delete-branch=false`)
 
     ---
 
-    ## Item #015 — Kid 申请金币 (审批流, kid 端 + admin 端) ⏳ pending
+    ## Item #015 — Kid 申请金币 (M1 = 合并到现有 submit modal) ✅ done (2026-07-06, PR #47 merged)
 
     > 用户原话 (2026-07-04 DM): "我要在 user 界面里增加申请金币的功能"
 
@@ -150,16 +152,16 @@
       - 跑全套 vitest + playwright
       - `git commit -m "feat(coin-request): docs + regression (Item #015 §5)"`
 
-    **Status**: ⏳ pending (2026-07-04 已拍板 Q1=A1 Q2=B1 Q3-5 默认, 🟡, 等 0:00 cron pickup 或 PM 主动派跑)
+    **Status**: ✅ done (PR #47 merged 2026-07-06, M1 minimal: 2 commits 68d69d4 me+admin events + 22b84e8 admin icon fix; 4 file +46/-8; 379/381 vitest pass)
     **风险**: 🟡 (新 schema `coin_requests` 表 + 4 endpoint + kid/admin UI 都改)
-    **Started**: —
-    **Completed**: —
-    **Commit**: —
-    **Branch**: 未建 (等拍板后 PM 按 #013 pattern 建 `feat/015-coin-request`)
+    **Started**: 2026-07-04
+    **Completed**: 2026-07-06
+    **Commit (M1 minimal)**: `68d69d4` M1 implementation (me+admin events + index.html + test) / `22b84e8` admin icon fix (topbar 🪙 + accountIcon ⚡⚙️🪙) — PR #47 merged 2026-07-06
+    **Branch**: `feat/015-coin-request` (merged to main 2026-07-06, branch kept; M1 redirect from original `coin_requests` table spec — per `feihao-pm-autonomy` §4f Close+Reset+Redo)
 
     ---
 
-    ## Item #006 — 打卡日历 (月历可视化) 🔧 running (Stage 1 done 2026-06-17, 等 Stage 2/3/4)
+    ## Item #006 — 打卡日历 (月历可视化) ✅ done (2026-06-20, 4 stages all merged, PR #41)
     49|
     50|> 用户原话 (2026-06-08): "先 hold 一下这个 idea 放 todo 里吧, 后面我再来拍"
     51|> 2026-06-17 DM 拍板: "B + 折叠 + 所有日期, 可切月份"
@@ -230,7 +232,7 @@
    116|
    117|---
    118|
-   119|## Item #008 — 任务装备/机甲化 (任务视觉) 🔧 running (Stage 1 done 2026-06-17, restart 2026-06-24 PM, 等 Stage 2/3/4)
+   119|## Item #008 — 任务装备/机甲化 (任务视觉) ✅ done (2026-06-24, 4 stages all merged, PR #44)
    120|
    121|> 用户原话 (2026-06-08): "先 hold 一下"
    122|> 用户提到"小朋友喜欢机甲风格" → 当时推荐 B 方案
@@ -293,7 +295,7 @@
    179|
    180|---
    181|
-   182|## Item #013 — 跑步 Milestone 金币袋 + 重新撤销语义 (Re-derive) 🔧 running (Stage 2 完成 2026-06-24, 等 Stage 1/3-6)
+   182|## Item #013 — 跑步 Milestone 金币袋 + 重新撤销语义 (Re-derive) ⏳ pending (Stage 2 claim 实际未 commit, 需 re-evaluate)
    183|
    184|> 用户原话 (feihao 2026-06-22 飞书 DM):
    185|> - "我希望的是跑步的 Milestone 可以奖励的是随机的金币, 不是游戏时间"
@@ -497,7 +499,7 @@
    383|  - **🚫 不做**: 音效, 历史 record 迁移 (留二期), wrangler deploy / git push
    384|  - `git commit -m "feat(running): admin revoke UI + cascade summary + docs (Item #013 §6)"`
    385|
-   386|**Status**: 🔧 running (Stage 2 done 2026-06-24, 等 Stage 1 / 3 / 4 / 5 / 6)
+   386|**Status**: ⏳ pending (Stage 2 claim 2026-06-24 "done" 但 commit 实际未存在 — git reflog + PR list cross-check 无 evidence; 6 stage 计划仍 valid 但需 PM 主动 re-evaluate: 是重做 Stage 1-6 全套 还是先 verify 现状,决定后再开 feat/013 跑)
    387|**风险**: 🔴 (改核心 invariant: reward semantic + revoke 逻辑 + modal flow; 6 stage 跨 5+ 文件, 需全套 regression; re-derive 算法需 careful audit_log 设计; UI 动画 + admin 双向改动, 一个 stage 错影响整体)
    388|**Started**: 2026-06-24
    389|**Commit (Stage 2)**: — (pending commit this cron run)
@@ -888,16 +890,18 @@
    774|
    775|---
    776|
-   777|## 📊 归档统计 (10 Item, 2026-06-24 累计)
-   778|
-   779|| Status | Count | Items |
-   780||---|---:|---|
-   781|| ✅ done | 8 | #001 emoji / #002 睡眠 / #005 三进度条 / #006 打卡日历 (PR #41) / #008 机甲化 (4 stages) / #009 硬删 / #011 跑步地图 (PR #42) / #012 calendar icon tabs (PR #43) |
-   782|| 🚫 blocked → 归档 | 2 | #003 英语 / #004 老师投诉 |
-   783|| **总计** | **10** | 全部归档 |
-   784|
-   785|> 📌 **当前清单** (active): #007 hold / #013 🔧 running (Stage 2 done 2026-06-24, restart PM 跑 Stage 1+3+4+5+6)
-   786|> 当前 ⏳ pending = **0**
+   ## 📊 归档统计 (12 Item, 2026-07-06 累计)
+
+   | Status | Count | Items |
+   |---|---:|---|
+   | ✅ done | 10 | #001 emoji / #002 睡眠 / #005 三进度条 / #006 打卡日历 (PR #41) / #008 机甲化 (4 stages, PR #44) / #009 硬删 / #011 跑步地图 (PR #42) / #012 calendar icon tabs (PR #43) / #014 暂停任务 (PR #45) / #015 申请金币 (PR #47) |
+   | 🚫 blocked → 归档 | 2 | #003 英语 / #004 老师投诉 |
+   | **总计** | **12** | 全部归档 |
+
+   > 📌 **当前清单** (active): #007 hold / #013 ⏳ pending (Stage 2 claim 实际未 commit, 需 PM re-evaluate)
+   > 当前 ⏳ pending = **1** (#013)
+   > 当前 ⏸ hold = **1** (#007)
+   > 当前 🔧 running = **0**
    787|
    788|> #006 2026-06-20 PM-fix: status → ✅ done, NIGHTLY-TODO 归档 (从主清单移到此处, 跟 #001/#002/#005/#009 同档; 完整 commit 历史 `0389c85` / `569e10c` / `c5d8c57` / `5abe507` / `f2c82e6` / `a4eb27b` / `ade11a1` / `064622a`, e2e 12/12 + unit 313/313, Qual verified, Iron Rule #25 added)
    789|
