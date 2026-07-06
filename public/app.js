@@ -52,6 +52,66 @@ function renderRunningCum() {
   el.hidden = state.running.cumKm <= 0;
 }
 
+// Item #016 §1: 暑假作业 modal (临时, 开学后下线 ~2026-09)
+// 6 items hardcoded (Q1=A1); 全勾才能 submit (用户原话 "挨个确认是否都完成了");
+// 提交后复用现有 completeTask(task.id) 走 task_completions 路径
+const SUMMER_HOMEWORK_TASK_NAME = '每日完成暑假作业';
+const SUMMER_HOMEWORK_ITEMS = [
+  { id: 'chinese', icon: '📝', name: '语文词语', hint: '抄写 2 遍,默写 1 遍' },
+  { id: 'math-school', icon: '🔢', name: '数学 (校内)', hint: '1 天 1 题/课/页 (kid 自评)' },
+  { id: 'english-vocab', icon: '📖', name: '英语单词', hint: '每天默写 1 课 (豆包报听写)' },
+  { id: 'english-reading', icon: '📚', name: '英语绘本', hint: '每天打卡 3 本,听 1 小时以上' },
+  { id: 'math-extra', icon: '🧮', name: '数学举一反三', hint: 'A 册:课内没做完做半周,做完后一天一周;B 册:周末一天基础一天提高' },
+  { id: 'english-class', icon: '🗓️', name: '英语外教课', hint: '每周六 4:15-6:15,课后两天内完成作业' },
+];
+
+let _summerHomeworkCurrentTask = null;
+
+function showSummerHomeworkModal(task) {
+  _summerHomeworkCurrentTask = task;
+  const modal = document.getElementById('summer-homework-modal');
+  const list = document.getElementById('summer-homework-list');
+  const submitBtn = document.getElementById('summer-homework-submit');
+  if (!modal || !list || !submitBtn) return;
+
+  list.innerHTML = SUMMER_HOMEWORK_ITEMS.map((item) => `
+    <label class="summer-homework-item">
+      <input type="checkbox" data-item-id="${item.id}" />
+      <span class="summer-homework-item-icon" aria-hidden="true">${item.icon}</span>
+      <span class="summer-homework-item-body">
+        <span class="summer-homework-item-name">${item.name}</span>
+        <span class="summer-homework-item-hint">${item.hint}</span>
+      </span>
+    </label>
+  `).join('');
+
+  // Reset submit button + bind change handler
+  submitBtn.disabled = true;
+  list.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const allChecked = Array.from(list.querySelectorAll('input[type="checkbox"]'))
+        .every((c) => c.checked);
+      submitBtn.disabled = !allChecked;
+    });
+  });
+
+  modal.hidden = false;
+}
+
+function closeSummerHomeworkModal() {
+  const modal = document.getElementById('summer-homework-modal');
+  if (modal) modal.hidden = true;
+  _summerHomeworkCurrentTask = null;
+}
+
+function submitSummerHomework() {
+  const task = _summerHomeworkCurrentTask;
+  if (!task) return;
+  closeSummerHomeworkModal();
+  // Reuse existing task 打卡 endpoint (跟 #010/#011 modal 同 pattern)
+  completeTask(task.id);
+}
+
 function openRunningCheckinModal() {
   const modal = document.getElementById('running-checkin-modal');
   const err = document.getElementById('running-checkin-error');
@@ -987,6 +1047,9 @@ function renderTasks() {
       if (!btn.disabled) {
         btn.addEventListener('click', () => completeTask(t.id));
       }
+    } else if (t.name === SUMMER_HOMEWORK_TASK_NAME) {
+      // Item #016 §1: 暑假作业 modal 拦截 (临时, 开学后下线)
+      btn.addEventListener('click', () => showSummerHomeworkModal(t));
     } else {
       btn.addEventListener('click', () => completeTask(t.id));
     }
@@ -1716,6 +1779,9 @@ function bindEvents() {
     e.preventDefault();
     submitEvent(e.target);
   });
+  // Item #016 §1: 暑假作业 modal (临时, 开学后下线)
+  $('#summer-homework-cancel').addEventListener('click', closeSummerHomeworkModal);
+  $('#summer-homework-submit').addEventListener('click', submitSummerHomework);
   // Refresh
   $('#btn-refresh').addEventListener('click', () => { toast('刷新中…', 'info'); refreshAll(); });
   // Click on modal backdrop closes it
