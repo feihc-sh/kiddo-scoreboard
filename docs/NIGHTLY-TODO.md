@@ -39,15 +39,17 @@
 
 ---
 
-    ## 📋 当前清单 (2 个 Item: 1 ⏳ pending, 0 🔧 running, 1 ⏸ hold)
+    ## 📋 当前清单 (3 个 Item: 2 ⏳ pending, 0 🔧 running, 1 ⏸ hold)
 
     > 📌 **Drift fix 2026-06-24 (PM 修)**: #011 ✅ done (PR #42 已 merged 2026-06-21), #012 ✅ done (PR #43 已 merged 2026-06-21), #008 ✅ done (4 stages all merged 2026-06-24) — 移到下方归档段
-    > 当前 active: #007 hold / #013 ⏳ pending (Stage 2 claim 完成但 commit 实际从未存在,见下方 📌 2026-07-06 注释)
+    > 当前 active: #007 hold / #013 ⏳ pending (Stage 2 claim 完成但 commit 实际从未存在,见下方 📌 2026-07-06 注释) / #016 ⏳ pending (暑假作业 modal, 2026-07-04 spec 拍板, 2026-07-06 重新入池,见下方 Item 段)
     > 2026-06-24 PM 1 晚连续跑完 #008 4 stages (3 晚预算 → 1 晚): Stage 2+3 CC, Stage 4 PM 自实现 docs
     >
     > 📌 **2026-07-04 新需求入池**: #014 (suspend task) + #015 (申请金币), 当日已拍板 (Q1=A1 Q2=B1 + Q3-5 默认), 详情见下方 Item 段
     >
     > 📌 **Drift fix 2026-07-06 (PM 修)**: #014 ✅ done (PR #45 merged 2026-07-05) → 移到归档段; #015 ✅ done (PR #47 merged 2026-07-06) → 移到归档段; #006 / #008 section header 修 (旧 header 还写 🔧 running, body Status 已 ✅ done, 现统一修); #013 从 🔧 running 修回 ⏳ pending (Stage 2 commit 实际未存在, 需 re-evaluate 再开跑)
+    >
+    > 📌 **#016 重新入池 2026-07-06** (PM 修): 之前在 `feat/015-coin-request` commit `2aa04aa` 加过, M1 reset 时被 force-push 抹掉, 现从 reflog 恢复 spec 重新入池 (Q1=A1 hardcoded + Q2=B2 no photo 已拍板); 另: 79d8ad3 文件有 776 行 line-number-prefix corrupt, 98a788e 修
 
     ## Item #014 — Admin 暂停任务 (suspend / 恢复, 不删) ✅ done (2026-07-05, PR #45 merged)
 
@@ -512,6 +514,63 @@ export async function writeRevokeAuditLog(db, recordId, details): void
 
 ---
 
+## Item #016 — 暑假作业 Modal (临时, 开学后下线) ⏳ pending
+
+> 用户原话 (2026-07-04 DM): "我想新加一个界面 — 当用户点击'暑假每日打卡'的时候，要弹出来一个确认框。确认框中包含他的几项暑假作业，他要挨个确认是否都完成了，然后才算是打卡成功。"
+
+**核心设计 (临时功能, 不值得大投资)**:
+- **触发**: kid UI 点 task "每日完成暑假作业" (PM 手动在 admin UI 创建) → 弹 modal (override 原有"直接打卡"逻辑)
+- **Modal 内容**: 6 项暑假作业 list + checkboxes
+- **必填行为**: 全部勾 才算打卡成功 (用户原话 "挨个确认是否都完成了")
+- **提交后**: 写入 `task_completions` (跟现有 task 打卡同路径) + award token_reward (1 金币,跟其他 task 一样)
+- **开学后清理** (~2026-09 后): 删 task + 删 modal 触发代码 + 删 modal UI (~5 min cleanup)
+
+**已拍板 (2026-07-04)**:
+1. Q1 (作业 item 来源) = **A1 hardcoded** (前端常量, 6 items 写死在 `public/app.js`) — 临时 → 不值得 DB schema 改动
+2. Q2 (拍照) = **B2 不要** — 临时 → 减少 infra (R2 setup 30 min)
+3. Q3-Q4 (拍照相关) = N/A
+4. 项目 = kiddo-scoreboard
+
+**6 项暑假作业 (PM 整理 2026-07-04)**:
+
+**学校作业 (3 项)**:
+1. 📝 **语文词语** — 抄写 2 遍,默写 1 遍
+2. 🔢 **数学** — 1 天 1 [题/课/页, 语义模糊, kid 自评]
+3. 📖 **英语单词** — 每天默写 1 课 (用 豆包 报听写)
+
+**课外 (3 项)**:
+4. 📚 **英语绘本** — 每天打卡 3 本,听 1 小时以上
+5. 🧮 **数学举一反三** — A 册:课内没做完做半周,做完后一天一周。B 册:周末一天基础一天提高
+6. 🗓️ **英语外教课** — 每周六 4:15-6:15 (可调到周三/五晚上),课后两天内完成作业
+
+**M1 设计** (per `feihao-pm-autonomy` §4f pitfall-13 复用现有 flow):
+- 拦截 task click → 若 task.name === "每日完成暑假作业" → showSummerHomeworkModal(task)
+- Modal 全勾 → submit → 复用现有 `completeTask(task.id)` (跟其他 task 打卡同 endpoint)
+- 0 新 endpoint / 0 新 schema / 0 新 admin section
+- Task 本身由 PM 在 admin UI 创建 (1 次性手动操作,~2 min)
+
+**Action Plan** (临时功能, 1 段 ≤ 30 min 草案)**:
+- [ ] **Stage 1 (≤30 min)**: kid UI modal
+  - `public/index.html`: `#summer-homework-modal` 容器 (默认 hidden)
+  - `public/app.js`: `SUMMER_HOMEWORK_ITEMS` 常量 + `showSummerHomeworkModal(task)` 函数 + 在 `renderTasks` click handler 加 task.name 匹配
+  - `public/app.css`: `.summer-homework-modal` 样式 (复用 #010 sprint modal 同款 CSS)
+  - `tests/unit/summer-homework-modal.test.ts`: 6 items 全勾 + 提交逻辑
+  - `tests/e2e/summer-homework-modal.spec.ts`: iPad viewport: 点 task → 弹 modal → 全勾 → 提交 → 打卡成功
+  - `git commit -m "feat(homework): 暑假作业 modal 临时功能 (Item #016 §1)"`
+- [ ] **Stage 2 (≤10 min, 可选)**: docs (临时功能,优先级低)
+  - PRD §3.X + TEST_PLAN §3.X (1 段, ~50 LoC)
+  - `git commit -m "feat(homework): docs (Item #016 §2)"`
+- [ ] **手动步骤 (5 min, PM 在 admin UI)**: 创建 task "每日完成暑假作业" (icon 📝, category=study, target_account=pocket_money, token_reward=1, is_active=1, sort_order=10) — 让 modal trigger 在 production 生效
+
+**Status**: ⏳ pending (2026-07-04 spec 拍板, 2026-07-06 重新入池, 🟢, 等 PM 主动派跑)
+**风险**: 🟢 (临时功能, hardcoded 无 schema 改动; 5 min cleanup 开学后)
+**Started**: 2026-07-06
+**Completed**: —
+**Commit**: —
+**Branch**: `feat/016-summer-homework`
+
+---
+
 ## 📦 归档 (用户 2026-06-08 拍板: 全部不实现, 留历史参考)
 
 ---
@@ -898,8 +957,8 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
    | 🚫 blocked → 归档 | 2 | #003 英语 / #004 老师投诉 |
    | **总计** | **12** | 全部归档 |
 
-   > 📌 **当前清单** (active): #007 hold / #013 ⏳ pending (Stage 2 claim 实际未 commit, 需 PM re-evaluate)
-   > 当前 ⏳ pending = **1** (#013)
+   > 📌 **当前清单** (active): #007 hold / #013 ⏳ pending (Stage 2 claim 实际未 commit, 需 PM re-evaluate) / #016 ⏳ pending (暑假作业 modal 临时功能, 2026-07-06 重新入池)
+   > 当前 ⏳ pending = **2** (#013, #016)
    > 当前 ⏸ hold = **1** (#007)
    > 当前 🔧 running = **0**
 
