@@ -66,6 +66,7 @@ const SUMMER_HOMEWORK_ITEMS = [
 ];
 
 let _summerHomeworkCurrentTask = null;
+let _summerHomeworkSubmitting = false;
 
 function showSummerHomeworkModal(task) {
   _summerHomeworkCurrentTask = task;
@@ -104,12 +105,24 @@ function closeSummerHomeworkModal() {
   _summerHomeworkCurrentTask = null;
 }
 
-function submitSummerHomework() {
-  const task = _summerHomeworkCurrentTask;
-  if (!task) return;
-  closeSummerHomeworkModal();
-  // Reuse existing task 打卡 endpoint (跟 #010/#011 modal 同 pattern)
-  completeTask(task.id);
+async function submitSummerHomework() {
+  // PR #50 follow-up #2: explicit guard against double-click / rapid re-entry.
+  // The previous version relied on closeSummerHomeworkModal() setting
+  // _summerHomeworkCurrentTask = null as a side-effect — a brittle
+  // dependency. If a future refactor moves closeModal() after completeTask()
+  // (e.g. to add an in-flight spinner), duplicate submissions become possible.
+  // An explicit boolean + await makes the guard self-contained and obvious.
+  if (_summerHomeworkSubmitting) return;
+  _summerHomeworkSubmitting = true;
+  try {
+    const task = _summerHomeworkCurrentTask;
+    if (!task) return;
+    closeSummerHomeworkModal();
+    // Reuse existing task 打卡 endpoint (跟 #010/#011 modal 同 pattern)
+    await completeTask(task.id);
+  } finally {
+    _summerHomeworkSubmitting = false;
+  }
 }
 
 function openRunningCheckinModal() {

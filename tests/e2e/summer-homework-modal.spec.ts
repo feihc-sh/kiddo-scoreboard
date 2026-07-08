@@ -94,6 +94,8 @@ test('HAPPY 3: full check + submit completes the task (task_completion row + bal
   const balanceBeforeRaw = d1Exec(
     "SELECT json_object('game_time', COALESCE(SUM(CASE WHEN type='game_time' AND status='approved' THEN change_value ELSE 0 END),0),'pocket_money', COALESCE(SUM(CASE WHEN type='pocket_money' AND status='approved' THEN change_value ELSE 0 END),0),'coins', COALESCE(SUM(CASE WHEN type='coins' AND status='approved' THEN change_value ELSE 0 END),0)) FROM score_events WHERE user_id=2;"
   );
+  const balanceBefore = JSON.parse(String(balanceBeforeRaw).trim());
+  const coinsBefore = Number(balanceBefore.coins ?? 0);
 
   // Click task → modal → check all 6 → submit
   await page.locator('#task-shortcuts .task-btn', { hasText: '每日完成暑假作业' }).click();
@@ -109,6 +111,37 @@ test('HAPPY 3: full check + submit completes the task (task_completion row + bal
   // task_completion row written (1 row for the new completion)
   const completionCountRaw = d1Exec("SELECT COUNT(*) FROM task_completions;");
   expect(String(completionCountRaw).trim()).toBe('1');
+
+  // PR #50 follow-up #1: extend the previously-dead balanceBeforeRaw snapshot
+  // into a real assertion on the +1 coin grant. The task-completion endpoint
+  // (Coin System M2 — see src/routes/me/tasks.ts + buildTaskCoinGrantSQL in
+  // src/utils/coin.ts) writes one score_event per completion: type='coins',
+  // change_value=1, status='approved', source='task', submitted_by='child',
+  // reason='task:#<task_id>'. Filter by change_value=1 + source='task' to
+  // pinpoint the task grant specifically (a +3 daily-bonus event may also
+  // fire if this is the only active task — isolating by amount keeps the
+  // test decoupled from bonus logic).
+  const taskCoinEventRaw = d1Exec(
+    "SELECT json_object('type', type, 'change_value', change_value, 'status', status, 'submitted_by', submitted_by, 'source', source, 'reason', reason) FROM score_events WHERE user_id=2 AND type='coins' AND change_value=1 AND source='task' ORDER BY id DESC LIMIT 1;"
+  );
+  const taskCoinEvent = JSON.parse(String(taskCoinEventRaw).trim());
+  expect(taskCoinEvent.type).toBe('coins');
+  expect(taskCoinEvent.change_value).toBe(1);
+  expect(taskCoinEvent.status).toBe('approved');
+  expect(taskCoinEvent.submitted_by).toBe('child');
+  expect(taskCoinEvent.source).toBe('task');
+  // reason format: 'task:#<task_id>' (see buildTaskCoinGrantSQL in src/utils/coin.ts:325)
+  expect(taskCoinEvent.reason).toMatch(/^task:#\d+$/);
+
+  // Coins balance must have increased by at least 1 (the +1 coin grant);
+  // assert strictly-greater rather than an exact delta so a future +3
+  // daily-bonus change (or its absence on multi-task days) doesn't
+  // make this test brittle.
+  const balanceAfterRaw = d1Exec(
+    "SELECT json_object('game_time', COALESCE(SUM(CASE WHEN type='game_time' AND status='approved' THEN change_value ELSE 0 END),0),'pocket_money', COALESCE(SUM(CASE WHEN type='pocket_money' AND status='approved' THEN change_value ELSE 0 END),0),'coins', COALESCE(SUM(CASE WHEN type='coins' AND status='approved' THEN change_value ELSE 0 END),0)) FROM score_events WHERE user_id=2;"
+  );
+  const balanceAfter = JSON.parse(String(balanceAfterRaw).trim());
+  expect(Number(balanceAfter.coins)).toBeGreaterThan(coinsBefore);
 
   // Wait for the task to render as completed (button shows "✓" or similar)
   await page.waitForTimeout(500);
