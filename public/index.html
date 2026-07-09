@@ -347,6 +347,32 @@
     </div>
   </div>
 
+  <!-- Item #013 §4: 金币袋动画 modal — shown when child reaches a new milestone.
+       Reuses .modal-back / .modal shell; opt-in via .coin-bag-modal--animate. -->
+  <div id="coin-bag-modal" class="modal-back" hidden>
+    <div class="modal coin-bag-modal">
+      <h2 class="modal-title" id="coin-bag-title">🎉 恭喜到达 嘉定新城!</h2>
+      <div class="coin-bag-stage">
+        <div class="coin-bag" id="coin-bag-graphic">👜</div>
+        <div class="coin-bag-coin coin-bag-coin-1">🪙</div>
+        <div class="coin-bag-coin coin-bag-coin-2">🪙</div>
+        <div class="coin-bag-coin coin-bag-coin-3">🪙</div>
+        <div class="coin-bag-coin coin-bag-coin-4">🪙</div>
+        <div class="coin-bag-coin coin-bag-coin-5">🪙</div>
+        <div class="coin-bag-coin coin-bag-coin-6">🪙</div>
+        <div class="coin-bag-coin coin-bag-coin-7">🪙</div>
+        <div class="coin-bag-coin coin-bag-coin-8">🪙</div>
+        <div class="coin-bag-coin coin-bag-coin-9">🪙</div>
+        <div class="coin-bag-coin coin-bag-coin-10">🪙</div>
+      </div>
+      <div class="coin-bag-amount" id="coin-bag-amount">+2</div>
+      <div class="coin-bag-unit">枚 金币</div>
+      <div class="modal-actions">
+        <button type="button" id="coin-bag-close" class="btn btn-primary">继续跑!</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Item #011 §3: 通关大图 modal — 80% screen, full-screen confetti.
        NOT a .modal-back (custom overlay) to avoid .modal backdrop blur cutting
        the SVG map underneath. -->

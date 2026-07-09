@@ -3040,3 +3040,155 @@ body {
 .running-node.unreached text {
   fill: #9ca3af;
 }
+
+
+/* Item #013 §4 — Coin bag milestone modal (HTML + CSS animation skeleton)
+   Reuses .modal-back / .modal / .modal-title / .modal-actions / .btn shell.
+   4-phase keyframe chain (3s total, single `.coin-bag-modal--animate` toggle):
+     0.0–0.8s drop       (bag translateY -350% → -50% with bounce)
+     0.8–1.6s shake-open (bag rotate ±2deg × 4)
+     1.6–2.5s scatter    (10 coins fly outward, staggered 0.05s each)
+     2.5–3.0s number-fade (+X 枚 fade+scale in)
+*/
+.coin-bag-modal {
+  max-width: 80vw;
+  max-height: 80vh;
+  padding: 32px 28px;
+  text-align: center;
+  overflow: visible;
+}
+.coin-bag-stage {
+  position: relative;
+  height: 240px;
+  margin: 24px 0;
+  overflow: visible;
+}
+.coin-bag {
+  font-size: 96px;
+  line-height: 1;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  filter: drop-shadow(0 0 18px rgba(0, 245, 255, 0.45));
+}
+.coin-bag-coin {
+  font-size: 32px;
+  line-height: 1;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.coin-bag-amount {
+  font-family: var(--font-mono, 'Share Tech Mono', monospace);
+  font-size: 72px;
+  font-weight: 900;
+  color: var(--cyan, #00d4ff);
+  text-align: center;
+  text-shadow: 0 0 32px var(--cyan-glow, rgba(0, 245, 255, 0.45));
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 8px 0 4px;
+  opacity: 0;
+}
+.coin-bag-unit {
+  font-family: var(--font-mono, 'Share Tech Mono', monospace);
+  font-size: 20px;
+  color: var(--text-muted, #4A6275);
+  text-align: center;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  opacity: 0;
+}
+
+/* Phase 1 — Drop: bag enters from above the modal, bounce on landing */
+@keyframes coin-bag-drop {
+  0%   { transform: translate(-50%, -350%); }
+  60%  { transform: translate(-50%, -50%) scale(0.95); }
+  80%  { transform: translate(-50%, -50%) scale(1.05); }
+  100% { transform: translate(-50%, -50%) scale(1.0); }
+}
+
+/* Phase 2 — Open: bag shakes side-to-side (rotate ±2deg × 4) */
+@keyframes coin-bag-shake-open {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0); }
+  20%      { transform: translate(-50%, -50%) rotate(2deg); }
+  40%      { transform: translate(-50%, -50%) rotate(-2deg); }
+  60%      { transform: translate(-50%, -50%) rotate(2deg); }
+  80%      { transform: translate(-50%, -50%) rotate(-2deg); }
+}
+
+/* Phase 3 — Scatter: 10 coins fly in different directions, each with own keyframe
+   (so translate values can differ — CSS doesn't allow per-element keyframes). */
+@keyframes coin-bag-coin-1-scatter  { 0% { transform: translate(-50%, -50%) rotate(0); opacity: 1; } 100% { transform: translate(calc(-50% -  80px), calc(-50% - 160px)) rotate(360deg); opacity: 0; } }
+@keyframes coin-bag-coin-2-scatter  { 0% { transform: translate(-50%, -50%) rotate(0); opacity: 1; } 100% { transform: translate(calc(-50% +  90px), calc(-50% - 150px)) rotate(-300deg); opacity: 0; } }
+@keyframes coin-bag-coin-3-scatter  { 0% { transform: translate(-50%, -50%) rotate(0); opacity: 1; } 100% { transform: translate(calc(-50% -  50px), calc(-50% - 180px)) rotate(420deg); opacity: 0; } }
+@keyframes coin-bag-coin-4-scatter  { 0% { transform: translate(-50%, -50%) rotate(0); opacity: 1; } 100% { transform: translate(calc(-50% +  60px), calc(-50% - 130px)) rotate(-360deg); opacity: 0; } }
+@keyframes coin-bag-coin-5-scatter  { 0% { transform: translate(-50%, -50%) rotate(0); opacity: 1; } 100% { transform: translate(calc(-50% - 100px), calc(-50% - 140px)) rotate(300deg); opacity: 0; } }
+@keyframes coin-bag-coin-6-scatter  { 0% { transform: translate(-50%, -50%) rotate(0); opacity: 1; } 100% { transform: translate(calc(-50% + 100px), calc(-50% - 120px)) rotate(-420deg); opacity: 0; } }
+@keyframes coin-bag-coin-7-scatter  { 0% { transform: translate(-50%, -50%) rotate(0); opacity: 1; } 100% { transform: translate(calc(-50% -  40px), calc(-50% - 170px)) rotate(380deg); opacity: 0; } }
+@keyframes coin-bag-coin-8-scatter  { 0% { transform: translate(-50%, -50%) rotate(0); opacity: 1; } 100% { transform: translate(calc(-50% +  40px), calc(-50% - 175px)) rotate(-340deg); opacity: 0; } }
+@keyframes coin-bag-coin-9-scatter  { 0% { transform: translate(-50%, -50%) rotate(0); opacity: 1; } 100% { transform: translate(calc(-50% -  70px), calc(-50% - 125px)) rotate(320deg); opacity: 0; } }
+@keyframes coin-bag-coin-10-scatter { 0% { transform: translate(-50%, -50%) rotate(0); opacity: 1; } 100% { transform: translate(calc(-50% +  70px), calc(-50% - 145px)) rotate(-380deg); opacity: 0; } }
+
+/* Phase 4 — Reveal: large "+X 枚" number fade + scale-in */
+@keyframes coin-bag-number-fade {
+  0%   { opacity: 0; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1.0); }
+}
+
+/* Single trigger: add `.coin-bag-modal--animate` on the modal root to play
+   the full 3s sequence. All sub-elements chain via animation-delay.
+   `forwards` keeps the final state (bag landed, coins gone, number visible). */
+.coin-bag-modal--animate .coin-bag {
+  animation: coin-bag-drop 0.8s ease-out forwards,
+             coin-bag-shake-open 0.8s ease-in-out 0.8s forwards;
+}
+.coin-bag-modal--animate .coin-bag-coin-1  { animation: coin-bag-coin-1-scatter  0.9s ease-out 1.60s forwards; }
+.coin-bag-modal--animate .coin-bag-coin-2  { animation: coin-bag-coin-2-scatter  0.9s ease-out 1.65s forwards; }
+.coin-bag-modal--animate .coin-bag-coin-3  { animation: coin-bag-coin-3-scatter  0.9s ease-out 1.70s forwards; }
+.coin-bag-modal--animate .coin-bag-coin-4  { animation: coin-bag-coin-4-scatter  0.9s ease-out 1.75s forwards; }
+.coin-bag-modal--animate .coin-bag-coin-5  { animation: coin-bag-coin-5-scatter  0.9s ease-out 1.80s forwards; }
+.coin-bag-modal--animate .coin-bag-coin-6  { animation: coin-bag-coin-6-scatter  0.9s ease-out 1.85s forwards; }
+.coin-bag-modal--animate .coin-bag-coin-7  { animation: coin-bag-coin-7-scatter  0.9s ease-out 1.90s forwards; }
+.coin-bag-modal--animate .coin-bag-coin-8  { animation: coin-bag-coin-8-scatter  0.9s ease-out 1.95s forwards; }
+.coin-bag-modal--animate .coin-bag-coin-9  { animation: coin-bag-coin-9-scatter  0.9s ease-out 2.00s forwards; }
+.coin-bag-modal--animate .coin-bag-coin-10 { animation: coin-bag-coin-10-scatter 0.9s ease-out 2.05s forwards; }
+.coin-bag-modal--animate .coin-bag-amount,
+.coin-bag-modal--animate .coin-bag-unit {
+  animation: coin-bag-number-fade 0.5s ease-out 2.5s forwards;
+}
+
+@media (max-width: 768px) {
+  .coin-bag-modal {
+    max-width: 95vw;
+    padding: 24px 18px;
+  }
+  .coin-bag { font-size: 64px; }
+  .coin-bag-stage { height: 180px; margin: 16px 0; }
+  .coin-bag-coin { font-size: 24px; }
+  .coin-bag-amount { font-size: 48px; }
+  .coin-bag-unit { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .coin-bag-modal--animate .coin-bag,
+  .coin-bag-modal--animate .coin-bag-coin,
+  .coin-bag-modal--animate .coin-bag-amount,
+  .coin-bag-modal--animate .coin-bag-unit {
+    animation: none !important;
+  }
+  .coin-bag-amount,
+  .coin-bag-unit {
+    opacity: 1;
+  }
+  .coin-bag-coin {
+    opacity: 0;
+  }
+}
