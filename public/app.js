@@ -486,7 +486,7 @@ function renderRunningMap(mapData, cumKm) {
     else break;
   }
 
-  // Render nodes
+  // Render nodes (Item #013 §3: r 7→10, 🎯 hint, unreached opacity 0.5)
   nodesGroup.innerHTML = '';
   points.forEach((pt, idx) => {
     const pos = NODE_POSITIONS[idx];
@@ -497,7 +497,7 @@ function renderRunningMap(mapData, cumKm) {
     const isCurrent = idx === currentPointIdx;
     const stateClass = isCurrent ? 'current' : isReached ? 'reached' : 'unreached';
 
-    // Short label: extract just the city/area name
+    // Short label: extract just the city/area name (unchanged from existing code)
     const rawLabel = pt.name || '';
     const shortLabel = rawLabel
       .replace(/^🏁\s*/, '')
@@ -508,16 +508,31 @@ function renderRunningMap(mapData, cumKm) {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.classList.add('running-node', stateClass);
     g.setAttribute('transform', `translate(${x}, ${y})`);
+    // Item #013 §3: unreached nodes fade to 0.5 opacity (clearly dimmed vs reached)
+    if (stateClass === 'unreached') g.setAttribute('opacity', '0.5');
 
+    // Item #013 §3: node r 7→10 (was 7); current stays at 12 to keep visual hierarchy
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('r', isCurrent ? '9' : '7');
+    circle.setAttribute('r', isCurrent ? '12' : '10');
     circle.setAttribute('cx', '0');
     circle.setAttribute('cy', '0');
     g.appendChild(circle);
 
+    // Item #013 §3: 🎯 emoji hint at center, 9px, Share Tech Mono — distinguishes
+    // "milestone reward point" from generic dot. Shown for all nodes (reached/unreached/current).
+    const emoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    emoji.setAttribute('x', '0');
+    emoji.setAttribute('y', '3');
+    emoji.setAttribute('text-anchor', 'middle');
+    emoji.setAttribute('font-size', '9');
+    emoji.setAttribute('font-family', 'Share Tech Mono, monospace');
+    emoji.textContent = '🎯';
+    g.appendChild(emoji);
+
+    // Short text label below the emoji (unchanged font sizing, but raise y to clear emoji)
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     text.setAttribute('x', '0');
-    text.setAttribute('y', '4');
+    text.setAttribute('y', '22');
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('font-size', '9');
     text.setAttribute('font-family', 'Share Tech Mono, monospace');

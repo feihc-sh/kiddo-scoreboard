@@ -39,10 +39,10 @@
 
 ---
 
-    ## 📋 当前清单 (3 个 Item: 2 ⏳ pending, 0 🔧 running, 1 ⏸ hold)
+    ## 📋 当前清单 (1 个 Item: 1 ⏳ pending, 0 🔧 running, 1 ⏸ hold)
 
     > 📌 **Drift fix 2026-06-24 (PM 修)**: #011 ✅ done (PR #42 已 merged 2026-06-21), #012 ✅ done (PR #43 已 merged 2026-06-21), #008 ✅ done (4 stages all merged 2026-06-24) — 移到下方归档段
-    > 当前 active: #007 hold / #013 ⏳ pending (Stage 2 claim 完成但 commit 实际从未存在,见下方 📌 2026-07-06 注释) / #016 ⏳ pending (暑假作业 modal, 2026-07-04 spec 拍板, 2026-07-06 重新入池,见下方 Item 段)
+    > 当前 active: #007 ⏸ hold (用户 2026-06-08 暂缓) / #013 ⏳ pending (Stage 2 ✅ done `df42182` in main, 剩 5 stage 待跑, 见下方 📌 2026-07-07 drift fix 注释)
     > 2026-06-24 PM 1 晚连续跑完 #008 4 stages (3 晚预算 → 1 晚): Stage 2+3 CC, Stage 4 PM 自实现 docs
     >
     > 📌 **2026-07-04 新需求入池**: #014 (suspend task) + #015 (申请金币), 当日已拍板 (Q1=A1 Q2=B1 + Q3-5 默认), 详情见下方 Item 段
@@ -50,6 +50,8 @@
     > 📌 **Drift fix 2026-07-06 (PM 修)**: #014 ✅ done (PR #45 merged 2026-07-05) → 移到归档段; #015 ✅ done (PR #47 merged 2026-07-06) → 移到归档段; #006 / #008 section header 修 (旧 header 还写 🔧 running, body Status 已 ✅ done, 现统一修); #013 从 🔧 running 修回 ⏳ pending (Stage 2 commit 实际未存在, 需 re-evaluate 再开跑)
     >
     > 📌 **#016 重新入池 2026-07-06** (PM 修): 之前在 `feat/015-coin-request` commit `2aa04aa` 加过, M1 reset 时被 force-push 抹掉, 现从 reflog 恢复 spec 重新入池 (Q1=A1 hardcoded + Q2=B2 no photo 已拍板); 另: 79d8ad3 文件有 776 行 line-number-prefix corrupt, 98a788e 修
+    >
+    > 📌 **Drift fix 2026-07-07 (cron 修)**: #016 Stage 1 实际 `37e3f02` 已 commit 2026-07-06 22:46 in branch `feat/016-summer-homework` (8 vitest + 4 e2e + 4 docs 9 files +621/-1), 但 TODO Status 仍 ⏳ pending — 标 ✅ done + 移归档; #013 Stage 2 实际 `df42182` 已 commit 2026-06-24 in main (migration 0012 + prize.ts rollCoinPrize + 4 files), 但 TODO Status 仍 ⏳ pending + 之前 drift fix note 误判 "Stage 2 commit 实际未存在" — 校正 Status, Stage 2 填 hash, 剩 5 stage 标 ⏳ pending 继续等跑
 
     ## Item #014 — Admin 暂停任务 (suspend / 恢复, 不删) ✅ done (2026-07-05, PR #45 merged)
 
@@ -297,7 +299,7 @@
 
 ---
 
-## Item #013 — 跑步 Milestone 金币袋 + 重新撤销语义 (Re-derive) ⏳ pending (Stage 2 claim 实际未 commit, 需 re-evaluate)
+## Item #013 — 跑步 Milestone 金币袋 + 重新撤销语义 (Re-derive) ⏳ pending (Stage 2 ✅ done `df42182`, 剩 5 stage 待跑)
 
 > 用户原话 (feihao 2026-06-22 飞书 DM):
 > - "我希望的是跑步的 Milestone 可以奖励的是随机的金币, 不是游戏时间"
@@ -501,20 +503,25 @@ export async function writeRevokeAuditLog(db, recordId, details): void
  - **🚫 不做**: 音效, 历史 record 迁移 (留二期), wrangler deploy / git push
  - `git commit -m "feat(running): admin revoke UI + cascade summary + docs (Item #013 §6)"`
 
-**Status**: ⏳ pending (Stage 2 claim 2026-06-24 "done" 但 commit 实际未存在 — git reflog + PR list cross-check 无 evidence; 6 stage 计划仍 valid 但需 PM 主动 re-evaluate: 是重做 Stage 1-6 全套 还是先 verify 现状,决定后再开 feat/013 跑)
+**Status**: ⏳ pending (drift fix 2026-07-07: Stage 2 ✅ done 2026-06-24, commit `df42182` on main — 之前 2026-07-06 drift fix note 误判"Stage 2 commit 实际未存在", 实际 `git log main -- migrations/0012_rename_awarded_minutes_to_coins.sql` 验证存在; 剩 Stage 1 + 3 + 4 + 5 + 6 待跑, **5 stage ≈ 5 cron runs**; re-derive 算法仍需 careful audit_log 设计, 风险 🔴 不变)
 **风险**: 🔴 (改核心 invariant: reward semantic + revoke 逻辑 + modal flow; 6 stage 跨 5+ 文件, 需全套 regression; re-derive 算法需 careful audit_log 设计; UI 动画 + admin 双向改动, 一个 stage 错影响整体)
 **Started**: 2026-06-24
-**Commit (Stage 2)**: — (pending commit this cron run)
-**未做**: Stage 1 (re-derive 基础设施) / Stage 3 (SVG milestone 视觉) / Stage 4 (coin bag modal HTML+CSS) / Stage 5 (触发逻辑 + 数据绑定) / Stage 6 (Admin 撤销 UI + cascade summary + 文档)
+**Commit (Stage 2)**: `df42182` (2026-06-24 01:31, 已在 main, migration 0012 + prize.ts rollCoinPrize + records.ts type=coins + 4 files 单测, 340/340 vitest 绿)
+**未做**: Stage 1 (re-derive 基础设施, src/utils/running-rederive.ts ~80 LoC + tests) / Stage 3 (SVG milestone 视觉) / Stage 4 (coin bag modal HTML+CSS) / Stage 5 (触发逻辑 + 数据绑定) / Stage 6 (Admin 撤销 UI + cascade summary + 文档)
 **依赖**: 不依赖 #008 (并行可跑); 不依赖 cron (PM 手动按 stage 启 CC, 1 stage 1 PR)
-**估算**: 总 **~400 LoC + ~330 LoC 测试**, 6 PR, **3 晚 cron** (Stage 1+2 一晚, 3+4 一晚, 5+6 一晚; 每晚 ≤2h 预算, ~3-4 stage/晚 实际)
+**估算**: 剩 **~320 LoC + ~270 LoC 测试** (Stage 1: 80+60, Stage 3: 40+50, Stage 4: 100+30, Stage 5: 50+40, Stage 6: 50+50+docs), 5 PR, **~3-5 晚 cron** (建议下次 cron 跑 Stage 1, 后续每个 cron run 1 stage)
+**Branch**: 仍待开 `feat/013-running-rederive-stage1` (Stage 1 时再开)
 **音效**: 用户拍板后再加 (Stage 5/6 之间插, ~20 LoC JS)
 **老 record 迁移**: Stage 6 之后可选, 不在 #013 scope
 **跨图 (002 苏州→杭州)**: 留二期, 不在 #013 scope
 
 ---
 
-## Item #016 — 暑假作业 Modal (临时, 开学后下线) ⏳ pending
+## 📦 归档 (用户 2026-06-08 拍板: 全部不实现, 留历史参考)
+
+---
+
+## Item #016 — 暑假作业 Modal (临时, 开学后下线) ✅ done (2026-07-06, branch `feat/016-summer-homework`, NOT merged per cron 红灯)
 
 > 用户原话 (2026-07-04 DM): "我想新加一个界面 — 当用户点击'暑假每日打卡'的时候，要弹出来一个确认框。确认框中包含他的几项暑假作业，他要挨个确认是否都完成了，然后才算是打卡成功。"
 
@@ -550,28 +557,24 @@ export async function writeRevokeAuditLog(db, recordId, details): void
 - Task 本身由 PM 在 admin UI 创建 (1 次性手动操作,~2 min)
 
 **Action Plan** (临时功能, 1 段 ≤ 30 min 草案)**:
-- [ ] **Stage 1 (≤30 min)**: kid UI modal
+- [x] **Stage 1 (≤30 min)**: kid UI modal ✅ (2026-07-06, commit `37e3f02`)
   - `public/index.html`: `#summer-homework-modal` 容器 (默认 hidden)
   - `public/app.js`: `SUMMER_HOMEWORK_ITEMS` 常量 + `showSummerHomeworkModal(task)` 函数 + 在 `renderTasks` click handler 加 task.name 匹配
   - `public/app.css`: `.summer-homework-modal` 样式 (复用 #010 sprint modal 同款 CSS)
   - `tests/unit/summer-homework-modal.test.ts`: 6 items 全勾 + 提交逻辑
   - `tests/e2e/summer-homework-modal.spec.ts`: iPad viewport: 点 task → 弹 modal → 全勾 → 提交 → 打卡成功
   - `git commit -m "feat(homework): 暑假作业 modal 临时功能 (Item #016 §1)"`
-- [ ] **Stage 2 (≤10 min, 可选)**: docs (临时功能,优先级低)
-  - PRD §3.X + TEST_PLAN §3.X (1 段, ~50 LoC)
+- [x] **Stage 2 (≤10 min, 可选)**: docs ✅ (in §1 commit, 不再单独跑)
+  - PRD §3.16 + TEST_PLAN §3.22 + PROGRESS v2.x + FEATURE_MATRIX 3.22
   - `git commit -m "feat(homework): docs (Item #016 §2)"`
 - [ ] **手动步骤 (5 min, PM 在 admin UI)**: 创建 task "每日完成暑假作业" (icon 📝, category=study, target_account=pocket_money, token_reward=1, is_active=1, sort_order=10) — 让 modal trigger 在 production 生效
 
-**Status**: ⏳ pending (2026-07-04 spec 拍板, 2026-07-06 重新入池, 🟢, 等 PM 主动派跑)
+**Status**: ✅ done (Stage 1 commit `37e3f02` 2026-07-06 22:46, branch `feat/016-summer-homework`, 未 merged to main per cron 红灯规则; 9 files +621/-1: index.html +13 / app.js +66 / app.css +61 / 1 unit (8 tests 全过) / 1 e2e (4 tests) / 4 docs; Stage 2 (docs) 已 in §1 commit, 不再单独跑; 387/389 vitest 绿, 2 pre-existing mecha failures baseline-consistent; 5 min 手动 follow-up: admin UI create task "每日完成暑假作业" 让 modal trigger production 生效)
 **风险**: 🟢 (临时功能, hardcoded 无 schema 改动; 5 min cleanup 开学后)
 **Started**: 2026-07-06
-**Completed**: —
-**Commit**: —
-**Branch**: `feat/016-summer-homework`
-
----
-
-## 📦 归档 (用户 2026-06-08 拍板: 全部不实现, 留历史参考)
+**Completed**: 2026-07-06
+**Commit (Stage 1)**: `37e3f02` (2026-07-06 22:46, 9 files +621/-1, 8 vitest + 4 e2e 全过, branch: feat/016-summer-homework, NOT merged)
+**Branch**: `feat/016-summer-homework` (未 merged, PM 决定: 保留 branch 等手动 merge or 留二期)
 
 ---
 

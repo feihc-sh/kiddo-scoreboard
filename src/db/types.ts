@@ -53,7 +53,13 @@ export type AuditAction =
   | 'event_hard_deleted' | 'completion_hard_deleted'
   // Module 8 (Health Check-in, RFC §3.3): health_events write actions. create/resolve
   // ship in M1; delete is reserved for v2 PM hard-delete UI (RFC §4.4 — not in v1).
-  | 'health_event_create' | 'health_event_resolve' | 'health_event_delete';
+  | 'health_event_create' | 'health_event_resolve' | 'health_event_delete'
+  // Module 9 (Running Map, RFC §3) + Item #013 R2 re-derive cascade.
+  // 'running_checkin' / 'running_map_complete' pre-existed in route code (Item #011/013 §2)
+  // but were never declared here — kept narrow on purpose so future audit-action
+  // additions get caught by the compiler.
+  | 'running_checkin' | 'running_map_complete'
+  | 'running_record_revoke' | 'running_record_compensation';
 
 // =============================================================
 // Row types (mirror SQL columns exactly)
