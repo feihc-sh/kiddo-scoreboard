@@ -475,12 +475,12 @@ export async function writeRevokeAuditLog(db, recordId, details): void
  - E2E: `tests/e2e/ui-running-map-milestones.spec.ts` (~50 LoC, 验证 iPad 视口 10 节点 visible, badge 文案)
  - `git commit -m "feat(running): SVG map milestone visual emphasis (Item #013 §3)"`
 
-- [ ] **Stage 4 (≤20 min)**: #coin-bag-modal HTML + CSS
- - `public/index.html` 加: `#coin-bag-modal` (跟 sprint modal 同级别, 80% 屏, 包含 bag graphic + 8-10 coin slots + 大数字 + 按钮)
- - `public/app.css` 加: `.coin-bag-*` 全部样式 (~100 LoC), 4 阶段 @keyframes (drop-bounce, bag-shake-open, coin-scatter, number-fade)
- - 单元测试: `tests/unit/coin-bag-modal.test.ts` (~30 LoC, DOM 节点 + 类名 + hidden default)
- - **🚫 不做**: 触发逻辑 (Stage 5), 音效 (用户拍板)
- - `git commit -m "feat(running): coin bag modal HTML + CSS animation (Item #013 §4)"`
+- [ ] **Stage 4 (≤20 min)**: #coin-bag-modal HTML + CSS 🔧 running → ✅ done 2026-07-10 (commit `97de86e`)
+  - `public/index.html` 加: `#coin-bag-modal` (跟 sprint modal 同级别, 80% 屏, 包含 bag graphic + 10 coin slots + 大数字 + 按钮) ✓
+  - `public/app.css` 加: `.coin-bag-*` 全部样式 + 4 阶段 @keyframes (drop / shake-open / 10 coin scatter / number-fade) + reduced-motion fallback + mobile 降级 ✓
+  - 单元测试: `tests/unit/coin-bag-modal.test.ts` (6 case 全过, happy-dom, 读真实 public/index.html 验证 DOM 结构) ✓
+  - **🚫 不做**: 触发逻辑 (Stage 5), 音效 (用户拍板) ✓
+  - `git commit -m "feat(running): coin bag modal HTML + CSS animation (Item #013 §4)"` ✓ `97de86e`
 
 - [ ] **Stage 5 (≤20 min)**: 触发逻辑 + 数据绑定
  - `public/app.js` 改: `showCoinBagModal(point, coins)` 函数 (~50 LoC) — 替代 `showGiftModal()`, 接 award_coins, 触发 3 阶段动画
@@ -503,11 +503,14 @@ export async function writeRevokeAuditLog(db, recordId, details): void
  - **🚫 不做**: 音效, 历史 record 迁移 (留二期), wrangler deploy / git push
  - `git commit -m "feat(running): admin revoke UI + cascade summary + docs (Item #013 §6)"`
 
-**Status**: ⏳ pending (drift fix 2026-07-07: Stage 2 ✅ done 2026-06-24, commit `df42182` on main — 之前 2026-07-06 drift fix note 误判"Stage 2 commit 实际未存在", 实际 `git log main -- migrations/0012_rename_awarded_minutes_to_coins.sql` 验证存在; 剩 Stage 1 + 3 + 4 + 5 + 6 待跑, **5 stage ≈ 5 cron runs**; re-derive 算法仍需 careful audit_log 设计, 风险 🔴 不变)
+**Status**: 🔧 running (drift fix 2026-07-10 cron: Stage 1 ✅ done commit `4553943` / Stage 2 ✅ done commit `df42182` / Stage 3 ✅ done commit `4846ff0` / Stage 4 ✅ done commit `97de86e` — all on `feat/013-stage3` branch (3 commits ahead of main); 2026-07-10 00:00 cron 完成 Stage 4 coin-bag-modal HTML+CSS (6/6 单测过); 剩 Stage 5 + 6 待跑, **2 stage ≈ 2 cron runs**; re-derive 基础设施 (Stage 1) 已 merge-able, 风险 🔴 不变)
 **风险**: 🔴 (改核心 invariant: reward semantic + revoke 逻辑 + modal flow; 6 stage 跨 5+ 文件, 需全套 regression; re-derive 算法需 careful audit_log 设计; UI 动画 + admin 双向改动, 一个 stage 错影响整体)
 **Started**: 2026-06-24
+**Commit (Stage 1)**: `4553943` (re-derive cascade on revoke, src/utils/running-rederive.ts ~250 LoC + tests/unit/running-rederive.test.ts, in feat/013-stage3)
 **Commit (Stage 2)**: `df42182` (2026-06-24 01:31, 已在 main, migration 0012 + prize.ts rollCoinPrize + records.ts type=coins + 4 files 单测, 340/340 vitest 绿)
-**未做**: Stage 1 (re-derive 基础设施, src/utils/running-rederive.ts ~80 LoC + tests) / Stage 3 (SVG milestone 视觉) / Stage 4 (coin bag modal HTML+CSS) / Stage 5 (触发逻辑 + 数据绑定) / Stage 6 (Admin 撤销 UI + cascade summary + 文档)
+**Commit (Stage 3)**: `4846ff0` (SVG map milestone visual emphasis, r 7→10 + 🎯 hint + cyan glow + progress badge, in feat/013-stage3)
+**Commit (Stage 4)**: `97de86e` (coin bag modal HTML + CSS animation, public/index.html +26 / public/app.css +152 / tests/unit/coin-bag-modal.test.ts +136, 6/6 单测过, reduced-motion fallback + mobile 降级, in feat/013-stage3)
+**未做**: Stage 5 (触发逻辑 + sequential queue + 替换 showGiftModal) / Stage 6 (Admin 撤销 UI 改用 rederiveRecordRevoke + cascade summary + 文档)
 **依赖**: 不依赖 #008 (并行可跑); 不依赖 cron (PM 手动按 stage 启 CC, 1 stage 1 PR)
 **估算**: 剩 **~320 LoC + ~270 LoC 测试** (Stage 1: 80+60, Stage 3: 40+50, Stage 4: 100+30, Stage 5: 50+40, Stage 6: 50+50+docs), 5 PR, **~3-5 晚 cron** (建议下次 cron 跑 Stage 1, 后续每个 cron run 1 stage)
 **Branch**: 仍待开 `feat/013-running-rederive-stage1` (Stage 1 时再开)
