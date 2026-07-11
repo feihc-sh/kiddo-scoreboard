@@ -174,6 +174,9 @@ records.post('/', async (c) => {
     .bind(map.id, previousCumKm, newCumKmRaw)
     .all<PointRow>();
   const points = pointsResult.results ?? [];
+  // Item #013 §1: roll the prize once per milestone (not once per record)
+  // so each milestone gets its own score_event. This makes the cascade
+  // re-derive on revoke unambiguous: each milestone award is its own row.
   const reached: ReachedPoint[] = points.map((p) => ({
     point_id: p.id,
     name: p.name,
@@ -198,9 +201,15 @@ records.post('/', async (c) => {
     const recordId = Number(recordIdFromInsert(recordResult));
 
     let coinEventId: number | null = null;
+    const coinEventIds: number[] = [];
 
-    if (totalAwardedCoins > 0) {
-      // INSERT score_events (+coins), mirrors src/routes/shop/exchange.ts:166-180
+    // Item #013 §1: write ONE score_event per reached milestone so the R2
+    // re-derive cascade on revoke can target each milestone independently.
+    // Each row: type='coins', change_value=per-milestone roll, source_ref=
+    // 'running:<recordId>:point:<point_id>'. The cumulative totalAwardedCoins
+    // is unchanged for the API response (front-end stays oblivious).
+    for (const p of reached) {
+      if (p.awarded_coins <= 0) continue;
       const evResult = await db
         .prepare(
           `INSERT INTO score_events
@@ -208,10 +217,17 @@ records.post('/', async (c) => {
            VALUES (?, 'coins', ?, '跑步打卡积分', 'approved', 'child', 'manual', ?, ?)
            RETURNING id`,
         )
-        .bind(CHILD_USER_ID, totalAwardedCoins, recordId, now)
+        .bind(
+          CHILD_USER_ID,
+          p.awarded_coins,
+          `running:${recordId}:point:${p.point_id}`,
+          now,
+        )
         .first<{ id: number }>();
-      coinEventId = Number(recordIdFromInsert(evResult));
+      const evId = Number(recordIdFromInsert(evResult));
+      coinEventIds.push(evId);
     }
+    coinEventId = coinEventIds.length > 0 ? coinEventIds[0] : null;
 
     // INSERT audit_log
     await db
@@ -231,6 +247,10 @@ records.post('/', async (c) => {
           new_points_reached: reached,
           total_awarded_coins: totalAwardedCoins,
           coin_event_id: coinEventId,
+          // Item #013 §1: cascade re-derive reads coin_event_ids to enumerate
+          // the per-milestone award rows. Kept alongside coin_event_id (first)
+          // for backward compat with Item #011/013 §2 audit viewers.
+          coin_event_ids: coinEventIds,
         }),
         now,
       )
