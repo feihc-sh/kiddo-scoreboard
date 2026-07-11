@@ -1422,6 +1422,60 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 - `dad77d7` (Stage 3: e2e + renderTasks re-render fix)
 - (pending Stage 4: docs + regression — 本 commit)
 
+### 3.22 暑假作业 Modal (Item #016, v2.x — 临时, 开学后下线)
+
+> **来源**: NIGHTLY-TODO Item #016, 2026-07-04 拍板 (Q1=A1 hardcoded + Q2=B2 no photo + Q3-4=N/A).
+> **Scope**: kid UI modal 6 items 全勾才能 submit, 复用现有 `completeTask(task.id)` 走 task_completions 路径。
+> **临时**: 5 min cleanup 开学后 (~2026-09) — 删 task + 删 modal HTML/JS/CSS。
+> **0 新 endpoint / 0 新 schema / 0 新 admin section** (per `feihao-pm-autonomy` §4f pitfall-13 复用现有 flow)。
+
+**Spec file**: `tests/e2e/summer-homework-modal.spec.ts` (4 e2e: happy 1+2+3, edge cancel) + `tests/unit/summer-homework-modal.test.ts` (8 unit: HTML hooks, 6 items, all-checked gate, modal toggle, CSS)
+
+**Setup (test fixture)**:
+- seed task "每日完成暑假作业" (icon=📝, category=study, target_account=pocket_money, token_reward=1, is_active=1, sort_order=10) — PM 手动在 production admin UI 创建同样 task
+
+**测试场景**:
+
+#### Happy 1: 点 task 弹 modal + 6 items 渲染 + submit 初始 disabled
+- Visit `/` (iPad viewport 1024×768)
+- 找到 task "每日完成暑假作业" button, click
+- **Assert**: `#summer-homework-modal` 可见; `#summer-homework-list` 含 6 个 `.summer-homework-item`; 每个 item 有 input[type=checkbox] + icon + name + hint; `#summer-homework-submit` `disabled`
+
+#### Happy 2: submit 保持 disabled 直到 6/6 checked
+- 点 5/6 checkboxes → submit 仍 disabled
+- 点第 6 个 → submit enabled
+- 取消一个 → submit 重新 disabled
+
+#### Happy 3: 全勾 + submit → task_completion row 写入 + task 显示已完成
+- 全勾 6 → click submit
+- **Assert**: modal hidden; DB `task_completions` 表新增 1 row; UI task button 显示 `✓` prefix (跟 #011 mecha HUD 完成态一致)
+- 平衡更新: 1 金币 award (走现有 coin balance 路径, 跟 #003 / #006 同 pattern)
+
+#### Edge: cancel 关 modal 无 task_completion 写入
+- 弹 modal → click cancel
+- **Assert**: modal hidden; DB `task_completions` count 不变 (0)
+
+**验证矩阵**:
+| Case | Submit 初始 | 6/6 checked | DB row | Modal 状态 |
+|---|---|---|---|---|
+| Happy 1 | disabled | n/a | 0 | visible |
+| Happy 2 | disabled → enabled | partial | 0 | visible |
+| Happy 3 | enabled | yes | +1 | hidden |
+| Edge (cancel) | disabled | no | 0 | hidden |
+
+**已知 non-goal** (临时功能, 留二期):
+- ESC / 点 backdrop 关 modal (暂不实现, 取消按钮已够)
+- 拍照 (Q2=B2 不要)
+- 任务 item 来自 DB schema (Q1=A1 hardcoded)
+- 6 min cleanup script (开学后 PM 手动删 3 个文件 + 1 个 task)
+
+**风险**: 🟢
+- 0 schema 改动; 0 new endpoint
+- 5 min cleanup 开学后, 无 tech debt
+- Task 不存在 (PM 还没手动创建) 时, modal 代码 no-op (其他 task 走默认 `completeTask(t.id)`)
+
+**引用**: PRD §3.16, NIGHTLY-TODO Item #016
+
 ---
 
 ## 4. Cross-Cutting E2E Flows

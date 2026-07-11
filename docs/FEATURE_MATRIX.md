@@ -76,8 +76,9 @@
 | **3.19** | Running Map Admin Revoke (Item #011 §4) | ✓ | ✓ | — | `admin-running-revoke.test.ts` |
 | **3.20** | 任务装备/机甲化 (Item #008 Stage 1-4) | ✓ | ✓ | — | `task-mecha-button.test.ts` (11) + `mecha-equip-activation.test.ts` (8) + `ui-task-mecha-frame.spec.ts` (4) + `ui-equip-activation.spec.ts` (6) |
 | **3.21** | Task Suspend/Resume — Admin Toggle (Item #014) | ✓ | ✓ | — | `admin-task-toggle.test.ts` (6) + `admin-toggle-ui.test.ts` (5) | `admin-task-toggle.spec.ts` (4 e2e) |
+| **3.22** | 暑假作业 Modal — Kid UI (Item #016) | ✓ | ✓ | — | `summer-homework-modal.test.ts` (8) | `summer-homework-modal.spec.ts` (4 e2e: happy 1+2+3 + edge cancel) |
 
-**UI 功能覆盖率**: **23/23 = 100%** ✅ (3.1-3.16.4 baseline + 3.17-3.19 running map + 3.20 mecha)
+**UI 功能覆盖率**: **24/24 = 100%** ✅ (3.1-3.16.4 baseline + 3.17-3.19 running map + 3.20 mecha + 3.21 suspend + 3.22 homework modal)
 
 ---
 

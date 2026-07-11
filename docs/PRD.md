@@ -1074,6 +1074,45 @@ CREATE INDEX idx_redemptions_user_redeemed ON shop_redemptions(user_id, redeemed
 - toggle 操作幂等，PM 可随时切换
 - child UI 已原生过滤 `is_active=0`
 
+### 3.16 暑假作业 Modal (Item #016, v2.x — 临时, 开学后下线)
+
+**用户场景** (NIGHTLY-TODO Item #016, 2026-07-04 拍板):
+暑假期间, 孩子每天有一堆作业要做 (语文词语 / 数学 / 英语单词默写 / 英语绘本 / 数学举一反三 / 英语外教课), PM 想让孩子点"暑假每日打卡"时**先确认每项都完成**了, 才算打卡成功 (用户原话 "挨个确认是否都完成了, 然后才算是打卡成功")。
+
+**核心设计** (临时功能, 不值得大投资):
+- **触发**: kid UI 点 task "每日完成暑假作业" (PM 手动在 admin UI 创建) → 弹 modal (override 原有"直接打卡"逻辑)
+- **Modal 内容**: 6 项暑假作业 list + checkboxes
+- **必填行为**: 全部勾才 enabled submit button (用户原话 "挨个确认是否都完成了")
+- **提交后**: 复用现有 `completeTask(task.id)` 走 task_completions 路径 + award token_reward (1 金币, 跟其他 task 一样)
+- **开学后清理** (~2026-09 后): PM 删 task + 删 modal 触发代码 + 删 modal UI (~5 min cleanup)
+
+**6 项暑假作业 (PM 整理 2026-07-04, hardcoded in `public/app.js`)**:
+| # | Icon | 名称 | Hint |
+|---|---|---|---|
+| 1 | 📝 | 语文词语 | 抄写 2 遍, 默写 1 遍 |
+| 2 | 🔢 | 数学 (校内) | 1 天 1 题/课/页 (kid 自评) |
+| 3 | 📖 | 英语单词 | 每天默写 1 课 (豆包报听写) |
+| 4 | 📚 | 英语绘本 | 每天打卡 3 本, 听 1 小时以上 |
+| 5 | 🧮 | 数学举一反三 | A 册: 课内没做完做半周, 做完后一天一周; B 册: 周末一天基础一天提高 |
+| 6 | 🗓️ | 英语外教课 | 每周六 4:15-6:15, 课后两天内完成作业 |
+
+**API**: 0 新增。复用现有 `POST /api/me/tasks/:id/complete` (跟其他 task 打卡同 endpoint)。
+**Schema**: 0 新增。task_completions 表已有 (P1 #016 M1 per `feihao-pm-autonomy` §4f pitfall-13)。
+**Admin UI**: 0 新增。PM 用现有 admin task CRUD 创建 task "每日完成暑假作业" (icon=📝, category=study, target_account=pocket_money, token_reward=1, is_active=1, sort_order=10)。
+
+**Modal 行为**:
+- 点 task → showSummerHomeworkModal(task) → 渲染 6 items
+- 任何 checkbox change → 检查是否全部 checked → 控制 submit button disabled
+- 点 "✓ 提交" → submitSummerHomework() → closeSummerHomeworkModal() + completeTask(task.id)
+- 点 "取消" → closeSummerHomeworkModal() (无 task_completion 写入)
+- Modal 默认 hidden (跟其他 modal 同 pattern)
+- ESC / 点 backdrop: 暂不实现 (临时功能, 取消按钮已够)
+
+**风险**: 🟢
+- 临时功能, hardcoded in `public/app.js`, 无 schema 改动
+- 5 min cleanup 开学后 (删 task + 删 modal HTML/JS/CSS)
+- 0 new endpoint, 0 new admin section (per pitfall-13 复用现有 flow)
+
 **引用**: Item #014 / NIGHTLY-TODO §
 
 ### 13. 跑步小地图 (Item #011, v2.x)

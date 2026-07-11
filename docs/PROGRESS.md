@@ -995,3 +995,56 @@ git log --oneline -5  # 看最新进度
 - child UI 已原生过滤 is_active=0
 
 **Push 计划**: PM 跑最终 verify (5 步 + tunnel smoke test) → report feihao → 等 4 options push。
+
+## ✅ v2.x — 暑假作业 Modal (Item #016) — 2026-07-06
+
+**触发场景**: feihao 2026-07-04 加 NIGHTLY-TODO "我想新加一个界面 — 当用户点击'暑假每日打卡'的时候，要弹出来一个确认框。确认框中包含他的几项暑假作业，他要挨个确认是否都完成了，然后才算是打卡成功。"
+
+**拍板** (2026-07-04 PM DM):
+- Q1 作业 item 来源 = **A1 hardcoded** (前端常量, 6 items 写死在 `public/app.js`) — 临时 → 不值得 DB schema 改动
+- Q2 拍照 = **B2 不要** — 临时 → 减少 infra (R2 setup 30 min)
+- Q3-Q4 = N/A
+
+**6 项暑假作业** (PM 整理 2026-07-04):
+1. 📝 语文词语 — 抄写 2 遍,默写 1 遍
+2. 🔢 数学 — 1 天 1 题/课/页 (kid 自评)
+3. 📖 英语单词 — 每天默写 1 课 (豆包报听写)
+4. 📚 英语绘本 — 每天打卡 3 本,听 1 小时以上
+5. 🧮 数学举一反三 — A 册:课内没做完做半周,做完后一天一周;B 册:周末一天基础一天提高
+6. 🗓️ 英语外教课 — 每周六 4:15-6:15,课后两天内完成作业
+
+**M1 设计** (per `feihao-pm-autonomy` §4f pitfall-13 复用现有 flow):
+- 拦截 task click → 若 `t.name === SUMMER_HOMEWORK_TASK_NAME` → showSummerHomeworkModal(task)
+- Modal 全勾 → submit → 复用现有 `completeTask(task.id)` (跟其他 task 打卡同 endpoint)
+- 0 新 endpoint / 0 新 schema / 0 新 admin section
+- Task 本身由 PM 在 admin UI 创建 (1 次性手动操作,~2 min)
+
+**M1 实现** (~1 commit, +250 LoC net):
+- `public/index.html` (+13): `#summer-homework-modal` 容器 (默认 hidden, 6 list 渲染, cancel + submit 按钮)
+- `public/app.js` (+58): `SUMMER_HOMEWORK_TASK_NAME` const + `SUMMER_HOMEWORK_ITEMS` array (6) + `showSummerHomeworkModal/closeSummerHomeworkModal/submitSummerHomework` 3 functions + renderTasks click handler 第 4 个分支 + init 里 2 个 button listeners
+- `public/app.css` (+61): `.summer-homework-list` flex + `.summer-homework-item` clickable row + checkbox styling (cyan accent)
+- `tests/unit/summer-homework-modal.test.ts` (+200, 8 tests): HTML hooks / 6 items / all-checked gate / modal toggle / CSS
+- `tests/e2e/summer-homework-modal.spec.ts` (+200, 4 tests): happy 1+2+3 + edge cancel
+- `docs/PRD.md` §3.16 + `docs/TEST_PLAN.md` §3.22 + `docs/PROGRESS.md` (本 entry) + `docs/FEATURE_MATRIX.md` 3.22 row
+
+**Corrupt 修** (本 branch 头, 已在 PR #49 合并): main 79d8ad3 文件 776 行有 `   NNN|` line-number-prefix corrupt (most likely 由 patch tool 早期 line-tracking 漏到 file), commit `98a788e` regex strip 修好。**这是为啥 M1 patch 一开始 fail 3 次** — `---` + `## 📦 归档` 在 corrupt 里 appear 3 次。修完才 work。
+
+**新增能力**:
+- **API**: 0 新增 (复用 `POST /api/me/tasks/:id/complete`)
+- **Schema**: 0 新增 (复用 `task_completions` 表)
+- **Kid UI**: `#summer-homework-modal` (跟 #010/#011 modal 同款 .modal-back/.modal shell)
+- **Admin UI**: 0 新增 (PM 手动创建 task 用现有 admin CRUD)
+
+**测试状态**:
+- ✅ 8 unit (summer-homework-modal.test.ts): HTML hooks + 6 items + all-checked gate + CSS
+- ✅ 4 e2e (summer-homework-modal.spec.ts): happy 1+2+3 + edge cancel
+- ⏳ FEATURE_MATRIX 3.22 row 跟本 commit 一起加
+
+**风险**: 🟢
+- 0 schema 改动; 0 new endpoint
+- 5 min cleanup 开学后 (~2026-09): PM 手动删 task + 删 modal HTML/JS/CSS
+- Task 不存在 (PM 还没手动创建) 时, modal 代码 no-op (其他 task 走默认 `completeTask(t.id)`)
+
+**手动 follow-up** (PM 在 admin UI 5 min):
+- 创建 task "每日完成暑假作业" (icon=📝, category=study, target_account=pocket_money, token_reward=1, is_active=1, sort_order=10)
+- Production D1 无 schema 改动, 走现有 `POST /api/admin/tasks` endpoint
