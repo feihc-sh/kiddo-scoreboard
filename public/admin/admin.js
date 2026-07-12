@@ -36,6 +36,20 @@ const state = {
   // Item #011 §4: running records list (all records, active + revoked)
   runningRecords: [],
   runningFilter: 'all',   // 'all' | 'active' | 'revoked'
+  // Item #016 §2 (2026-07-12 feihao): summer-homework calendar heatmap.
+  summerCalendar: null,   // { task_id, task_name, from_date, to_date, kids:[...] }
+  summerCalendarTaskId: null,   // selected task (default = first active task)
+  summerCalendarYear: 2026,
+  // feihao 2026-07-12: tabbed month picker (was 2-col grid, now 1 month at a time).
+  summerCalendarMonth: (function () { const m = new Date().getMonth() + 1; return [7, 8].includes(m) ? m : 7; })(),
+  // Item #016 §5 (2026-07-12 feihao): per-subitem dot matrix (which of the
+  // 6 暑假作业 sub-items did the kid勾 each day). Uses the SAME /by-task
+  // endpoint but renders transposed (rows=date, cols=6 items + footer
+  // total row). Separate state so the dropdown changes don't clobber
+  // each other.
+  summerSubmatrix: null,
+  summerSubmatrixTaskId: null,
+  summerSubmatrixYear: 2026,
 };
 
 // ---------- Toast ----------
@@ -130,6 +144,12 @@ async function loadAllEvents() {
 async function loadTasks() {
   const r = await api('GET', '/api/admin/tasks?include_inactive=true');
   state.tasks = r.tasks;
+  // Item #016 §2: refresh summer-calendar task dropdown now that state.tasks
+  // is populated. Done here (not inside loadSummerCalendar) so the dropdown
+  // is filled BEFORE loadSummerCalendar reads state.summerCalendarTaskId.
+  populateSummerTaskSelect();
+  // Item #016 §5: same pattern for the subitem-matrix dropdown.
+  populateSubmatrixTaskSelect();
 }
 async function loadAudit() {
   const qs = new URLSearchParams({ limit: '100' });
@@ -187,18 +207,329 @@ function deletedMarker(recordType, originalId) {
   return ` <span class="pm-row-deleted-marker">🗑 删于 ${fmtTime(d.deleted_at)} by ${escapeHtml(byName)}</span>`;
 }
 
+// ---------- Item #016 §2 (2026-07-12 feihao): Summer Homework Calendar ----------
+// GitHub-style per-kid heatmap of打卡 across a year. Backed by
+// /api/admin/task-completions/by-task?task_id=…&from=YYYY-MM-DD&to=YYYY-MM-DD.
+
+const SUMMER_CALENDAR_MONTH_NAMES = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+const SUMMER_CALENDAR_WEEKDAYS = ['日','一','二','三','四','五','六'];
+
+async function loadSummerCalendar() {
+  // populateSummerTaskSelect() is invoked from loadTasks() once state.tasks
+  // is populated (guarantees the dropdown options exist before we read the
+  // selected taskId). This function only does the API fetch.
+  const taskId = state.summerCalendarTaskId;
+  if (!taskId) {
+    state.summerCalendar = { task_id: 0, task_name: '(none)', from_date: '', to_date: '', kids: [] };
+    return;
+  }
+  const year = state.summerCalendarYear;
+  try {
+    const r = await api(
+      'GET',
+      `/api/admin/task-completions/by-task?task_id=${taskId}&from=${year}-01-01&to=${year}-12-31`,
+    );
+    state.summerCalendar = r;
+  } catch (e) {
+    if (e.message === 'UNAUTHORIZED') throw e;
+    state.summerCalendar = { task_id: taskId, task_name: '?', from_date: '', to_date: '', kids: [] };
+    toast('加载暑假作业月历失败：' + e.message, 'error');
+  }
+}
+
+function populateSummerTaskSelect() {
+  const sel = $('#filter-summer-task');
+  if (!sel) return;
+  const activeTasks = (state.tasks || []).filter((t) => t.is_active === 1);
+  if (activeTasks.length === 0) {
+    sel.innerHTML = '<option value="">(没有 active 任务)</option>';
+    return;
+  }
+  // Default to the summer-homework task if present, else first active task.
+  if (!state.summerCalendarTaskId) {
+    const summer = activeTasks.find((t) => /暑假作业/.test(t.name));
+    state.summerCalendarTaskId = summer ? summer.id : activeTasks[0].id;
+  }
+  sel.innerHTML = activeTasks
+    .map((t) => `<option value="${t.id}" ${t.id === state.summerCalendarTaskId ? 'selected' : ''}>${escapeHtml(t.icon || '📝')} ${escapeHtml(t.name)} (#${t.id})</option>`)
+    .join('');
+}
+
+function renderSummerCalendar() {
+  const root = $('#summer-calendar-list');
+  const empty = $('#summer-calendar-empty');
+  const countEl = $('#count-summer-calendar');
+  if (!root || !countEl) return;
+
+  const data = state.summerCalendar;
+  if (!data || !data.kids || data.kids.length === 0) {
+    root.innerHTML = '';
+    empty.hidden = false;
+    countEl.textContent = '0';
+    return;
+  }
+  empty.hidden = true;
+  countEl.textContent = data.kids.length;
+
+  // feihao 2026-07-12: month tab bar (7月 | 8月), shared across all kids.
+  const tabsHtml = `
+    <div class="sc-month-tabs">
+      ${[7, 8].map((m) => {
+        const active = state.summerCalendarMonth === m;
+        const name = SUMMER_CALENDAR_MONTH_NAMES[m - 1];
+        return `<button type="button" class="sc-month-tab${active ? ' active' : ''}" data-month="${m}">${name}</button>`;
+      }).join('')}
+    </div>
+  `;
+
+  // Build per-kid row.
+  root.innerHTML = tabsHtml + data.kids.map((kid) => {
+    // Index completions by date → status (latest wins; 'revoked' overrides 'active' if both).
+    const byDate = {};
+    for (const c of kid.completions) {
+      const prev = byDate[c.completed_date];
+      if (!prev || c.status === 'revoked') byDate[c.completed_date] = c.status;
+    }
+    let doneCount = 0, revokedCount = 0;
+    Object.values(byDate).forEach((s) => { if (s === 'active') doneCount++; else if (s === 'revoked') revokedCount++; });
+
+    const year = state.summerCalendarYear;
+    const month = state.summerCalendarMonth;
+    return `
+      <div class="summer-calendar-kid">
+        <div class="summer-calendar-kid-header">
+          <span class="summer-calendar-kid-name">${escapeHtml(kid.kid_name)} <span style="color:var(--text-muted);font-weight:400;font-size:13px;">#${kid.kid_id}</span></span>
+          <span class="summer-calendar-kid-stats">
+            <span style="color:var(--green);">✓ ${doneCount} 天</span> ·
+            <span style="color:var(--orange);">↩ ${revokedCount} 天</span>
+          </span>
+          <span class="summer-calendar-legend">
+            <span><span class="summer-calendar-legend-swatch" style="background:var(--green);"></span>active</span>
+            <span><span class="summer-calendar-legend-swatch" style="background:var(--orange-dim);"></span>revoked</span>
+          </span>
+        </div>
+        <div class="summer-calendar-grid">${render2026Month(year, month, byDate)}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Bind month tab clicks (re-render only, no API call).
+  root.querySelectorAll('.sc-month-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.summerCalendarMonth = Number(btn.dataset.month);
+      renderSummerCalendar();
+    });
+  });
+}
+
+function render2026Month(year, month, byDate) {
+  const today = todayIsoLocal();
+  // feihao 2026-07-12: render single selected month (was SUMMER_MONTHS.map).
+  const idx = month - 1;
+  const mName = SUMMER_CALENDAR_MONTH_NAMES[idx];
+  const daysInMonth = new Date(year, month, 0).getDate();
+  // JS getDay: 0=Sun..6=Sat.
+  const firstDayOfWeek = new Date(year, idx, 1).getDay();
+  const dayCells = [];
+  for (let i = 0; i < firstDayOfWeek; i++) dayCells.push('<div class="summer-calendar-day empty"></div>');
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const status = byDate[dateStr];
+    const isFuture = dateStr > today;
+    const cls = ['summer-calendar-day'];
+    if (status === 'active') cls.push('done');
+    else if (status === 'revoked') cls.push('revoked');
+    if (dateStr === today) cls.push('today');
+    if (isFuture) cls.push('future');
+    const tip = status ? `${dateStr} · ${status}` : dateStr;
+    // feihao 2026-07-12: 把日期数字 ${d} 填进格子, 方便扫读
+    dayCells.push(`<div class="${cls.join(' ')}" title="${escapeHtml(tip)}"><span class="sc-day-num">${d}</span></div>`);
+  }
+  return `
+    <div class="summer-calendar-month">
+      <div class="summer-calendar-month-name">${mName}</div>
+      <div class="summer-calendar-month-weekdays">${SUMMER_CALENDAR_WEEKDAYS.map((w) => `<span>${w}</span>`).join('')}</div>
+      <div class="summer-calendar-month-days">${dayCells.join('')}</div>
+    </div>
+  `;
+}
+
+// today as YYYY-MM-DD in LOCAL time (matches the dev "today" the user sees).
+function todayIsoLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// ---------- Item #016 §5 (2026-07-12 feihao): Summer Subitem Matrix ----------
+// Per-kid dot matrix. Rows = dates in the SUMMER window (Jul+Aug by default,
+// same window as the calendar heatmap). Columns = the 6 hardcoded sub-items
+// from app.js:59-66. Last row of the matrix = per-item total 打卡天数
+// (SUM of checked=1 across all kids/days — answers "which item gets
+// checked the most"). Uses the same /by-task endpoint, just rendered
+// transposed + per-subitem.
+
+const SUBITEM_COLS = [
+  { id: 'chinese',         icon: '📝', name: '语文' },
+  { id: 'math-school',     icon: '🔢', name: '校内数' },
+  { id: 'english-vocab',   icon: '📖', name: '英语单词' },
+  { id: 'english-reading', icon: '📚', name: '英语绘本' },
+  { id: 'math-extra',      icon: '🧮', name: '举一反三' },
+  { id: 'english-class',   icon: '🗓️', name: '外教课' },
+];
+const SUBMATRIX_MONTHS = [7, 8]; // 1-indexed; same Jul+Aug window as the calendar (feihao 2026-07-12 fix — was [6,7] → June+July)
+
+function populateSubmatrixTaskSelect() {
+  const sel = $('#filter-submatrix-task');
+  if (!sel) return;
+  const activeTasks = (state.tasks || []).filter((t) => t.is_active === 1);
+  if (activeTasks.length === 0) {
+    sel.innerHTML = '<option value="">(没有 active 任务)</option>';
+    return;
+  }
+  if (!state.summerSubmatrixTaskId) {
+    const summer = activeTasks.find((t) => /暑假作业/.test(t.name));
+    state.summerSubmatrixTaskId = summer ? summer.id : activeTasks[0].id;
+  }
+  sel.innerHTML = activeTasks
+    .map((t) => `<option value="${t.id}" ${t.id === state.summerSubmatrixTaskId ? 'selected' : ''}>${escapeHtml(t.icon || '📝')} ${escapeHtml(t.name)} (#${t.id})</option>`)
+    .join('');
+}
+
+async function loadSummerSubitemsMatrix() {
+  const taskId = state.summerSubmatrixTaskId;
+  if (!taskId) {
+    state.summerSubmatrix = null;
+    return;
+  }
+  const year = state.summerSubmatrixYear;
+  try {
+    const r = await api(
+      'GET',
+      `/api/admin/task-completions/by-task?task_id=${taskId}&from=${year}-07-01&to=${year}-08-31`,
+    );
+    state.summerSubmatrix = r;
+  } catch (e) {
+    if (e.message === 'UNAUTHORIZED') throw e;
+    state.summerSubmatrix = null;
+    toast('加载子项完成度失败：' + e.message, 'error');
+  }
+}
+
+function renderSummerSubitemsMatrix() {
+  const root = $('#summer-subitems-matrix-list');
+  const empty = $('#summer-subitems-matrix-empty');
+  const countEl = $('#count-summer-subitems-matrix');
+  if (!root || !countEl) return;
+  const data = state.summerSubmatrix;
+  if (!data || !data.kids || data.kids.length === 0) {
+    root.innerHTML = '';
+    empty.hidden = false;
+    countEl.textContent = '0';
+    return;
+  }
+  empty.hidden = true;
+  countEl.textContent = data.kids.length;
+  // Build date grid: every day in Jul+Aug of selected year.
+  const year = state.summerSubmatrixYear;
+  const today = todayIsoLocal();
+  const dates = [];
+  for (const m of SUBMATRIX_MONTHS) {
+    const daysInMonth = new Date(year, m, 0).getDate();
+    for (let d = 1; d <= daysInMonth; d++) {
+      dates.push(`${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+    }
+  }
+  // Render per-kid block.
+  root.innerHTML = data.kids.map((kid) => {
+    // Index completions by date.
+    const byDate = {};
+    for (const c of kid.completions) {
+      byDate[c.completed_date] = c; // latest write wins (UNIQUE per (task,user,date))
+    }
+    // Per-item total counter for the footer row.
+    const perItemTotals = Object.fromEntries(SUBITEM_COLS.map((c) => [c.id, 0]));
+    let totalRows = 0; // how many dates the kid actually opened the modal
+    // Build matrix rows.
+    const rows = dates.map((dateStr) => {
+      const c = byDate[dateStr];
+      const isFuture = dateStr > today;
+      if (!c || c.status === 'revoked') {
+        return `<tr class="sm-row sm-empty"><td class="sm-date">${dateStr.slice(5)}${dateStr === today ? ' · 今天' : ''}</td>${
+          SUBITEM_COLS.map(() => '<td class="sm-cell sm-na"></td>').join('')
+        }<td class="sm-status"></td></tr>`;
+      }
+      totalRows++;
+      const cells = SUBITEM_COLS.map((col) => {
+        const v = c.subitems ? c.subitems[col.id] : undefined;
+        let cls = 'sm-cell';
+        let tip = `${col.name}: `;
+        if (v === 1) { cls += ' sm-done'; tip += '✓ 勾了'; if (perItemTotals[col.id] !== undefined) perItemTotals[col.id]++; }
+        else if (v === 0) { cls += ' sm-missed'; tip += '✗ 开了但没勾'; }
+        else { cls += ' sm-legacy'; tip += '(历史记录,无子项)'; }
+        return `<td class="${cls}" title="${escapeHtml(tip)}"></td>`;
+      }).join('');
+      const checkedCount = Object.values(c.subitems || {}).filter((v) => v === 1).length;
+      return `<tr class="sm-row"><td class="sm-date">${dateStr.slice(5)}${dateStr === today ? ' · 今天' : ''}</td>${cells}<td class="sm-status">${checkedCount}/${SUBITEM_COLS.length}</td></tr>`;
+    }).join('');
+    // Footer row: per-item 总计打卡天数.
+    const footerCells = SUBITEM_COLS.map((col) => {
+      const n = perItemTotals[col.id];
+      const tone = n === 0 ? 'sm-zero' : n >= totalRows * 0.8 ? 'sm-strong' : 'sm-mid';
+      return `<td class="sm-cell ${tone}"><span class="sm-total">${n}</span></td>`;
+    }).join('');
+    const totalAll = SUBITEM_COLS.reduce((s, c) => s + perItemTotals[c.id], 0);
+    return `
+      <div class="sm-kid-block">
+        <div class="sm-kid-header">
+          <span class="sm-kid-name">${escapeHtml(kid.kid_name)} <span style="color:var(--text-muted);font-weight:400;font-size:12px;">#${kid.kid_id}</span></span>
+          <span class="sm-kid-stats">
+            打卡 ${totalRows} 天 · 总勾 ${totalAll}/${totalRows * 6}
+          </span>
+        </div>
+        <table class="sm-table">
+          <thead>
+            <tr>
+              <th class="sm-date-col">日期</th>
+              ${SUBITEM_COLS.map((c) => `<th class="sm-subitem-col" title="${escapeHtml(c.name)}">${c.icon}<br><span class="sm-subitem-col-name">${c.name}</span></th>`).join('')}
+              <th class="sm-status-col">合计</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr class="sm-footer-row">
+              <td class="sm-date sm-footer-label">总计打卡天数</td>
+              ${footerCells}
+              <td class="sm-status sm-footer-total">${totalAll}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    `;
+  }).join('');
+}
+
 async function refreshAll() {
   try {
+    // Item #016 §2: loadTasks MUST run before loadSummerCalendar because
+    // populateSummerTaskSelect() (called from loadTasks) sets the default
+    // summerCalendarTaskId from state.tasks. Running them in parallel leaves
+    // a race where loadSummerCalendar sees state.tasks=[] and bails.
+    await loadBalance();
+    await loadPendingEvents();
+    await loadAllEvents();
+    await loadTasks();
+    // The rest are independent and can run in parallel.
     await Promise.all([
-      loadBalance(),
-      loadPendingEvents(),
-      loadAllEvents(),
-      loadTasks(),
       loadAudit(),
       loadCompletions(),
       loadDeletedRecords(),
       loadPendingRedemptions(),
       loadRunningRecords(),
+      loadSummerCalendar(),
+      // Item #016 §5 (2026-07-12 feihao): subitem dot matrix (uses the
+      // same /by-task endpoint so adding to the same Promise.all batch is
+      // free — just one extra HTTP call).
+      loadSummerSubitemsMatrix(),
     ]);
     renderAll();
   } catch (e) {
@@ -217,6 +548,9 @@ function renderAll() {
   renderCompletions();
   renderPendingRedemptions();
   renderRunningRecords();
+  renderSummerCalendar();
+  // Item #016 §5 (2026-07-12 feihao): subitem dot matrix render.
+  renderSummerSubitemsMatrix();
 }
 
 // ---------- H. Shop pending fulfill (M4 §6.5) ----------
@@ -924,6 +1258,29 @@ function bindFilters() {
   $('#filter-running-status').addEventListener('change', function(e) {
     state.runningFilter = e.target.value;
     renderRunningRecords();
+  });
+  // Item #016 §2: summer-homework calendar filters.
+  $('#filter-summer-task').addEventListener('change', async (e) => {
+    state.summerCalendarTaskId = Number(e.target.value);
+    try { await loadSummerCalendar(); renderSummerCalendar(); }
+    catch (err) { if (err.message !== 'UNAUTHORIZED') toast('加载失败：' + err.message, 'error'); }
+  });
+  $('#filter-summer-year').addEventListener('change', async (e) => {
+    state.summerCalendarYear = Number(e.target.value);
+    try { await loadSummerCalendar(); renderSummerCalendar(); }
+    catch (err) { if (err.message !== 'UNAUTHORIZED') toast('加载失败：' + err.message, 'error'); }
+  });
+  // Item #016 §5 (2026-07-12 feihao): subitem matrix filters (separate
+  // state so changing one doesn't reset the other).
+  $('#filter-submatrix-task').addEventListener('change', async (e) => {
+    state.summerSubmatrixTaskId = Number(e.target.value);
+    try { await loadSummerSubitemsMatrix(); renderSummerSubitemsMatrix(); }
+    catch (err) { if (err.message !== 'UNAUTHORIZED') toast('加载失败：' + err.message, 'error'); }
+  });
+  $('#filter-submatrix-year').addEventListener('change', async (e) => {
+    state.summerSubmatrixYear = Number(e.target.value);
+    try { await loadSummerSubitemsMatrix(); renderSummerSubitemsMatrix(); }
+    catch (err) { if (err.message !== 'UNAUTHORIZED') toast('加载失败：' + err.message, 'error'); }
   });
 }
 

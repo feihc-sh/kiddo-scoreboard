@@ -3052,7 +3052,15 @@ body {
 */
 .coin-bag-modal {
   max-width: 80vw;
-  max-height: 80vh;
+  /* Item #016 §4 (2026-07-12 feihao): removed `max-height: 80vh`.
+     The original 80vh clipped the modal-actions row off the bottom of the
+     panel on viewports shorter than ~720px (the 继续跑 button ended up
+     outside the modal panel, in the backdrop). With content now bounded
+     (bag 240px + number 80px + actions 60px + padding 64px ≈ 444px), an
+     explicit cap is unnecessary.
+     Also override the parent `.modal { max-height: 90vh }` rule (line 1550)
+     which would clip the panel at ~90vh on tall viewports. */
+  max-height: none;
   padding: 32px 28px;
   text-align: center;
   overflow: visible;
@@ -3191,4 +3199,387 @@ body {
   .coin-bag-coin {
     opacity: 0;
   }
+}
+
+/* Item #016 §1: 暑假作业 modal — 6 items, one per row.
+   Original release shipped without per-item CSS, so <label>s rendered
+   inline (no spacing/borders). Added 2026-07-12 per feihao QA.
+   Mobile-first (Tecno primary device); ≥60px tap target per §3.11. */
+.summer-homework-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0 24px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.summer-homework-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-hud);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  min-height: 60px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.summer-homework-item:hover { background: var(--cyan-soft); }
+.summer-homework-item:has(input:checked) {
+  background: var(--cyan-soft);
+  border-color: var(--cyan);
+}
+.summer-homework-item input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  cursor: pointer;
+  accent-color: var(--cyan);
+}
+.summer-homework-item-icon {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.summer-homework-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.summer-homework-item-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.summer-homework-item-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+@media (max-width: 768px) {
+  .summer-homework-item { padding: 14px 16px; min-height: 64px; }
+  .summer-homework-item-name { font-size: 17px; }
+}
+
+/* Item #016 §2 (2026-07-12 feihao): admin summer-homework calendar heatmap.
+   Per-kid row of 12 month grids; each month is a 7-col day grid.
+   Legend: --green = active打卡, --orange-dim = revoked 撤销, transparent = no data.
+   Today is highlighted with a cyan ring. Mobile: collapse to 2-col month grid. */
+.summer-calendar-kid {
+  margin-bottom: 28px;
+}
+.summer-calendar-kid:last-child { margin-bottom: 0; }
+.summer-calendar-kid-header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-dim);
+}
+.summer-calendar-kid-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.summer-calendar-kid-stats {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: ui-monospace, monospace;
+}
+.summer-calendar-legend {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.summer-calendar-legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.summer-calendar-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+/* feihao 2026-07-12: month tab picker (was 2-col grid; now single month at a time). */
+.sc-month-tabs {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: 14px;
+  padding: 3px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.sc-month-tab {
+  padding: 6px 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.sc-month-tab:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+.sc-month-tab.active {
+  background: var(--cyan);
+  color: rgba(0, 0, 0, 0.85);
+  box-shadow: 0 0 8px var(--cyan-glow);
+}
+.summer-calendar-month {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.summer-calendar-month-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+.summer-calendar-month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 2px;
+}
+.summer-calendar-month-weekdays span {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1;
+}
+.summer-calendar-month-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.summer-calendar-day {
+  aspect-ratio: 1;
+  min-height: 36px;
+  border-radius: 4px;
+  cursor: default;
+  transition: outline 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.03);
+}
+  .summer-calendar-day.empty {
+    background: transparent;
+  }
+  .summer-calendar-day .sc-day-num {
+    pointer-events: none;
+  }
+  .summer-calendar-day.done {
+    background: var(--green);
+    box-shadow: 0 0 3px var(--green-glow);
+    color: rgba(0, 0, 0, 0.75);
+  }
+  .summer-calendar-day.revoked {
+    background: var(--orange-dim);
+    color: rgba(0, 0, 0, 0.75);
+  }
+  .summer-calendar-day.today {
+    outline: 2px solid var(--cyan);
+    outline-offset: -1px;
+  }
+  .summer-calendar-day.future {
+    opacity: 0.45;
+  }
+@media (max-width: 768px) {
+  .summer-calendar-day { min-height: 32px; font-size: 11px; }
+  .sc-month-tab { padding: 5px 12px; font-size: 12px; }
+}
+@media (max-width: 480px) {
+  .summer-calendar-day { min-height: 28px; font-size: 10px; }
+}
+
+/* ============================================================
+   Item #016 §5 (2026-07-12 feihao): Summer Subitem Dot Matrix
+   Per-kid dot matrix: rows = dates in Jul+Aug, columns = the 6
+   hardcoded 暑假作业 sub-items. Footer row shows per-item
+   total 打卡天数 (SUM checked). Answers "哪个 item 经常没勾".
+   ============================================================ */
+.sm-kid-block {
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  padding: 14px 16px;
+  /* feihao 2026-07-12: 横向滚动 — 让 matrix 不会在小屏被压缩 */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.sm-table {
+  min-width: 560px;  /* feihao 2026-07-12: 强制最小宽, 滚动时 cell 不被压扁 */
+}
+.sm-kid-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sm-kid-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+}
+.sm-kid-stats {
+  font-size: 13px;
+  color: var(--text-soft);
+  font-weight: 500;
+}
+.sm-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 3px;
+  font-size: 11px;
+}
+.sm-table thead th {
+  text-align: center;
+  vertical-align: bottom;
+  padding: 4px 2px 8px;
+  color: var(--text-soft);
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.sm-subitem-col {
+  min-width: 64px;
+}
+.sm-subitem-col-name {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  display: inline-block;
+}
+.sm-date-col, .sm-status-col {
+  width: 44px;
+}
+.sm-date {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-soft);
+  font-size: 11px;
+  padding: 4px 6px;
+  text-align: right;
+  white-space: nowrap;
+}
+.sm-cell {
+  width: 32px;
+  height: 22px;
+  border-radius: 5px;
+  background: transparent;
+  position: relative;
+  transition: transform 0.08s;
+  cursor: default;
+}
+.sm-cell:hover {
+  transform: scale(1.18);
+  z-index: 2;
+}
+.sm-cell.sm-na {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px dashed rgba(255, 255, 255, 0.06);
+}
+.sm-cell.sm-done {
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green-glow);
+}
+.sm-cell.sm-missed {
+  background: var(--orange-dim);
+  /* diagonal stripes to distinguish from solid green done */
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--orange-dim),
+    var(--orange-dim) 3px,
+    rgba(255, 90, 30, 0.4) 3px,
+    rgba(255, 90, 30, 0.4) 6px
+  );
+}
+.sm-cell.sm-legacy {
+  background: rgba(120, 140, 200, 0.18);
+  border: 1px dashed rgba(120, 140, 200, 0.35);
+}
+.sm-status {
+  text-align: center;
+  color: var(--text-soft);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  padding: 0 4px;
+  min-width: 40px;
+}
+.sm-footer-row {
+  border-top: 2px solid var(--border);
+}
+.sm-footer-row td {
+  padding-top: 8px;
+}
+.sm-footer-label {
+  text-align: right;
+  color: var(--cyan);
+  font-weight: 700;
+  font-size: 11px;
+}
+.sm-footer-total {
+  color: var(--cyan);
+  font-weight: 700;
+  font-size: 12px;
+}
+.sm-cell .sm-total {
+  display: block;
+  width: 100%;
+  height: 100%;
+  line-height: 22px;
+  font-weight: 700;
+  font-size: 12px;
+  text-align: center;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.sm-cell.sm-zero .sm-total {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+.sm-cell.sm-strong {
+  background: rgba(120, 220, 140, 0.12);
+}
+.sm-cell.sm-mid {
+  background: rgba(255, 220, 90, 0.10);
+}
+.pm-toolbar-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+@media (max-width: 768px) {
+  .sm-table { font-size: 10px; border-spacing: 2px; }
+  .sm-cell { width: 22px; height: 18px; }
+  .sm-subitem-col { min-width: 56px; }
+  .sm-date-col, .sm-status-col { width: 56px; }
 }

@@ -5,11 +5,19 @@
 //
 //   POST /api/me/tasks/:id/complete
 //     :id = task_id
-//     No body required.
+//     Optional JSON body: { subitems: { 'chinese': 1, 'math-school': 0, ... } }
+//       * Used by the 暑假作业 modal (app.js:59-66) to record which of the
+//         6 hardcoded sub-items the kid actually completed today.
+//       * Keys MUST be from the 6-item allow-list (validated server-side).
+//       * Values MUST be 0 or 1.
+//       * Omitted entirely → no per-subitem rows written (back-compat for
+//         non-summer-homework tasks like "跑步").
 //     Effects (single db.batch() transaction):
 //       1. INSERT task_completion (status='active', today, unixepoch())
 //       2. INSERT score_event (auto-approved, source='task', child-submitted)
 //       3. INSERT audit_log (action='task_complete', actor='child')
+//       4. (summer-homework only) batch 2: INSERT 0..6 rows in
+//          summer_homework_subitems (one per checked sub-item).
 //     Returns 201 with awarded amount + new balance, or an error code.
 
 import { Hono } from 'hono';
@@ -31,6 +39,20 @@ const tasks = new Hono<{ Bindings: Env }>();
  * Must match the id inserted by seeds/local.sql.
  */
 const CHILD_USER_ID = 2;
+
+// Item #016 §5 (2026-07-12 feihao): server-side mirror of SUMMER_HOMEWORK_ITEMS
+// from public/app.js. Used to validate the optional `subitems` body field of
+// /api/me/tasks/:id/complete — MUST stay in lock-step with the client list
+// (kid-side buttons are filtered through this set before being persisted).
+const SUMMER_HOMEWORK_SUBITEM_IDS = new Set([
+  'chinese',         // 📝 语文词语
+  'math-school',     // 🔢 数学 (校内)
+  'english-vocab',   // 📖 英语单词
+  'english-reading', // 📚 英语绘本
+  'math-extra',      // 🧮 数学举一反三
+  'english-class',   // 🗓️ 英语外教课
+]);
+const SUMMER_HOMEWORK_TASK_NAME = '每日完成暑假作业';
 
 const TASK_COLUMNS =
   'id, name, token_reward, target_account, icon, category, ' +
@@ -65,6 +87,43 @@ tasks.post('/:id/complete', async (c) => {
       { error: { code: 'TASK_INACTIVE', message: 'task is no longer active' } },
       400,
     );
+  }
+
+  // 2.6 §5 summer-homework subitems (optional body). Validate keys + values
+  //     BEFORE opening any batch so a malformed payload is rejected cleanly.
+  //     Only persisted when task.name === SUMMER_HOMEWORK_TASK_NAME.
+  let subitemsChecked: string[] = []; // subitem_id list with checked=1
+  if (task.name === SUMMER_HOMEWORK_TASK_NAME) {
+    let rawSubitems: Record<string, unknown> | null = null;
+    try {
+      const body = await c.req.json().catch(() => null);
+      if (body && typeof body === 'object' && body.subitems && typeof body.subitems === 'object') {
+        rawSubitems = body.subitems as Record<string, unknown>;
+      }
+    } catch { /* tolerate non-JSON or empty body */ }
+    if (rawSubitems) {
+      for (const [k, v] of Object.entries(rawSubitems)) {
+        if (!SUMMER_HOMEWORK_SUBITEM_IDS.has(k)) {
+          return c.json(
+            { error: { code: 'BAD_REQUEST', message: `unknown subitem_id: ${k}` } },
+            400,
+          );
+        }
+        // 0 = opened modal but did not勾 this item; 1 = 勾了.
+        // We persist BOTH so admin dot matrix can show "which was missing"
+        // vs "which was勾ed". Either way must be 0 or 1.
+        if (v !== 0 && v !== 1) {
+          return c.json(
+            { error: { code: 'BAD_REQUEST', message: `subitem ${k} must be 0 or 1` } },
+            400,
+          );
+        }
+        if (v === 1) subitemsChecked.push(k);
+      }
+    }
+    // If body.subitems missing for 暑假作业: persist nothing (kid opened
+    // modal then clicked submit without checking anything — treat as
+    // "no per-item record" rather than guessing).
   }
 
   // 2.5 §3.12 sleep task self-lockout: refuse if past cutoff_time.
@@ -159,6 +218,35 @@ tasks.post('/:id/complete', async (c) => {
   // +1 coin event id (row 0) is the task_completion FK target AND audit_log target.
   const eventId = Number(results[0]?.meta?.last_row_id ?? 0);
   const coinEventId = Number(results[0]?.meta?.last_row_id ?? 0);
+  const completionId = Number(results[1]?.meta?.last_row_id ?? 0);
+
+  // 4.4 (Item #016 §5): summer-homework subitems — write batch 2 with
+  //     the freshly-inserted task_completion_id. Split into a separate
+  //     batch so a subitem-insert failure (e.g. constraint, full disk)
+  //     does NOT roll back the main +1 coin / completion / audit write.
+  //     Both 0 (未勾) and 1 (勾了) rows are persisted so admin dot matrix
+  //     can distinguish "modal opened, this item not done" from "modal
+  //     never opened that day" (no row at all).
+  if (task.name === SUMMER_HOMEWORK_TASK_NAME && completionId > 0 && rawSubitems) {
+    const subitemStmts = Object.entries(rawSubitems)
+      .map(([k, v]) =>
+        db
+          .prepare(
+            `INSERT OR IGNORE INTO summer_homework_subitems
+               (task_completion_id, subitem_id, checked)
+             VALUES (?, ?, ?)`,
+          )
+          .bind(completionId, k, v as number),
+      );
+    if (subitemStmts.length > 0) {
+      try {
+        await db.batch(subitemStmts);
+      } catch (e) {
+        // Auxiliary: log + toast in response but keep the +1 coin awarded.
+        console.error('summer_homework_subitems insert failed:', e);
+      }
+    }
+  }
 
   // 4.5. Bonus check: if all active tasks for today are done and no bonus
   //      has been issued yet, write a +3 coin event. This is a sequential
