@@ -86,13 +86,15 @@ function showSummerHomeworkModal(task) {
     </label>
   `).join('');
 
-  // Reset submit button + bind change handler
-  submitBtn.disabled = true;
+  // Reset submit button + bind change handler.
+  // Item #016 §2 (2026-07-12 feihao): removed "all 6 must be checked" constraint.
+  // Submit now enabled as soon as ANY checkbox is checked (or always-on if
+  // kid wants to mark "did nothing today but still打卡"). Matches the actual
+  // semantic — kid confirms what they did, not "100% completion".
+  submitBtn.disabled = false;
   list.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
     cb.addEventListener('change', () => {
-      const allChecked = Array.from(list.querySelectorAll('input[type="checkbox"]'))
-        .every((c) => c.checked);
-      submitBtn.disabled = !allChecked;
+      // No-op: button stays enabled. Kept so future re-tightening is 1-line.
     });
   });
 
@@ -117,9 +119,20 @@ async function submitSummerHomework() {
   try {
     const task = _summerHomeworkCurrentTask;
     if (!task) return;
+    // Item #016 §5 (2026-07-12 feihao): collect 6 checkbox states BEFORE
+    // closing the modal (modal DOM is about to be torn down). { id: 0|1 }
+    // payload goes to /api/me/tasks/:id/complete so admin dot matrix can
+    // show "which items勾ed / 没勾" instead of just "did打卡".
+    const modal = document.getElementById('summer-homework-modal');
+    const subitems = {};
+    if (modal) {
+      modal.querySelectorAll('input[type="checkbox"][data-item-id]').forEach((cb) => {
+        subitems[cb.getAttribute('data-item-id')] = cb.checked ? 1 : 0;
+      });
+    }
     closeSummerHomeworkModal();
     // Reuse existing task 打卡 endpoint (跟 #010/#011 modal 同 pattern)
-    await completeTask(task.id);
+    await completeTask(task.id, { subitems });
   } finally {
     _summerHomeworkSubmitting = false;
   }
@@ -180,11 +193,11 @@ async function submitRunning(km) {
     const points = r.new_points_reached?.length || 0;
     const coins = r.total_awarded_coins || 0;
 
-    // Show gift modal for each newly-reached point.
-    if (points > 0 && r.new_points_reached) {
-      // Show the first gift modal; the rest (if any) are shown after closing.
-      const firstPoint = r.new_points_reached[0];
-      showGiftModal(firstPoint, coins);
+    // Item #013 §5: enqueue coin-bag modal(s) per newly-reached milestone.
+    // Each milestone gets its own modal (per-milestone awarded_coins); the
+    // queue shows them sequentially — 1 closes before the next opens.
+    if (points > 0 && r.new_points_reached && r.new_points_reached.length > 0) {
+      showCoinBagModalQueue(r.new_points_reached);
       toast(`🏃 跑了 ${km} km, 到达 ${points} 个新点位, +${coins} 枚`, 'success');
     } else {
       toast(`🏃 跑了 ${km} km, 累计 ${state.running.cumKm.toFixed(1)} km`, 'success');
@@ -648,22 +661,122 @@ function animateAvatarToPoint(pointIdx, cumKm, totalKm) {
   if (progressEl) progressEl.textContent = `${cumKm.toFixed(1)} / ${totalKm} km`;
 }
 
-/** Show the gift modal when child reaches a new point. */
+/** Show the gift modal when child reaches a new point.
+ *  Item #013 §5: DEPRECATED — replaced by showCoinBagModal + sequential queue.
+ *  Kept as a no-op so any stale references don't crash; Stage 6 will delete. */
 function showGiftModal(point, minutes) {
   const modal = document.getElementById('running-gift-modal');
-  const amountEl = document.getElementById('running-gift-amount');
-  const titleEl = document.getElementById('running-gift-title');
-  const hintEl = document.getElementById('running-gift-hint');
   if (!modal) return;
-  if (amountEl) amountEl.textContent = `+${minutes}`;
-  if (titleEl) titleEl.textContent = minutes >= 10 ? '🎁 通关奖励!' : '🎁 到达新地点!';
-  if (hintEl) hintEl.textContent = `恭喜到达 ${point.name || '下一站'}!`;
-  modal.hidden = false;
+  // Soft-deprecated: intentionally a no-op. Use showCoinBagModal() instead.
+  modal.hidden = true;
 }
 
 function closeGiftModal() {
   const modal = document.getElementById('running-gift-modal');
   if (modal) modal.hidden = true;
+}
+
+// Item #013 §5: coin-bag modal trigger + sequential queue.
+// Each newly-reached milestone gets its own bag-drop modal; modals open
+// strictly sequentially (next opens only after current user closes).
+// State machine: `_coinBagShowing` blocks re-entry while a modal is open.
+const _coinBagQueue = [];
+let _coinBagShowing = false;
+
+/** Append milestones to the queue and start pumping. Each entry is a
+ *  reached-point object: { point_id, name, cum_km, awarded_coins }. */
+function showCoinBagModalQueue(reachedPoints) {
+  if (!Array.isArray(reachedPoints) || reachedPoints.length === 0) return;
+  for (const p of reachedPoints) {
+    _coinBagQueue.push(p);
+  }
+  pumpCoinBagQueue();
+}
+
+/** Internal pump: pops the queue head and opens 1 modal. Re-entrant safe
+ *  via the `_coinBagShowing` latch. */
+function pumpCoinBagQueue() {
+  if (_coinBagShowing) return;
+  const next = _coinBagQueue.shift();
+  if (!next) return;
+  _coinBagShowing = true;
+  showCoinBagModal(next, () => {
+    _coinBagShowing = false;
+    // Schedule next pump on next tick so this handler returns first.
+    setTimeout(pumpCoinBagQueue, 0);
+  });
+}
+
+/** Show the coin-bag modal for a single milestone. Calls onClose when the
+ *  user dismisses the modal so the queue can advance. Re-triggers the CSS
+ *  animation each call (modal may be reopened with different content). */
+function showCoinBagModal(point, onClose) {
+  const modal = document.getElementById('coin-bag-modal');
+  const titleEl = document.getElementById('coin-bag-title');
+  const amountEl = document.getElementById('coin-bag-amount');
+  const closeBtn = document.getElementById('coin-bag-close');
+  if (!modal) { onClose?.(); return; }
+
+  const coins = Number(point?.awarded_coins ?? 0);
+  const name = point?.name || '下一站';
+
+  if (titleEl) titleEl.textContent = `🎉 恭喜到达 ${name}!`;
+  if (amountEl) amountEl.textContent = `+${coins}`;
+
+  // Reset any prior animation so re-open replays the 4-phase sequence.
+  modal.classList.remove('coin-bag-modal--animate');
+  modal.hidden = false;
+  // Force reflow so the class re-add re-triggers @keyframes.
+  void modal.offsetWidth;
+  modal.classList.add('coin-bag-modal--animate');
+
+  if (closeBtn) {
+    // Item #016 §4 (2026-07-12 feihao): delay the close button until the
+    // coin-bag animation finishes (~3.0s total: bag-drop 0.8s + shake 0.8s
+    // + 10-coin scatter 0.9s + number-fade 0.5s). Kid taps 继续跑! too
+    // eagerly and skips the +N 枚 金币 number fade. Hide button → reveal on
+    // `animationend` of `.coin-bag-amount` (last element to finish at 3.0s).
+    closeBtn.hidden = true;
+
+    const revealBtn = () => {
+      closeBtn.hidden = false;
+      amountEl?.removeEventListener('animationend', revealBtn);
+      if (revealSafetyTimer) { clearTimeout(revealSafetyTimer); revealSafetyTimer = null; }
+    };
+    // Safety fallback: if `animationend` never fires (e.g., animation class
+    // re-added without reflow in some edge case), still reveal after 3.5s.
+    let revealSafetyTimer = setTimeout(revealBtn, 3500);
+    if (amountEl) {
+      amountEl.addEventListener('animationend', revealBtn);
+    }
+
+    // Use a fresh handler per open so multiple openings don't collide.
+    const handler = () => {
+      closeBtn.removeEventListener('click', handler);
+      amountEl?.removeEventListener('animationend', revealBtn);
+      if (revealSafetyTimer) { clearTimeout(revealSafetyTimer); revealSafetyTimer = null; }
+      modal.hidden = true;
+      modal.classList.remove('coin-bag-modal--animate');
+      closeBtn.hidden = true;  // reset for next open
+      onClose?.();
+    };
+    closeBtn.addEventListener('click', handler);
+  } else {
+    // No close button → immediately advance queue.
+    modal.hidden = true;
+    onClose?.();
+  }
+}
+
+/** Test helper: read the queue + showing flag (used by vitest). Exposed on
+ *  window so happy-dom tests can assert the queue state without importing
+ *  app.js internals. */
+function _coinBagQueueState() {
+  return { queueLength: _coinBagQueue.length, showing: _coinBagShowing };
+}
+if (typeof window !== 'undefined') {
+  window._coinBagQueueState = _coinBagQueueState;
+  window._coinBagQueueClear = () => { _coinBagQueue.length = 0; _coinBagShowing = false; };
 }
 
 /** Show the completion modal when cumKm >= totalKm. */
@@ -1214,14 +1327,18 @@ function eventUnit(type) {
 }
 
 // ---------- Actions ----------
-async function completeTask(taskId) {
+async function completeTask(taskId, body = {}) {
   // §3 equip activation (optimistic UI): fire BEFORE await so user gets instant
   // visual feedback even if API hangs/fails (e.g., --local tunnel without D1).
   // Animation runs on the *current* .mecha-frame; renderTasks() after await will
   // replace it with a new node (without the class) — that's fine, the pulse already played.
   triggerEquipActivation(taskId);
   try {
-    const r = await api('POST', `/api/me/tasks/${taskId}/complete`);
+    // Item #016 §5 (2026-07-12 feihao): forward optional body (e.g. summer
+    // homework subitems) to the server. The endpoint validates the keys
+    // server-side; we don't add a check here so non-summer tasks can pass
+    // {} safely.
+    const r = await api('POST', `/api/me/tasks/${taskId}/complete`, body);
     state.completedTaskIds.add(taskId);
     state.balance = r.new_balance;
     renderBalance();
