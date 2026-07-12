@@ -53,7 +53,7 @@
     >
     > 📌 **Drift fix 2026-07-07 (cron 修)**: #016 Stage 1 实际 `37e3f02` 已 commit 2026-07-06 22:46 in branch `feat/016-summer-homework` (8 vitest + 4 e2e + 4 docs 9 files +621/-1), 但 TODO Status 仍 ⏳ pending — 标 ✅ done + 移归档; #013 Stage 2 实际 `df42182` 已 commit 2026-06-24 in main (migration 0012 + prize.ts rollCoinPrize + 4 files), 但 TODO Status 仍 ⏳ pending + 之前 drift fix note 误判 "Stage 2 commit 实际未存在" — 校正 Status, Stage 2 填 hash, 剩 5 stage 标 ⏳ pending 继续等跑
     >
-    > 📌 **Drift fix 2026-07-12 (PM 修)**: #013 Stage 5 partial implementation in `public/app.js` (showCoinBagModalQueue + pumpCoinBagQueue + showCoinBagModal ~80 LoC, submitRunning call site updated, showGiftModal deprecated) committed locally; NIGHTLY-TODO updated: Stage 5 checkbox ✅, Status → partial done; Stage 6 still ⏳ pending; unit test + e2e deferred to future nightly. git commit blocked by sandbox approval at time of update — commit hash to be recorded when resolved.
+    > 📌 **Drift fix 2026-07-12 (PM 修)**: #013 Stage 5 ✅ committed `afcd192` (public/app.js ~80 LoC: showCoinBagModalQueue + pumpCoinBagQueue + showCoinBagModal, submitRunning call updated, showGiftModal deprecated); NIGHTLY-TODO ✅ updated: Stage 5 checkbox ✅, Status → partial done; Stage 6 ⏳ pending; unit test + e2e deferred to future nightly.
 
     ## Item #014 — Admin 暂停任务 (suspend / 恢复, 不删) ✅ done (2026-07-05, PR #45 merged)
 
