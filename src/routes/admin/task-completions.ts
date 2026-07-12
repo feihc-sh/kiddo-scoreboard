@@ -373,4 +373,142 @@ taskCompletions.post('/:id/hard-delete', async (c) => {
   }
 });
 
+// ---------------- GET /by-task (calendar view) ----------------
+//
+// Item #016 §2 (2026-07-12 feihao): new endpoint for admin calendar view.
+// Returns ALL kids' completions for ONE task across a date range (typically
+// a full year). Joined with kid name + task name so the UI can render a
+// GitHub-style per-kid heatmap without N+1 calls.
+//
+// Item #016 §5 (2026-07-12 feihao): also returns per-subitem 勾选 status
+// (only meaningful when the task has subitems — e.g. 暑假作业's 6 hardcoded
+// items in app.js:59-66). Returned as `completions[].subitems` =
+//   { 'chinese': 1, 'math-school': 0, ... }
+// where 1 = 勾了, 0 = opened modal but did not勾, omitted key = no row.
+//
+//   GET /api/admin/task-completions/by-task
+//     ?task_id=N   (required, positive integer)
+//     ?from=YYYY-MM-DD (optional, default 'YYYY-01-01' of current year)
+//     ?to=YYYY-MM-DD   (optional, default 'YYYY-12-31' of current year)
+//     Returns {
+//       task_id, task_name,
+//       from_date, to_date,
+//       kids: [{ kid_id, kid_name, completions: [{id, completed_date, status,
+//                completed_at, subitems: { chinese: 1, ... }}] }]
+//     }
+taskCompletions.get('/by-task', async (c) => {
+  const pmUserId = await getPmUserId(c);
+  if (pmUserId == null) {
+    return c.json(
+      { error: { code: 'UNAUTHORIZED', message: 'PM session required' } },
+      401,
+    );
+  }
+
+  // task_id: required
+  const taskIdRaw = c.req.query('task_id');
+  if (taskIdRaw == null) {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'task_id is required' } },
+      400,
+    );
+  }
+  const taskId = Number(taskIdRaw);
+  if (!Number.isInteger(taskId) || taskId <= 0) {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'task_id must be a positive integer' } },
+      400,
+    );
+  }
+
+  // from_date / to_date: optional with sensible defaults (full current year).
+  const currentYear = new Date().getUTCFullYear();
+  const fromDate = c.req.query('from') ?? `${currentYear}-01-01`;
+  const toDate = c.req.query('to') ?? `${currentYear}-12-31`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'from/to must be YYYY-MM-DD' } },
+      400,
+    );
+  }
+
+  // 1. Resolve task name (for the section header).
+  const taskRow = await c.env.DB
+    .prepare(`SELECT id, name FROM tasks WHERE id = ?`)
+    .bind(taskId)
+    .first<{ id: number; name: string }>();
+  if (!taskRow) {
+    return c.json(
+      { error: { code: 'NOT_FOUND', message: 'task not found' } },
+      404,
+    );
+  }
+
+  // 2. Pull all completions for this task in the range, joined with kid name.
+  const rows = await c.env.DB
+    .prepare(
+      `SELECT tc.id, tc.task_id, tc.user_id, u.name AS user_name,
+              tc.status, tc.completed_date, tc.completed_at
+         FROM task_completions AS tc
+         JOIN users AS u ON u.id = tc.user_id AND u.role = 'child'
+        WHERE tc.task_id = ?
+          AND tc.completed_date BETWEEN ? AND ?
+        ORDER BY tc.user_id, tc.completed_date`,
+    )
+    .bind(taskId, fromDate, toDate)
+    .all<{
+      id: number; task_id: number; user_id: number; user_name: string;
+      status: 'active' | 'revoked'; completed_date: string; completed_at: number;
+    }>();
+
+  // 2.5 (Item #016 §5) Pull subitems for these completions in ONE query
+  //     (instead of N+1 per-completion). Filter by completion id IN set.
+  const completionIds = (rows.results ?? []).map((r) => r.id);
+  const subitemsByCompletion = new Map<number, Record<string, 0 | 1>>();
+  if (completionIds.length > 0) {
+    const placeholders = completionIds.map(() => '?').join(',');
+    const subRows = await c.env.DB
+      .prepare(
+        `SELECT task_completion_id, subitem_id, checked
+           FROM summer_homework_subitems
+          WHERE task_completion_id IN (${placeholders})`,
+      )
+      .bind(...completionIds)
+      .all<{ task_completion_id: number; subitem_id: string; checked: 0 | 1 }>();
+    for (const s of subRows.results ?? []) {
+      let m = subitemsByCompletion.get(s.task_completion_id);
+      if (!m) {
+        m = {};
+        subitemsByCompletion.set(s.task_completion_id, m);
+      }
+      m[s.subitem_id] = s.checked;
+    }
+  }
+
+  // 3. Group by kid (preserving ORDER BY for stable response).
+  const kidsMap = new Map<number, { kid_id: number; kid_name: string; completions: unknown[] }>();
+  for (const r of rows.results ?? []) {
+    let k = kidsMap.get(r.user_id);
+    if (!k) {
+      k = { kid_id: r.user_id, kid_name: r.user_name, completions: [] };
+      kidsMap.set(r.user_id, k);
+    }
+    k.completions.push({
+      id: r.id,
+      completed_date: r.completed_date,
+      status: r.status,
+      completed_at: r.completed_at,
+      subitems: subitemsByCompletion.get(r.id) ?? {},
+    });
+  }
+
+  return c.json({
+    task_id: taskRow.id,
+    task_name: taskRow.name,
+    from_date: fromDate,
+    to_date: toDate,
+    kids: Array.from(kidsMap.values()),
+  });
+});
+
 export default taskCompletions;
