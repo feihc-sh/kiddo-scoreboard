@@ -484,14 +484,14 @@ export async function writeRevokeAuditLog(db, recordId, details): void
   - **🚫 不做**: 触发逻辑 (Stage 5), 音效 (用户拍板) ✓
   - `git commit -m "feat(running): coin bag modal HTML + CSS animation (Item #013 §4)"` ✓ `97de86e`
 
-- [x] **Stage 5 (≤20 min)**: 触发逻辑 + 数据绑定 ✅ done 2026-07-12 (commit `<pending>`)
+- [x] **Stage 5 (≤20 min)**: 触发逻辑 + 数据绑定 ✅ done 2026-07-12 (commit `afcd192`)
  - `public/app.js` 改: `showCoinBagModal(point, coins)` 函数 (~50 LoC) — 替代 `showGiftModal()`, 接 award_coins, 触发 3 阶段动画 ✓
  - `public/app.js` 改: `submitRunning()` 成功后, 遍历 `response.new_points_reached[]`, **sequential 队列** (1 个 bag modal 完才弹下 1 个) ✓
  - `public/app.js` 改: `running-gift-modal` 移除 (or mark deprecated, Stage 6 删) ✓
  - 单测: `tests/unit/coin-bag-modal-trigger.test.ts` (~40 LoC, 6 case) — **Deferred to future nightly**
  - E2E: `tests/e2e/ui-coin-bag.spec.ts` (~60 LoC, 跑 8 km → 看到 bag drop 动画 + 数字 +2 + 按钮) — **Deferred to future nightly**
  - **🚫 不做**: 音效, 老 gift modal 兼容 (Stage 6 一并删) ✓
- - `git commit -m "feat(running): coin bag modal trigger + sequential queue (Item #013 §5)"` ✓ (commit hash pending — git commit blocked by sandbox approval, to be resolved manually)
+ - `git commit -m "feat(running): coin bag modal trigger + sequential queue (Item #013 §5)"` ✓ `afcd192`
 
 - [ ] **Stage 6 (≤15 min)**: Admin 撤销 UI + cascade summary + 文档
  - `src/routes/admin/running.ts` (新文件, ~80 LoC): `POST /api/admin/running/records/:id/revoke` 调 `rederiveRecordRevoke()`, 返 cascade summary JSON
