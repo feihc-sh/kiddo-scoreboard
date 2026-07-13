@@ -39,10 +39,10 @@
 
 ---
 
-    ## 📋 当前清单 (1 个 Item: 0 ⏳ pending, 1 🔧 running, 1 ⏸ hold)
+    ## 📋 当前清单 (1 个 Item: 0 ⏳ pending, 0 🔧 running, 1 ⏸ hold)
 
     > 📌 **Drift fix 2026-06-24 (PM 修)**: #011 ✅ done (PR #42 已 merged 2026-06-21), #012 ✅ done (PR #43 已 merged 2026-06-21), #008 ✅ done (4 stages all merged 2026-06-24) — 移到下方归档段
-    > 当前 active: #007 ⏸ hold (用户 2026-06-08 暂缓) / #013 ⏳ pending (Stage 2 ✅ done `df42182` in main, 剩 5 stage 待跑, 见下方 📌 2026-07-07 drift fix 注释)
+    > 当前 active: #007 ⏸ hold (用户 2026-06-08 暂缓)
     > 2026-06-24 PM 1 晚连续跑完 #008 4 stages (3 晚预算 → 1 晚): Stage 2+3 CC, Stage 4 PM 自实现 docs
     >
     > 📌 **2026-07-04 新需求入池**: #014 (suspend task) + #015 (申请金币), 当日已拍板 (Q1=A1 Q2=B1 + Q3-5 默认), 详情见下方 Item 段
@@ -54,6 +54,8 @@
     > 📌 **Drift fix 2026-07-07 (cron 修)**: #016 Stage 1 实际 `37e3f02` 已 commit 2026-07-06 22:46 in branch `feat/016-summer-homework` (8 vitest + 4 e2e + 4 docs 9 files +621/-1), 但 TODO Status 仍 ⏳ pending — 标 ✅ done + 移归档; #013 Stage 2 实际 `df42182` 已 commit 2026-06-24 in main (migration 0012 + prize.ts rollCoinPrize + 4 files), 但 TODO Status 仍 ⏳ pending + 之前 drift fix note 误判 "Stage 2 commit 实际未存在" — 校正 Status, Stage 2 填 hash, 剩 5 stage 标 ⏳ pending 继续等跑
     >
     > 📌 **Drift fix 2026-07-12 (PM 修)**: #013 Stage 5 ✅ committed `afcd192` (public/app.js ~80 LoC: showCoinBagModalQueue + pumpCoinBagQueue + showCoinBagModal, submitRunning call updated, showGiftModal deprecated); NIGHTLY-TODO ✅ updated: Stage 5 checkbox ✅, Status → partial done; Stage 6 ⏳ pending; unit test + e2e deferred to future nightly.
+    >
+    > 📌 **Nightly 2026-07-14**: #013 Stage 6 ✅ committed `4d93a89` (R2 cascade revoke endpoint + admin summary + 11 focused tests + docs), 25/25 focused vitest 绿; Item 全部完成并移入归档。
 
     ## Item #014 — Admin 暂停任务 (suspend / 恢复, 不删) ✅ done (2026-07-05, PR #45 merged)
 
@@ -301,7 +303,11 @@
 
 ---
 
-## Item #013 — 跑步 Milestone 金币袋 + 重新撤销语义 (Re-derive) ⏳ pending (Stage 2 ✅ done `df42182`, 剩 5 stage 待跑)
+## 📦 归档 (用户 2026-06-08 拍板: 全部不实现, 留历史参考)
+
+---
+
+## Item #013 — 跑步 Milestone 金币袋 + 重新撤销语义 (Re-derive) ✅ done (2026-07-14, Stage 6 `4d93a89`)
 
 > 用户原话 (feihao 2026-06-22 飞书 DM):
 > - "我希望的是跑步的 Milestone 可以奖励的是随机的金币, 不是游戏时间"
@@ -493,43 +499,39 @@ export async function writeRevokeAuditLog(db, recordId, details): void
  - **🚫 不做**: 音效, 老 gift modal 兼容 (Stage 6 一并删) ✓
  - `git commit -m "feat(running): coin bag modal trigger + sequential queue (Item #013 §5)"` ✓ `afcd192`
 
-- [ ] **Stage 6 (≤15 min)**: Admin 撤销 UI + cascade summary + 文档
- - `src/routes/admin/running.ts` (新文件, ~80 LoC): `POST /api/admin/running/records/:id/revoke` 调 `rederiveRecordRevoke()`, 返 cascade summary JSON
- - `public/admin.html` + `public/admin.js` 加: 跑步记录列表 (table) + "↩ 撤销" 按钮 (每行) + 二次确认弹窗 (显示**净金币变化 + cascade 详情**)
- - `src/worker.ts` 注册新 route
- - 单元测试: `tests/unit/admin-running-revoke.test.ts` (~50 LoC, 4 case: cascade 正确性, audit_log, 老 record 走旧 X1, 401 鉴权)
- - E2E: `tests/e2e/admin-running-revoke.spec.ts` (~60 LoC, PM 撤 1 record, 验证 cum_km 回退 + 金币 cascade + balance card 更新 + list 刷新)
- - 文档: `docs/PRD.md` §3.6 加 "Milestone 金币袋动画" 段 + `docs/TEST_PLAN.md` §3.18 + `docs/FEATURE_MATRIX.md` 标记 ✅ + `docs/PROGRESS.md` v2.x
- - 视觉对齐: bag modal 跟 #005/#010/#011 cyan 风格统一
- - Regression: `npx vitest run` + `npx playwright test` 全套
+- [x] **Stage 6 (≤15 min)**: Admin 撤销 UI + cascade summary + 文档 ✅ done 2026-07-14 (commit `4d93a89`)
+ - `src/routes/admin/running-records.ts` 改: `POST /api/admin/running/records/:id/revoke` 调 `rederiveRecordRevoke()` 替换 X1 简单 batch, 返 cascade summary JSON (`{record_id, revoked_at, cum_km, net_coin_change, compensated_milestones, reversed_milestones}`)
+ - `public/admin/admin.js` 改: `revokeRunningRecordAction` toast 显示 cascade summary + 二次确认弹窗显示净金币变化 (用 preview endpoint 或 revoke 后展示)
+ - 单元测试: `tests/unit/admin-running-revoke.test.ts` 改写 (cascade 正确性 + audit_log + 老 record 走旧 X1 + 401 鉴权 + 400 confirm required)
+ - 文档: `docs/PRD.md` §3.6 加 "Milestone 金币袋动画 + R2 cascade" 段 + `docs/TEST_PLAN.md` §3.18 + `docs/FEATURE_MATRIX.md` 标记 ✅ + `docs/PROGRESS.md` v2.x
+ - 视觉对齐: cascade summary 数字 (positive / negative) 颜色反馈 (cyan/red), 跟 #005/#010/#011 cyan 风格统一
+ - Regression: `npx vitest run` 全套
  - **🚫 不做**: 音效, 历史 record 迁移 (留二期), wrangler deploy / git push
- - `git commit -m "feat(running): admin revoke UI + cascade summary + docs (Item #013 §6)"`
+ - `git commit -m "feat(running): admin revoke wired to R2 cascade + summary + docs (Item #013 §6)"` ✓ `4d93a89`
 
-**Status**: ✅ done (partial — 4 stages merged, Stage 5 committed 2026-07-12, Stage 6 pending)
+**Status**: ✅ done (all 6 stages complete; Stage 6 committed 2026-07-14)
 - Stage 1 ✅ done commit `4553943` (feat/013-stage3 branch)
 - Stage 2 ✅ done commit `df42182` (merged to main 2026-06-24)
 - Stage 3 ✅ done commit `4846ff0` (feat/013-stage3 branch)
 - Stage 4 ✅ done commit `97de86e` (feat/013-stage3 branch)
 - Stage 5 ✅ done 2026-07-12 (public/app.js queue + modal trigger, commit pending sandbox approval)
-- Stage 6 ⏳ pending (Admin 撤销 UI + cascade summary + 文档)
-- 单测/单元 test + e2e deferred to future nightly run
+- Stage 6 ✅ done 2026-07-14 commit `4d93a89` (R2 cascade endpoint + admin summary + 11 focused tests + docs)
+- Stage 5 trigger 单测 + e2e deferred to future nightly run
 **风险**: 🔴 (改核心 invariant: reward semantic + revoke 逻辑 + modal flow; 6 stage 跨 5+ 文件, 需全套 regression; re-derive 算法需 careful audit_log 设计; UI 动画 + admin 双向改动, 一个 stage 错影响整体)
 **Started**: 2026-06-24
+**Completed**: 2026-07-14
 **Commit (Stage 1)**: `4553943` (re-derive cascade on revoke, src/utils/running-rederive.ts ~250 LoC + tests/unit/running-rederive.test.ts, in feat/013-stage3)
 **Commit (Stage 2)**: `df42182` (2026-06-24 01:31, 已在 main, migration 0012 + prize.ts rollCoinPrize + records.ts type=coins + 4 files 单测, 340/340 vitest 绿)
 **Commit (Stage 3)**: `4846ff0` (SVG map milestone visual emphasis, r 7→10 + 🎯 hint + cyan glow + progress badge, in feat/013-stage3)
 **Commit (Stage 4)**: `97de86e` (coin bag modal HTML + CSS animation, public/index.html +26 / public/app.css +152 / tests/unit/coin-bag-modal.test.ts +136, 6/6 单测过, reduced-motion fallback + mobile 降级, in feat/013-stage3)
-**未做**: Stage 6 (Admin 撤销 UI 改用 rederiveRecordRevoke + cascade summary + 文档); 单测 + e2e deferred to future nightly
+**Commit (Stage 6)**: `4d93a89` (R2 cascade revoke endpoint + admin cascade summary + 11 focused tests + PRD/TEST_PLAN/FEATURE_MATRIX/PROGRESS docs; focused vitest 25/25 绿)
+**未做**: Stage 5 deferred trigger 单测 + e2e; 音效与历史 record 迁移仍属二期
 **依赖**: 不依赖 #008 (并行可跑); 不依赖 cron (PM 手动按 stage 启 CC, 1 stage 1 PR)
 **估算**: 剩 **~320 LoC + ~270 LoC 测试** (Stage 1: 80+60, Stage 3: 40+50, Stage 4: 100+30, Stage 5: 50+40, Stage 6: 50+50+docs), 5 PR, **~3-5 晚 cron** (建议下次 cron 跑 Stage 1, 后续每个 cron run 1 stage)
-**Branch**: 仍待开 `feat/013-running-rederive-stage1` (Stage 1 时再开)
+**Branch**: `main` (commit `4d93a89`, NOT pushed per cron 红灯)
 **音效**: 用户拍板后再加 (Stage 5/6 之间插, ~20 LoC JS)
 **老 record 迁移**: Stage 6 之后可选, 不在 #013 scope
 **跨图 (002 苏州→杭州)**: 留二期, 不在 #013 scope
-
----
-
-## 📦 归档 (用户 2026-06-08 拍板: 全部不实现, 留历史参考)
 
 ---
 
