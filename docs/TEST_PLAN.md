@@ -1091,14 +1091,17 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 - Rng parameter: fixed 0.5 → small bucket; fixed 0.8 → medium bucket; fixed 0.95 → large bucket
 - Edge: awarded_minutes never negative
 
-#### Unit Tests (admin-running-revoke, new — Item #011 §4)
+#### Unit Tests (admin-running-revoke, Item #011 §4 + Item #013 §6 cascade)
 
-**`tests/unit/admin-running-revoke.test.ts`**:
+**`tests/unit/admin-running-revoke.test.ts`** (11 tests):
 - GET /api/admin/running/records: 401 without cookie, returns all records including revoked
 - POST revoke: confirm: true required (400), invalid id (400), not found (404), already revoked (409)
-- Happy path: UPDATE revoked_at + INSERT -game_time score_event + UPSERT running_progress + audit_log
-- No score_event when awarded_minutes=0
+- Happy path: cascade through running_points → response summary `{record_id, revoked_at, cum_km, revoke_score_event_id:null, net_coin_change, compensated_milestones, reversed_milestones}` + UPSERT running_progress + audit_log
+- Happy path with milestone: cascade iterates running_points, writes per-milestone coin events (or skips if no award)
+- No score_event when awarded_coins=0 (cascade summary empty)
 - Double revoke returns 409
+
+**`tests/unit/running-rederive.test.ts`** (14 tests, Item #013 §1): cascade 例子 4 case + boundary (NOT_FOUND / ALREADY_REVOKED / boundary cum_km / legacy source_ref ignored) + audit_log writer
 
 #### E2E Tests
 

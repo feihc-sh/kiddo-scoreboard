@@ -74,6 +74,7 @@
 | **3.17** | Running Map Schema + Checkin (Item #011) | — | — | — | `running-schema.test.ts` `running-prize.test.ts` |
 | **3.18** | Running Map Child UI (Item #011 §2+3) | ✓ | ✓ | — | `ui-running-checkin.spec.ts` `ui-running-map.spec.ts` |
 | **3.19** | Running Map Admin Revoke (Item #011 §4) | ✓ | ✓ | — | `admin-running-revoke.test.ts` |
+| **3.19.1** | Running Map Admin Revoke — R2 Cascade + Coin Bag (Item #013 §6) | ✓ | ✓ | — | `admin-running-revoke.test.ts` (11) + `running-rederive.test.ts` (14) |
 | **3.20** | 任务装备/机甲化 (Item #008 Stage 1-4) | ✓ | ✓ | — | `task-mecha-button.test.ts` (11) + `mecha-equip-activation.test.ts` (8) + `ui-task-mecha-frame.spec.ts` (4) + `ui-equip-activation.spec.ts` (6) |
 | **3.21** | Task Suspend/Resume — Admin Toggle (Item #014) | ✓ | ✓ | — | `admin-task-toggle.test.ts` (6) + `admin-toggle-ui.test.ts` (5) | `admin-task-toggle.spec.ts` (4 e2e) |
 | **3.22** | 暑假作业 Modal — Kid UI (Item #016) | ✓ | ✓ | — | `summer-homework-modal.test.ts` (8) | `summer-homework-modal.spec.ts` (4 e2e: happy 1+2+3 + edge cancel) |

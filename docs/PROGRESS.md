@@ -1048,3 +1048,35 @@ git log --oneline -5  # 看最新进度
 **手动 follow-up** (PM 在 admin UI 5 min):
 - 创建 task "每日完成暑假作业" (icon=📝, category=study, target_account=pocket_money, token_reward=1, is_active=1, sort_order=10)
 - Production D1 无 schema 改动, 走现有 `POST /api/admin/tasks` endpoint
+
+## ✅ v2.x — Running Milestone 金币袋 + R2 Cascade 撤销 (Item #013) — 2026-07-14
+
+**Stage 6 落地** (Stage 1-5 已在之前 nightly cron 完成 — `4553943` re-derive cascade / `97de86e` coin bag modal / `afcd192` modal trigger + queue):
+
+**改动** (~50 LoC src + ~50 LoC tests + 文档):
+- `src/routes/admin/running-records.ts` (~120 LoC): `POST /api/admin/running/records/:id/revoke` 委托 `rederiveRecordRevoke()` 替换旧 X1 简单 batch, 返 cascade summary JSON `{record_id, revoked_at, cum_km, revoke_score_event_id:null, net_coin_change, compensated_milestones, reversed_milestones}`; 401/404/409/confirm 行为保留
+- `public/admin/admin.js` (`revokeRunningRecordAction`): toast 显示 cascade summary + 净金币变化 ("已撤销 · 净金币 +2 (补偿 1 / 反向 0)"), 二次确认文案改为 "积分按 milestone cascade 调整" (不假称 preview endpoint)
+- `tests/unit/admin-running-revoke.test.ts`: 11 tests (新增 cascade response shape 断言 + milestone happy-path + 401/400/404/409/double-revoke 保留); mock 扩展支持 `running_points` 表 + `score_events.source_ref` 查询 + `INSERT INTO score_events RETURNING id` + logAudit 5-参数签名
+
+**R2 vs X1**:
+- **X1 (旧)**: 撤 record → 写 1 个 `-X` score_event (aggregate reverse), 不区分哪些 milestone 仍 reached
+- **R2 (新)**: 撤 record → 重算 cum_km → 对**仍 reached** 的 milestone 写 `compensation +X`, 对**不再 reached** 的 milestone 写 `reverse -X`; 一条 record 可触发 0+ score_events
+
+**响应字段语义**:
+- `revoke_score_event_id: null` — R2 写 0+ events, 没有"the" revoke event id; 保留字段供 X1 客户端兼容
+- `net_coin_change` — 本次调用的金币净变化 (signed; 0 = 不变)
+- `compensated_milestones` — 仍 reached + 原 award 仍在, 新写的 compensation 列表
+- `reversed_milestones` — 不再 reached, 新写的 reverse 列表
+
+**历史 record 兼容**: 旧 `source_ref='running:N'` (pre-§2) record 撤走**旧 X1 简单 reverse** (无 cascade, 只 reverse 单个 score_event); 新 record 走 R2 cascade. 文档详见 NIGHTLY-TODO.md Item #013 §1.
+
+**测试状态** (本 commit):
+- ✅ 11 unit (`admin-running-revoke.test.ts`): cascade 正确性 + audit_log + 401/400/404/409/double-revoke
+- ✅ 14 unit (`running-rederive.test.ts`, Stage 1): re-derive cascade 4 case + boundary
+- ⏳ e2e (deferred to future nightly)
+- ✅ 0 pre-existing 失败新增 (3 个 pre-existing failure: `mecha-equip-activation.test.ts` 2 个 + `summer-homework-modal.test.ts` 1 个, verified on clean HEAD `68ea916`, 跟本 stage 无关)
+
+**风险**: 🟢
+- 仅替换 admin revoke 内部实现, 0 schema 改动, 0 新 endpoint, 对外契约 (HTTP 200/400/404/409) 保持
+- 旧 `running:N` source_ref record: cascade 走 skip (找不到 matching award), 行为跟 §1 spec 一致
+

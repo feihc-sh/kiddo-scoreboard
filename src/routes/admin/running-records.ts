@@ -11,6 +11,7 @@
 
 import { Hono } from 'hono';
 import { getPmUserId } from '../../middleware/requirePm.ts';
+import { rederiveRecordRevoke } from '../../utils/running-rederive.ts';
 import type { Env } from '../../worker.ts';
 
 // ---- helpers --------------------------------------------------------
@@ -87,6 +88,11 @@ interface RevokeBody {
   confirm?: unknown;
 }
 
+// Item #013 §6: the admin revoke endpoint now delegates to R2 cascade
+// (rederiveRecordRevoke), which writes 0+ per-milestone score_events with
+// source_ref='running:N:point:P[:compensation|:reverse]' instead of a single
+// -X score_event. The response carries the cascade summary so the admin UI
+// can show the user-visible net coin delta.
 async function revokeRunningRecord(
   db: D1Database,
   id: number,
@@ -95,116 +101,24 @@ async function revokeRunningRecord(
   record_id: number;
   revoked_at: number;
   cum_km: number;
+  // R2 writes 0+ score_events (one per affected milestone) — there is no
+  // single "the" revoke event id, so this field is always null. Kept in the
+  // response shape for backward compatibility with X1 clients that read it.
   revoke_score_event_id: number | null;
+  net_coin_change: number;
+  compensated_milestones: Array<{ point_id: number; coins: number }>;
+  reversed_milestones: Array<{ point_id: number; coins: number }>;
 }> {
   const now = Math.floor(Date.now() / 1000);
-
-  // 1) Load the record
-  const rec = await db
-    .prepare(
-      `SELECT id, child_id, map_id, km, awarded_coins, revoked_at
-       FROM running_records WHERE id = ?`,
-    )
-    .bind(id)
-    .first<{
-      id: number;
-      child_id: number;
-      map_id: number;
-      km: number;
-      awarded_coins: number | null;
-      revoked_at: number | null;
-    }>();
-  if (!rec) throw new Error('NOT_FOUND');
-  if (rec.revoked_at !== null) throw new Error('ALREADY_REVOKED');
-
-  // 2) Recompute active cum_km (excluding this record) before we UPDATE it
-  const cumRow = await db
-    .prepare(
-      `SELECT COALESCE(SUM(km), 0) AS cum_km
-       FROM running_records
-       WHERE child_id = ? AND map_id = ? AND revoked_at IS NULL AND id != ?`,
-    )
-    .bind(rec.child_id, rec.map_id, id)
-    .first<{ cum_km: number }>();
-  const newCumKm = Number(cumRow?.cum_km ?? 0);
-
-  // 3) Build the batch statements
-  const stmts = [
-    // a. Revoke the record
-    db
-      .prepare(
-        `UPDATE running_records
-         SET revoked_at = ?, revoked_by = ?
-         WHERE id = ?`,
-      )
-      .bind(now, pmUserId, id),
-    // c. UPSERT running_progress (write-through cache)
-    db
-      .prepare(
-        `INSERT INTO running_progress (child_id, map_id, cum_km, last_updated)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT (child_id, map_id)
-         DO UPDATE SET cum_km = ?, last_updated = ?`,
-      )
-      .bind(
-        rec.child_id,
-        rec.map_id,
-        newCumKm,
-        now,
-        newCumKm,
-        now,
-      ),
-    // d. Audit log
-    db
-      .prepare(
-        `INSERT INTO audit_log
-           (actor, action, target_event_id, target_user_id, details, created_at)
-         VALUES ('pm', 'running_record_revoke', ?, ?, ?, ?)`,
-      )
-      .bind(
-        id,
-        rec.child_id,
-        JSON.stringify({
-          record_id: id,
-          child_id: rec.child_id,
-          map_id: rec.map_id,
-          km: rec.km,
-          awarded_coins: rec.awarded_coins,
-          cum_km_after: newCumKm,
-        }),
-        now,
-      ),
-  ];
-
-  // b. Score event for point reversal (only if there were awarded minutes)
-  let revokeScoreEventId: number | null = null;
-  if (rec.awarded_coins && rec.awarded_coins > 0) {
-    stmts.splice(
-      1,
-      0,
-      db
-        .prepare(
-          `INSERT INTO score_events
-             (user_id, type, change_value, reason, status, submitted_by, source, source_ref, created_at)
-           VALUES (?, 'coins', ?, '跑步打卡撤销', 'approved', 'pm', 'manual', ?, ?)`,
-        )
-        .bind(rec.child_id, -rec.awarded_coins, `running_revoke:${id}`, now),
-    );
-  }
-
-  // Execute batch
-  const results = await db.batch(stmts);
-
-  // Extract last_row_id of the score_event if it was written
-  if (rec.awarded_coins && rec.awarded_coins > 0) {
-    revokeScoreEventId = Number(results[1]?.meta?.last_row_id ?? 0) || null;
-  }
-
+  const result = await rederiveRecordRevoke(db, id, pmUserId);
   return {
     record_id: id,
     revoked_at: now,
-    cum_km: newCumKm,
-    revoke_score_event_id: revokeScoreEventId,
+    cum_km: result.newCumKm,
+    revoke_score_event_id: null,
+    net_coin_change: result.netCoinChange,
+    compensated_milestones: result.compensatedMilestones,
+    reversed_milestones: result.reversedMilestones,
   };
 }
 

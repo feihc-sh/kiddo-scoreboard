@@ -664,20 +664,38 @@ function renderRunningRecords() {
   });
 }
 
+// Item #013 §6 — admin revoke now triggers R2 cascade (rederiveRecordRevoke).
+// The endpoint returns a cascade summary instead of a single -X event; we
+// surface the net coin delta + per-milestone counts in the success toast so
+// the PM sees what the revoke actually did. Confirmation copy is kept safe
+// (no preview claim — there's no /preview endpoint; we just say "积分按
+// cascade 调整" and let the response speak).
 async function revokeRunningRecordAction(id) {
   if (!Number.isInteger(id) || id <= 0) return;
   if (inFlight.has('rr-' + id)) return;
   inFlight.add('rr-' + id);
   var ok = window.confirm(
     '确定要撤销这条跑步记录?\n\n' +
-    '• 积分将扣回 (如有)\n' +
     '• 累计公里数将回退\n' +
+    '• 积分按 milestone cascade 调整 (补偿 / 反向)\n' +
     '此操作不可撤销。'
   );
   if (!ok) { inFlight.delete('rr-' + id); return; }
   try {
-    await api('POST', '/api/admin/running/records/' + id + '/revoke', { confirm: true });
-    toast('已撤销', 'success');
+    const result = await api(
+      'POST',
+      '/api/admin/running/records/' + id + '/revoke',
+      { confirm: true },
+    );
+    // Cascade summary: net_coin_change signed (+ = compensation net, - = reverse net).
+    const net = Number(result && result.net_coin_change);
+    const compensated = (result && result.compensated_milestones) || [];
+    const reversed = (result && result.reversed_milestones) || [];
+    const sign = net > 0 ? '+' : '';
+    const msg =
+      '已撤销 · 净金币 ' + sign + net +
+      ' (补偿 ' + compensated.length + ' / 反向 ' + reversed.length + ')';
+    toast(msg, 'success');
     await loadRunningRecords();
     renderRunningRecords();
   } catch (e) {

@@ -714,6 +714,7 @@ WHERE user_id = ? AND type = 'pocket_money' AND status = 'approved';
 | F10 | PM 审批 | 待审批列表，通过/拒绝/撤销 |
 | F11 | 双账户兑换 | /admin/exchange 选方向 + 数量，生成事件，余额联动 |
 | F12 | 周额度发放 | /admin/grant 双账户分配 |
+| F17 | Running Milestone 金币袋动画 + R2 Cascade 撤销 (Item #013 §4+6) | child UI 弹 🪙 金币袋 modal (sequential queue); PM 撤 record 走 R2 cascade: 仍 reached milestone 写 compensation, 不再 reached 写 reverse; 响应带 `{net_coin_change, compensated_milestones, reversed_milestones}` summary |
 | F13 | 审计 log | 时间线视图，含 task_complete / task_revoke / exchange 等 |
 | F14 | 路由守卫 | 儿子访问 /admin/* 跳转登录 |
 | F15 | iPad 适配 | Safari 横屏触摸友好，字体 ≥ 18px |
