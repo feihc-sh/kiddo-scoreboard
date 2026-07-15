@@ -6,11 +6,13 @@
 
 import { loadState, saveState, $, setText } from './utils.js';
 import { renderWorldMap } from './world-map.js';
-import { renderStageIntro, startCombat } from './stage-intro.js';
+import { renderStageIntro } from './stage-intro.js';
+import { showBattleView } from './battle-controller.js';
 
 // View names
 const VIEW_WORLD_MAP = 'world-map';
 const VIEW_STAGE_INTRO = 'stage-intro';
+const VIEW_BATTLE = 'battle';
 
 /** @type {object | null} */
 let gameState = null;
@@ -47,10 +49,12 @@ function renderHUD() {
 function showView(viewName, viewData = {}) {
   const worldMapView = $('view-world-map');
   const stageIntroView = $('view-stage-intro');
+  const battleView = $('view-battle');
 
   // Hide all views
   worldMapView?.classList.remove('active');
   stageIntroView?.classList.remove('active');
+  battleView?.classList.remove('active');
 
   // Show requested view
   switch (viewName) {
@@ -69,6 +73,12 @@ function showView(viewName, viewData = {}) {
           onStageClick: handleStageClick,
           onBack: handleBackToWorldMap,
         });
+      }
+      break;
+
+    case VIEW_BATTLE:
+      if (battleView) {
+        battleView.classList.add('active');
       }
       break;
 
@@ -116,8 +126,22 @@ function handleStageClick(stageIdx) {
   };
   saveState(gameState);
 
-  // Start combat (P2: shows alert, P3: will hook actual combat)
-  startCombat(worldIdx, stageIdx);
+  // Start combat (P3: launch battle controller)
+  showBattleView(gameState, handleBattleEnd);
+}
+
+/**
+ * Handle battle end
+ * @param {object} result - { type: 'victory'|'defeat', state: updatedGameState }
+ */
+function handleBattleEnd(result) {
+  // Update game state from battle result
+  gameState = result.state;
+  saveState(gameState);
+  renderHUD();
+
+  // Return to world map
+  showView(VIEW_WORLD_MAP);
 }
 
 /**
