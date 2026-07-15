@@ -139,3 +139,11 @@
 - **Check**: GitHub Actions run log
 - **Recovery**: `wrangler d1 export kiddo-scoreboard-db --remote --output=remote-backup/manual-$(date +%Y-%m-%d).sql`
 
+## 2026-07-15T12:03:51Z - Deploy or smoke test FAILED
+- **Commit**: 491f0b3fac0cdd8b43795ae8737f40ebe48b9b1f
+- **Actor**: feihc-sh
+- **Run**: 29413778230
+- **Branch**: refs/heads/main
+- **Backup was OK** (data safe), but deploy/smoke-test broke something
+- **Recovery**: Roll back to last known good deploy via Cloudflare dashboard
+
