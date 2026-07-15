@@ -155,6 +155,8 @@ function closeRunningCheckinModal() {
   const form = document.getElementById('running-checkin-form');
   if (form) form.reset();
   if (modal) modal.hidden = true;
+  // §3.10: reset in-flight flag when modal is closed (cancel or submit)
+  isRunningSubmitInFlight = false;
 }
 
 function showRunningError(message) {
@@ -164,7 +166,17 @@ function showRunningError(message) {
   err.hidden = false;
 }
 
+// §3.10: in-flight flag to prevent cancel race condition
+let isRunningSubmitInFlight = false;
+
+// §3.12: completion modal "tap-again-to-cancel" state
+let shownCompletionModal = false;
+
 async function submitRunning(km) {
+  // §3.10: guard against double-submit + cancel race
+  if (isRunningSubmitInFlight) return;
+  isRunningSubmitInFlight = true;
+
   const submitBtn = document.getElementById('running-checkin-submit');
   if (submitBtn) submitBtn.disabled = true;
   try {
@@ -222,6 +234,8 @@ async function submitRunning(km) {
     showRunningError(e?.message || '提交失败, 再试一次');
   } finally {
     if (submitBtn) submitBtn.disabled = false;
+    // §3.10: clear flag so user can retry or re-submit after any outcome
+    isRunningSubmitInFlight = false;
   }
 }
 
@@ -802,14 +816,44 @@ function showCompletionModal(stats) {
       waitingEl.hidden = false;
     }
   }
+  // §3.12: mark that modal is newly shown; first close attempt will cancel
+  shownCompletionModal = true;
   modal.hidden = false;
   // Fire confetti
   if (typeof fireConfetti === 'function') fireConfetti();
 }
 
+// §3.12: completion modal — "再按一次取消完成" edge case
 function closeCompletionModal() {
   const modal = document.getElementById('running-completion-modal');
-  if (modal) modal.hidden = true;
+  if (!modal) return;
+
+  if (shownCompletionModal) {
+    // First tap: change button text to prompt "再按一次取消"
+    shownCompletionModal = false;
+    const btn = document.getElementById('running-completion-next');
+    const waiting = document.getElementById('running-completion-waiting');
+    if (btn) {
+      btn.textContent = '再按一次取消完成';
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-secondary');
+    }
+    if (waiting) waiting.textContent = '点击上方按钮取消通关';
+    return; // Keep modal open
+  }
+
+  // Second tap: actually close
+  modal.hidden = true;
+  shownCompletionModal = false;
+  // Reset button text for next time
+  const btn = document.getElementById('running-completion-next');
+  if (btn) {
+    btn.textContent = '查看下一张地图';
+    btn.classList.remove('btn-secondary');
+    btn.classList.add('btn-primary');
+  }
+  const waiting = document.getElementById('running-completion-waiting');
+  if (waiting) waiting.textContent = '🌍 等待 PM 制作下一张地图...';
 }
 
 /** Load running map data from the API and render the map. */
