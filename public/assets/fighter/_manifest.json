@@ -1,0 +1,75 @@
+{
+  "generated_at": "2026-07-14T14:53:56Z",
+  "model": "pollinations-flux",
+  "style": "pixel art / NES palette / chibi / white bg / 256x256",
+  "count": 8,
+  "ok_count": 8,
+  "sprites": [
+    {
+      "file": "hero-idle.png",
+      "status": "ok",
+      "bytes": 12753,
+      "elapsed_s": 1.6,
+      "attempt": 1,
+      "path": "/Users/tidusmaomao/workspace/kiddo-scoreboard/public/assets/fighter/hero-idle.png"
+    },
+    {
+      "file": "hero-attack.png",
+      "status": "ok",
+      "bytes": 13659,
+      "elapsed_s": 1.2,
+      "attempt": 1,
+      "path": "/Users/tidusmaomao/workspace/kiddo-scoreboard/public/assets/fighter/hero-attack.png"
+    },
+    {
+      "file": "hero-hurt.png",
+      "status": "ok",
+      "bytes": 10755,
+      "elapsed_s": 101.3,
+      "attempt": 3,
+      "path": "/Users/tidusmaomao/workspace/kiddo-scoreboard/public/assets/fighter/hero-hurt.png",
+      "regenerated_at": "2026-07-14T16:14:23Z",
+      "prompt_v2": "kneeling one knee + clutching chest + sweat drops"
+    },
+    {
+      "file": "hero-victory.png",
+      "status": "ok",
+      "bytes": 11341,
+      "elapsed_s": 1.1,
+      "attempt": 1,
+      "path": "/Users/tidusmaomao/workspace/kiddo-scoreboard/public/assets/fighter/hero-victory.png"
+    },
+    {
+      "file": "monster-idle.png",
+      "status": "ok",
+      "bytes": 9201,
+      "elapsed_s": 1.2,
+      "attempt": 1,
+      "path": "/Users/tidusmaomao/workspace/kiddo-scoreboard/public/assets/fighter/monster-idle.png"
+    },
+    {
+      "file": "monster-attack.png",
+      "status": "ok",
+      "bytes": 10074,
+      "elapsed_s": 1.5,
+      "attempt": 1,
+      "path": "/Users/tidusmaomao/workspace/kiddo-scoreboard/public/assets/fighter/monster-attack.png"
+    },
+    {
+      "file": "monster-hurt.png",
+      "status": "ok",
+      "bytes": 10530,
+      "elapsed_s": 1.9,
+      "attempt": 1,
+      "path": "/Users/tidusmaomao/workspace/kiddo-scoreboard/public/assets/fighter/monster-hurt.png"
+    },
+    {
+      "file": "monster-defeat.png",
+      "status": "ok",
+      "bytes": 11758,
+      "elapsed_s": 30.9,
+      "attempt": 1,
+      "path": "/Users/tidusmaomao/workspace/kiddo-scoreboard/public/assets/fighter/monster-defeat.png"
+    }
+  ]
+}

@@ -1,0 +1,542 @@
+/* public/fighter/fighter.css
+ * Fighter game Stage 1 minimal styles.
+ * Kid-friendly light theme with red HP bars.
+ */
+
+/* ---- Reset & base ---- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: linear-gradient(180deg, #dbeafe 0%, #fef3c7 100%);
+  color: #374151;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Fighter shell ---- */
+.fighter-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  width: 100%;
+  max-width: 860px;
+  position: relative;
+}
+
+/* ---- Stage info ---- */
+#stage-info {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #6b7280;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ---- HP Bar ---- */
+.hp-bar {
+  width: 100%;
+  max-width: 800px;
+  height: 24px;
+  background: #1f2937;
+  border: 2px solid #4b5563;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.hp-fill {
+  height: 100%;
+  width: 100%;
+  /* Gradient set dynamically by JS based on HP % */
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+  transition: width 0.3s ease, background 0.3s ease;
+  border-radius: 3px;
+}
+
+/* ---- Canvas arena ---- */
+.arena {
+  position: relative;
+  width: 800px;
+  height: 500px;
+  background: #f3f4f6;
+  border: 2px solid #4b5563;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#fighter-canvas {
+  display: block;
+  background: transparent;
+}
+
+/* ---- Hero sprite (inside arena) ---- */
+.hero-sprite {
+  position: absolute;
+  left: 80px;
+  bottom: 40px;
+  width: 120px;
+  height: 120px;
+  pointer-events: none;
+}
+
+.hero-sprite img.hero-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.hero-sprite.hero-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #3b82f6;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+/* ---- Action bar ---- */
+.action-bar {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 800px;
+}
+
+/* ---- Buttons (mirror app.css .btn) ---- */
+.btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  font-family: inherit;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-secondary {
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #30363d;
+}
+
+/* ---- Monster area (positioned inside arena) ---- */
+.monster-area {
+  position: absolute;
+  right: 80px;
+  bottom: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.monster-sprite {
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  font-weight: bold;
+  border-radius: 8px;
+  border: 2px solid #6b7280;
+  background: #e5e7eb;
+  color: #374151;
+  transition: transform 0.1s ease, background 0.2s ease;
+  user-select: none;
+}
+
+.monster-sprite img.monster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.monster-sprite[data-monster-id="fungus"] {
+  background: #bbf7d0;
+  color: #166534;
+}
+
+.monster-sprite[data-monster-id="worm"] {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.monster-sprite[data-monster-id="dragon"] {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.monster-sprite[data-state="fighting"] {
+  cursor: pointer;
+}
+
+.monster-sprite[data-state="fighting"]:hover {
+  transform: scale(1.05);
+}
+
+.monster-sprite[data-state="fighting"]:active {
+  transform: scale(0.95);
+}
+
+.monster-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: #374151;
+}
+
+.monster-hp-bar {
+  width: 200px;
+  height: 16px;
+  background: #1f2937;
+  border: 2px solid #4b5563;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  text-align: center;
+}
+
+.monster-hp-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+  transition: width 0.3s ease;
+  border-radius: 3px;
+}
+
+.monster-hp-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  font-family: 'Courier New', monospace;
+}
+
+/* ---- Stars counter ---- */
+.stars-counter {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 20px;
+  color: #d97706;
+  font-weight: bold;
+}
+
+/* ---- Star burst animation ---- */
+.star-burst {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 36px;
+  color: #fbbf24;
+  font-weight: bold;
+  pointer-events: none;
+  z-index: 100;
+  animation: starBurstAnim 800ms ease-out forwards;
+}
+
+@keyframes starBurstAnim {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(-30px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(-30px);
+  }
+}
+
+/* ---- Queue info ---- */
+.queue-info {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  font-size: 14px;
+  color: #6b7280;
+  font-family: 'Courier New', monospace;
+}
+
+/* ---- HP text overlay ---- */
+.hp-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  font-family: 'Courier New', monospace;
+  pointer-events: none;
+}
+
+/* ---- HP bar damage flash animation ---- */
+@keyframes hpFlashRed {
+  0%, 100% { background-color: inherit; }
+  50% { background-color: rgba(220, 38, 38, 0.3); }
+}
+
+.hp-bar.damaged {
+  animation: hpFlashRed 0.3s ease-out;
+}
+
+/* ---- Modal backdrop ---- */
+.modal-back {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Ensure hidden modals don't intercept pointer events */
+.modal-back[hidden] {
+  display: none !important;
+}
+
+/* ---- Modal card ---- */
+.modal {
+  background: #ffffff;
+  border: 2px solid #d1d5db;
+  border-radius: 12px;
+  padding: 32px 48px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  max-width: 90%;
+}
+
+.modal-title {
+  font-size: 28px;
+  font-weight: bold;
+  color: #374151;
+  margin-bottom: 16px;
+}
+
+.modal-hint {
+  font-size: 16px;
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+/* ---- Game over modal (red accent) ---- */
+.game-over-modal {
+  border-color: #dc2626;
+  box-shadow: 0 0 24px rgba(220, 38, 38, 0.2);
+}
+
+.game-over-modal .modal-title {
+  color: #f87171;
+}
+
+/* ---- Victory modal (green accent) ---- */
+.victory-modal {
+  border-color: #22c55e;
+  box-shadow: 0 0 24px rgba(34, 197, 94, 0.2);
+}
+
+.victory-modal .modal-title {
+  color: #4ade80;
+}
+
+/* ---- Dragon monster size ---- */
+.monster-sprite[data-monster-id="dragon"] {
+  width: 140px;
+  height: 140px;
+  font-size: 56px;
+}
+
+/* ---- Stage clear modal (gold accent) ---- */
+.stage-clear-modal {
+  border-color: #eab308;
+  box-shadow: 0 0 24px rgba(234, 179, 8, 0.2);
+}
+
+.stage-clear-modal .modal-title {
+  color: #facc15;
+}
+
+/* ---- Victory modal (green accent) ---- */
+.victory-modal {
+  border-color: #22c55e;
+  box-shadow: 0 0 32px rgba(34, 197, 94, 0.3);
+}
+
+.victory-modal .modal-title {
+  color: #4ade80;
+  font-size: 32px;
+}
+
+/* ---- Defeat modal (red accent) ---- */
+.defeat-modal {
+  border-color: #dc2626;
+  box-shadow: 0 0 24px rgba(220, 38, 38, 0.2);
+}
+
+.defeat-modal .modal-title {
+  color: #f87171;
+}
+
+/* ---- Modal extra hint styling ---- */
+.modal .modal-hint + .modal-hint {
+  margin-top: -16px;
+}
+
+/* ---- Shop Grid ---- */
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 20px 0;
+  width: 100%;
+}
+
+.shop-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 8px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+  font-family: inherit;
+  color: #374151;
+  min-width: 100px;
+}
+
+.shop-item:hover:not(:disabled) {
+  border-color: #3b82f6;
+  background: #dbeafe;
+}
+
+.shop-item:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.shop-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shop-item[data-owned="true"] {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.shop-item-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.shop-item-emoji-fallback {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.shop-item-name {
+  font-size: 14px;
+  font-weight: bold;
+  color: #374151;
+}
+
+.shop-item-effect {
+  font-size: 12px;
+  color: #16a34a;
+}
+
+.shop-item-cost {
+  font-size: 13px;
+  color: #d97706;
+  font-weight: bold;
+}
+
+/* ---- HP bar with image overlay ---- */
+.hp-bar--has-image .hp-fill {
+  opacity: 0.7;
+}
+
+#hp-bar-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  border-radius: 3px;
+}
+
+/* ---- Hero sprite (Stage 5 asset swap — already defined above in arena section) ---- */
+
+/* ---- Monster sprite with real image ---- */
+#monster-sprite img.monster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* ---- Asset loading indicator (E2E) ---- */
+#asset-status {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 10px;
+  color: #6b7280;
+  font-family: monospace;
+}

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <!-- Mecha theme: deep space void — mirrors index.html -->
+  <meta name="theme-color" content="#07090D">
+  <!-- Dev mode: prevent iPad Safari from caching stale HTML/JS across wrangler dev restarts. -->
+  <!-- In production (after wrangler deploy), remove these 3 lines for real CDN caching. -->
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>⚔️ Fighter — 计分板</title>
+  <link rel="stylesheet" href="/fighter/fighter.css">
+</head>
+<body class="fighter-page">
+
+  <!-- ====== Fighter Game Shell ====== -->
+  <main class="fighter-shell">
+
+    <!-- Stage indicator -->
+    <div id="stage-info">Stage 1 / 5</div>
+
+    <!-- HP Bar (hero) -->
+    <div id="hp-bar" class="hp-bar" role="progressbar" aria-label="英雄血量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+      <div id="hp-fill" class="hp-fill" style="width: 100%"></div>
+      <span id="hp-text" class="hp-text">100/100</span>
+    </div>
+
+    <!-- Stars counter -->
+    <div id="stars-counter" class="stars-counter" hidden>⭐ <span id="stars-value">0</span></div>
+
+    <!-- Floating +1⭐ feedback (Stage 2 animation) -->
+    <div id="star-burst" class="star-burst" hidden>+1⭐</div>
+
+    <!-- Stage queue indicator -->
+    <div id="queue-info" class="queue-info" hidden>剩余: <span id="queue-count">0</span></div>
+
+    <!-- Canvas arena -->
+    <div class="arena">
+      <!-- Hero sprite container (Stage 5 asset swap) -->
+      <div id="hero-sprite" class="hero-sprite"></div>
+      <!-- Monster display (placeholder — Stage 5 swaps real PNG) -->
+      <div id="monster-area" class="monster-area">
+        <div id="monster-sprite" class="monster-sprite" data-monster-id="">?</div>
+        <div id="monster-name" class="monster-name">点击「开始战斗」</div>
+        <div id="monster-hp-bar" class="monster-hp-bar" hidden>
+          <div id="monster-hp-fill" class="monster-hp-fill" style="width: 100%"></div>
+          <span id="monster-hp-text" class="monster-hp-text">30/30</span>
+        </div>
+      </div>
+      <canvas id="fighter-canvas" width="800" height="500"></canvas>
+    </div>
+
+    <!-- Action bar -->
+    <div class="action-bar">
+      <button id="btn-start-fight" class="btn btn-primary" onclick="startFight()">开始战斗</button>
+    </div>
+
+    <!-- Stage clear modal (between stages) — enhanced with shop in Stage 5 -->
+    <div id="stage-clear-modal" class="modal-back" hidden>
+      <div class="modal stage-clear-modal">
+        <h2 class="modal-title">🎉 通关!</h2>
+        <p id="stage-clear-text" class="modal-hint">第 1 关完成</p>
+        <p class="modal-hint">奖励: <span id="stage-clear-bonus">+5⭐</span></p>
+        <p class="modal-hint">当前余额: <span id="shop-balance">0</span>⭐</p>
+        <div id="shop-grid" class="shop-grid" hidden>
+          <!-- Populated dynamically by fighter.js -->
+        </div>
+        <button id="btn-next-stage" class="btn btn-primary">下一关 →</button>
+      </div>
+    </div>
+
+    <!-- Victory modal (after stage 5 cleared) -->
+    <div id="victory-modal" class="modal-back" hidden>
+      <div class="modal victory-modal">
+        <h2 class="modal-title">🏆 胜利!</h2>
+        <p class="modal-hint">你击败了拼写巨龙!</p>
+        <p class="modal-hint">总获得: <span id="victory-total-stars">0</span>⭐</p>
+        <button id="btn-restart-victory" class="btn btn-primary">再玩一次</button>
+      </div>
+    </div>
+
+    <!-- Defeat modal (hero HP <= 0) -->
+    <div id="defeat-modal" class="modal-back" hidden>
+      <div class="modal game-over-modal">
+        <h2 class="modal-title">💀 失败了</h2>
+        <p class="modal-hint">不要灰心，再试一次!</p>
+        <p class="modal-hint">本局获得: <span id="defeat-stars">0</span>⭐</p>
+        <button id="btn-restart-defeat" class="btn btn-primary">重新开始</button>
+      </div>
+    </div>
+
+    <!-- Legacy game-over modal (kept for compatibility) -->
+    <div id="game-over-modal" class="modal-back" hidden>
+      <div class="modal game-over-modal">
+        <h2 class="modal-title">💀 失败了</h2>
+        <p id="game-over-stats" class="modal-hint">本局获得 <span id="game-over-stars">0</span> ⭐</p>
+        <button id="btn-restart" class="btn btn-primary">🔄 重新开始</button>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="/fighter/fighter.js"></script>
+</body>
+</html>
