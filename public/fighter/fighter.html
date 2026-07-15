@@ -22,7 +22,8 @@
     <!-- Stage indicator -->
     <div id="stage-info">Stage 1 / 5</div>
 
-    <!-- HP Bar (hero) -->
+    <!-- Hero HP bar (with label to distinguish from monster HP) -->
+    <div class="hp-bar-label">⚔️ Hero HP</div>
     <div id="hp-bar" class="hp-bar" role="progressbar" aria-label="英雄血量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
       <div id="hp-fill" class="hp-fill" style="width: 100%"></div>
       <span id="hp-text" class="hp-text">100/100</span>
@@ -50,7 +51,7 @@
           <span id="monster-hp-text" class="monster-hp-text">30/30</span>
         </div>
       </div>
-      <canvas id="fighter-canvas" width="800" height="500"></canvas>
+      <canvas id="fighter-canvas" width="800" height="420"></canvas>
     </div>
 
     <!-- Action bar -->

@@ -728,10 +728,10 @@
 
     ctx.clearRect(0, 0, cw, ch);
 
-    // Background gradient
+    // Background gradient — light cream to match arena (fighter.css line 71 #f3f4f6 family)
     const grad = ctx.createLinearGradient(0, 0, 0, ch);
-    grad.addColorStop(0, '#0d1117');
-    grad.addColorStop(1, '#161b22');
+    grad.addColorStop(0, '#fef3c7');  // light cream (matches body bg bottom)
+    grad.addColorStop(1, '#fde68a');  // slightly deeper cream
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, cw, ch);
 
