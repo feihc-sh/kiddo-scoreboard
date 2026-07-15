@@ -14,3 +14,12 @@ export default defineConfig({
     },
   },
 });
+
+// Separate config for fighter-v2 tests that need browser-like environment
+export const fighterV2Config = defineConfig({
+  test: {
+    include: ['tests/unit/fighter-v2/**/*.test.ts'],
+    environment: 'jsdom',
+    globals: true,
+  },
+});

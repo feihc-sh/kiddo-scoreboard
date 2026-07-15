@@ -32,6 +32,12 @@ import {
   showDefeatModal,
   clearBattleTimer,
 } from './battle-scene.js';
+import {
+  showShopModal,
+  hideShopModal,
+  isWorldCleared,
+  awardWorldClearBonus,
+} from './shop-modal.js';
 
 /** @type {object | null} */
 let battleState = null;
@@ -358,10 +364,36 @@ function goToNextStage() {
     saveState(newState);
     showBattleView(newState, onBattleEndCallback);
   } else {
-    // World complete - go back to map
-    // (Equipment shop would go here in P4)
-    onBattleEndCallback?.({ type: 'world-clear', state: gameState });
+    // World complete - award bonus and show shop
+    let updatedState = awardWorldClearBonus(gameState);
+
+    // Mark world as cleared
+    const cleared = [...(updatedState.progress?.worldsCleared || [])];
+    if (!cleared.includes(currentWorldIdx)) {
+      cleared.push(currentWorldIdx);
+    }
+    updatedState = {
+      ...updatedState,
+      progress: {
+        ...updatedState.progress,
+        worldsCleared: cleared,
+      },
+    };
+    saveState(updatedState);
+
+    // Show shop modal before returning to map
+    showShopModal(updatedState, handleShopClose);
   }
+}
+
+/**
+ * Handle shop close - return to world map
+ * @param {object} state - potentially updated state from shop purchases
+ */
+function handleShopClose(state) {
+  clearBattleState();
+  // Return to world map with potentially updated state
+  onBattleEndCallback?.({ type: 'world-clear', state });
 }
 
 /**
