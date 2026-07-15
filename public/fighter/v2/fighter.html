@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>单词战士 V2 - 世界地图</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="fighter.css">
+</head>
+<body>
+  <div id="fighter-app" class="fighter-app">
+    <!-- Top HUD -->
+    <header class="fighter-hud">
+      <div class="fighter-hud__title">
+        ⚔️ 单词战士
+      </div>
+      <div class="fighter-hud__stars">
+        ⭐ <span id="hud-stars">0</span>
+      </div>
+    </header>
+
+    <!-- Views Container -->
+    <main class="fighter-views">
+      <!-- World Map View -->
+      <section id="view-world-map" class="fighter-view" aria-label="世界地图">
+        <!-- Content rendered by world-map.js -->
+      </section>
+
+      <!-- Stage Intro View -->
+      <section id="view-stage-intro" class="fighter-view" aria-label="关卡选择">
+        <!-- Content rendered by stage-intro.js -->
+      </section>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="fighter.js"></script>
+</body>
+</html>
