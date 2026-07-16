@@ -1,0 +1,14 @@
+// Asset mapping: backup image -> official spec name
+// Verified via vision_analyze on 2026-07-16
+{
+  "hero-idle.png": "img_fb9d8635d3da.png",
+  "hero-attack.png": "img_a77a01357e02.png",
+  "hero-hurt.png": null,
+  "hero-victory.png": null,
+  "monster-fungus.png": "img_7a30da4c4a8d.png",
+  "monster-worm.png": "img_68b62323c6b3.png",
+  "monster-dragon.png": "img_f8c5e5604334.png",
+  "equip-sword-bronze.png": "img_f0523adc6c18.png",
+  "equip-shield-wood.png": "img_3e2a457ea35b.png",
+  "equip-potion-small.png": "img_df5275e7f020.png"
+}

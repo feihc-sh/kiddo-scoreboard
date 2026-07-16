@@ -273,7 +273,7 @@ function buildHeroSection(battleState, equipment) {
       <span class="battle-hero__turn">回合 ${battleState.turnCount || 1}</span>
     </div>
     <div class="battle-hero__sprite">
-      <div class="battle-sprite battle-sprite--hero">🦸</div>
+      <img class="battle-sprite-img battle-sprite-img--hero" src="/fighter/v2/hero-idle.png" alt="hero" />
     </div>
     <div class="battle-hero__stats">
       <div class="battle-stat">
@@ -329,7 +329,7 @@ function buildMonsterSection(battleState) {
         <span class="battle-monster__progress">${monstersKilled + 1}/${total}</span>
       </div>
       <div class="battle-monster__body">
-        <div class="battle-sprite ${spriteClass}" id="monster-sprite">${monster.emoji}</div>
+        <img class="battle-sprite-img battle-sprite-img--monster" src="/fighter/v2/monster-${monster.type || monster.id}.png" alt="${monster.name}" onerror="this.outerHTML='<div class=\\'battle-sprite ${spriteClass}\\'>${monster.emoji}</div>'" />
         <div class="battle-monster__info">
           <div class="battle-stat">
             <span class="battle-stat__label">❤️ HP</span>

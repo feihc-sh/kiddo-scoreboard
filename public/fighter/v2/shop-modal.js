@@ -129,7 +129,7 @@ function buildEquipmentTypeSection(type, equip, state) {
   return `
     <div class="shop-section" data-type="${type}">
       <div class="shop-section__header">
-        <span class="shop-section__icon">${icon}</span>
+        <img class="shop-section__icon-img" src="/fighter/v2/equip-${type}-bronze.png" alt="${name}" onerror="this.outerHTML='<span class=&quot;shop-section__icon&quot;>${icon}</span>'" />
         <span class="shop-section__name">${name}</span>
       </div>
       <div class="shop-section__rows">

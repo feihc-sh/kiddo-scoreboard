@@ -1,0 +1,93 @@
+{
+  "generated_at": "2026-07-16T07:35:00Z",
+  "model": "pollinations-flux (豆包 prompt, backend 替代)",
+  "backend_note": "feihao 原 prompt 是豆包格式;豆包 API 未接,改用 pollinations.ai image API (model=flux, nologo=true) 兜底。prompt 已翻译成英文供 flux 理解。",
+  "style": "pixel art / NES-SNES palette / chibi / white bg / 256x256",
+  "size_px": "256x256",
+  "count": 10,
+  "ok_count": 10,
+  "verify": {
+    "ocr_text_clean": true,
+    "watermark_removed": true,
+    "background_pure_white": true,
+    "unique_colors_gt_10000": true
+  },
+  "sprites": [
+    {
+      "file": "hero-idle.png",
+      "status": "ok",
+      "bytes": 9640,
+      "attempt": 3,
+      "prompt_role": "kid RPG hero standing idle pose, blue cape, brave smile, sword at side"
+    },
+    {
+      "file": "hero-attack.png",
+      "status": "ok",
+      "bytes": 9288,
+      "attempt": 1,
+      "prompt_role": "hero mid-attack slash, raised sword, dynamic action pose"
+    },
+    {
+      "file": "hero-hurt.png",
+      "status": "ok",
+      "bytes": 9035,
+      "attempt": 1,
+      "prompt_role": "hero taking damage, surprised expression, slight lean back"
+    },
+    {
+      "file": "hero-victory.png",
+      "status": "ok",
+      "bytes": 10180,
+      "attempt": 1,
+      "prompt_role": "hero victory pose, raised sword, cheering expression"
+    },
+    {
+      "file": "monster-fungus.png",
+      "status": "ok",
+      "bytes": 12241,
+      "attempt": 1,
+      "prompt_role": "lazy vocabulary fungus, small green mushroom, sleepy droopy eyes, yawning"
+    },
+    {
+      "file": "monster-worm.png",
+      "status": "ok",
+      "bytes": 11721,
+      "attempt": 1,
+      "prompt_role": "polysemy worm, orange worm, floating meaning-symbol bubbles, confused look"
+    },
+    {
+      "file": "monster-dragon.png",
+      "status": "ok",
+      "bytes": 15552,
+      "attempt": 1,
+      "prompt_role": "spelling dragon boss, large red dragon with alphabet letter scales (A B C), fierce but cute"
+    },
+    {
+      "file": "equip-sword-bronze.png",
+      "status": "ok",
+      "bytes": 8315,
+      "attempt": 1,
+      "prompt_role": "bronze tier sword icon, simple brown blade with copper guard (tier=bronze, v2 naming)"
+    },
+    {
+      "file": "equip-shield-wood.png",
+      "status": "ok",
+      "bytes": 11596,
+      "attempt": 1,
+      "prompt_role": "wooden tier shield icon, round wood shield with iron boss center (tier=wood, v2 naming)"
+    },
+    {
+      "file": "equip-potion-small.png",
+      "status": "ok",
+      "bytes": 8074,
+      "attempt": 1,
+      "prompt_role": "small red health potion icon, tiny flask with heart symbol (tier=small, v2 naming)"
+    }
+  ],
+  "next_steps": [
+    "feihao 视觉验收 10 张 (hero×4 / monster×3 / equip×3)",
+    "决策: 接受 v2 替换 v1 / 改 backend 重跑 / 单张调 prompt 重跑",
+    "如替换 v1: 更新 fighter.js asset path (v1 无 tier 后缀, v2 有 tier)",
+    "P4 Equipment RPG 模块接入 v2 equip 图标"
+  ]
+}

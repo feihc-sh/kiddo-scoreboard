@@ -797,8 +797,25 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
   transition: transform 0.2s ease;
+}
+
+.battle-sprite-img {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px;
+  box-sizing: border-box;
+  transition: transform 0.2s ease;
+}
+
+.battle-sprite-img--monster {
+  width: 100px;
+  height: 100px;
 }
 
 .battle-sprite--hero {
@@ -1055,6 +1072,17 @@ body {
 
 .shop-section__icon {
   font-size: 24px;
+}
+
+.shop-section__icon-img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 4px;
+  box-sizing: border-box;
 }
 
 .shop-section__rows {
