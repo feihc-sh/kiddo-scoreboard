@@ -73,28 +73,46 @@ export async function getCoinBalanceUpdatedAt(
  * "Active" means: tasks.is_active = 1 AND task_completions.status = 'active'.
  * Revoked completions (TC-F3) don't count, so a revoke+redo cycle can
  * re-arm the bonus check (TC-F5 / TC-X4).
+ *
+ * FIX (2026-07-16 feihao 拍板): 用 NOT EXISTS 检查每个 active task 是不是
+ * 都被今天 active completion 覆盖。旧 activeCount === doneCount 会被
+ * "admin 关掉 task 但 task_completion 残留" 破坏 (doneCount 算上 is_active=0
+ * 的 row, activeCount 不算 → 永远不相等,bonus 永不触发)。新语义:
+ * "active task 全完成 = bonus" — 只要还有 active task 没完成就不触发,
+ * 完成过几个 inactive task 不影响判定。
  */
 export async function isAllTasksCompleted(
   db: D1Database,
   userId: number,
   date: string,                  // 'YYYY-MM-DD' Asia/Shanghai
 ): Promise<boolean> {
+  // Guard: zero active tasks → no bonus (nothing to "complete all of").
   const activeRow = await db
     .prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE is_active = 1`)
     .first<{ cnt: number }>();
   const activeCount = Number(activeRow?.cnt ?? 0);
   if (activeCount === 0) return false;
 
-  const doneRow = await db
+  // Bonus fires iff every active task has an active completion today.
+  // undoneCount = active tasks WITHOUT a today's active completion.
+  const undoneRow = await db
     .prepare(
-      `SELECT COUNT(*) AS cnt FROM task_completions
-       WHERE user_id = ? AND completed_date = ? AND status = 'active'`,
+      `SELECT COUNT(*) AS cnt
+       FROM tasks t
+       WHERE t.is_active = 1
+         AND NOT EXISTS (
+           SELECT 1 FROM task_completions tc
+           WHERE tc.task_id = t.id
+             AND tc.user_id = ?
+             AND tc.completed_date = ?
+             AND tc.status = 'active'
+         )`,
     )
     .bind(userId, date)
     .first<{ cnt: number }>();
-  const doneCount = Number(doneRow?.cnt ?? 0);
+  const undoneCount = Number(undoneRow?.cnt ?? 0);
 
-  return activeCount === doneCount;
+  return undoneCount === 0;
 }
 
 /**
