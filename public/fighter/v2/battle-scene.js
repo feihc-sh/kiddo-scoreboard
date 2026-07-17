@@ -281,6 +281,13 @@ export function showDefeatModal(battleState, onRetry, onBackToMap) {
 
   battleContainer.appendChild(modal);
 
+  // PM fix (Stage 3): disable attack buttons so user can't bypass defeat modal
+  const actionButtons = battleContainer.querySelectorAll('.dk-battle-button');
+  actionButtons.forEach(btn => {
+    btn.disabled = true;
+    btn.classList.add('dk-battle-button--disabled');
+  });
+
   modal.querySelector('#modal-back-to-map').addEventListener('click', () => {
     modal.remove();
     onBackToMap?.();

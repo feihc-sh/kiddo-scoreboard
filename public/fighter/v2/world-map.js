@@ -5,65 +5,12 @@
  */
 
 import { clearChildren } from './utils.js';
-const KNIGHT_SVG = `
-<svg class="dk-knight" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-  <!-- Body/Armor -->
-  <rect x="25" y="30" width="30" height="35" rx="4" fill="#cbd5e1"/>
-  <rect x="28" y="33" width="24" height="29" rx="2" fill="#94a3b8"/>
-  <!-- Helmet -->
-  <ellipse cx="40" cy="22" rx="14" ry="16" fill="#cbd5e1"/>
-  <rect x="28" y="18" width="24" height="8" fill="#94a3b8"/>
-  <rect x="36" y="22" width="8" height="12" fill="#475569"/>
-  <!-- Shield -->
-  <path d="M12 35 L12 60 Q12 68 20 68 L24 68 Q28 68 28 60 L28 35 Z" fill="#64748b"/>
-  <path d="M14 38 L14 58 Q14 64 20 64 L23 64 Q26 64 26 58 L26 38 Z" fill="#94a3b8"/>
-  <path d="M18 42 L18 56 L20 56 L20 42 Z" fill="#fbbf24"/>
-  <!-- Sword -->
-  <rect x="55" y="15" width="4" height="40" fill="#9ca3af"/>
-  <rect x="50" y="50" width="14" height="4" rx="1" fill="#92400e"/>
-  <rect x="55" y="8" width="4" height="10" fill="#d1d5db"/>
-  <!-- Legs -->
-  <rect x="28" y="65" width="10" height="12" rx="2" fill="#64748b"/>
-  <rect x="42" y="65" width="10" height="12" rx="2" fill="#64748b"/>
-  <!-- Feet -->
-  <rect x="26" y="75" width="14" height="5" rx="2" fill="#475569"/>
-  <rect x="40" y="75" width="14" height="5" rx="2" fill="#475569"/>
-</svg>
-`;
 
-// SVG Assets - Red Dragon
-const DRAGON_SVG = `
-<svg class="dk-dragon" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
-  <!-- Body -->
-  <ellipse cx="50" cy="50" rx="28" ry="22" fill="#dc2626"/>
-  <ellipse cx="50" cy="50" rx="22" ry="17" fill="#b91c1c"/>
-  <!-- Head -->
-  <ellipse cx="75" cy="35" rx="18" ry="14" fill="#dc2626"/>
-  <ellipse cx="85" cy="32" rx="8" ry="6" fill="#b91c1c"/>
-  <!-- Eye -->
-  <ellipse cx="80" cy="32" rx="4" ry="4" fill="#fbbf24"/>
-  <ellipse cx="81" cy="32" rx="2" ry="2" fill="#1f2937"/>
-  <!-- Horns -->
-  <path d="M70 25 L65 15 L72 22 Z" fill="#7f1d1d"/>
-  <path d="M78 22 L76 12 L80 20 Z" fill="#7f1d1d"/>
-  <!-- Wings -->
-  <path d="M30 40 Q10 25 5 35 Q15 35 25 45 Z" fill="#991b1b"/>
-  <path d="M28 45 Q8 30 3 40 Q13 40 23 50 Z" fill="#7f1d1d"/>
-  <path d="M70 40 Q90 25 95 35 Q85 35 75 45 Z" fill="#991b1b"/>
-  <!-- Tail -->
-  <path d="M22 55 Q5 60 10 70 Q15 65 22 60 Z" fill="#dc2626"/>
-  <!-- Legs -->
-  <rect x="35" y="65" width="8" height="12" rx="2" fill="#b91c1c"/>
-  <rect x="55" y="65" width="8" height="12" rx="2" fill="#b91c1c"/>
-  <!-- Claws -->
-  <path d="M33 75 L30 80 L36 80 Z" fill="#fbbf24"/>
-  <path d="M39 75 L36 80 L42 80 Z" fill="#fbbf24"/>
-  <path d="M53 75 L50 80 L56 80 Z" fill="#fbbf24"/>
-  <path d="M59 75 L56 80 L62 80 Z" fill="#fbbf24"/>
-  <!-- Fire breath hint -->
-  <ellipse cx="92" cy="38" rx="4" ry="3" fill="#f97316" opacity="0.7"/>
-</svg>
-`;
+// Asset image tags — per ASSET-CATALOG.md asset-swap wiring pattern
+// knight.png = hero-idle.png first frame (256x328, cropped by PM)
+// dragon.png = monster-dragon.png first frame (naming mismatch per catalog, but file exists)
+const KNIGHT_IMG = `<img class="dk-knight" src="/fighter/v2/knight.png" alt="骑士" onerror="this.outerHTML='<div class=&quot;dk-knight-fallback&quot;>🦸</div>'" />`;
+const DRAGON_IMG = `<img class="dk-dragon" src="/fighter/v2/dragon.png" alt="红龙" onerror="this.outerHTML='<div class=&quot;dk-dragon-fallback&quot;>🐉</div>'" />`;
 
 // Castle SVG
 const CASTLE_SVG = `
@@ -174,16 +121,16 @@ export function renderMainMenu(container, gameState, callbacks) {
   const charactersContainer = document.createElement('div');
   charactersContainer.className = 'dk-menu-characters';
 
-  // Knight character
+  // Knight character (real sprite, per ASSET-CATALOG.md)
   const knightWrapper = document.createElement('div');
   knightWrapper.className = 'dk-character dk-character--knight';
-  knightWrapper.innerHTML = KNIGHT_SVG;
+  knightWrapper.innerHTML = KNIGHT_IMG;
   charactersContainer.appendChild(knightWrapper);
 
-  // Dragon character
+  // Dragon character (real sprite, per ASSET-CATALOG.md)
   const dragonWrapper = document.createElement('div');
   dragonWrapper.className = 'dk-character dk-character--dragon';
-  dragonWrapper.innerHTML = DRAGON_SVG;
+  dragonWrapper.innerHTML = DRAGON_IMG;
   charactersContainer.appendChild(dragonWrapper);
 
   sceneContainer.appendChild(charactersContainer);

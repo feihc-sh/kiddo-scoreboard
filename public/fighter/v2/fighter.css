@@ -213,8 +213,8 @@ body {
 .dk-main-menu {
   background: linear-gradient(180deg, #1e3a5f 0%, #312e81 50%, #1e1b4b 100%);
   min-height: 100%;
-  display: flex;            /* PM fix: force flex so children lay out */
-  flex-direction: column;   /* PM fix: stack wrapper vertically */
+  /* display/flex-direction inherited from .fighter-view.active — do NOT override display here
+     or .fighter-view { display: none } won't apply when main menu is not active */
   overflow: visible;        /* PM fix: don't clip children */
 }
 
@@ -302,13 +302,26 @@ body {
 
 .dk-knight,
 .dk-dragon {
-  width: 80px;
-  height: 80px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges; /* Safari fallback */
+  display: block;
+  object-fit: contain;
+}
+
+.dk-knight {
+  width: 120px;
+  height: 154px; /* 256:328 ratio scaled up */
 }
 
 .dk-dragon {
-  width: 100px;
-  height: 80px;
+  width: 150px;
+  height: 123px; /* approximate 256:328 ratio */
+}
+
+.dk-knight-fallback,
+.dk-dragon-fallback {
+  font-size: 80px;
+  text-align: center;
 }
 
 .dk-grass-bg {

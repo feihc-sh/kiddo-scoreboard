@@ -7,6 +7,12 @@
 import { getWorldStages, getWorld, MONSTER_TYPES } from './stages.js';
 import { createElement, clearChildren } from './utils.js';
 
+// PM fix (Stage 3 C): production sequential lock — hide locked stages in production
+const IS_PRODUCTION =
+  window.location.hostname === 'kiddo-scoreboard.pages.dev' ||
+  (!window.location.hostname.match(/localhost|127\.0\.0\.1|trycloudflare\.com|\.dev\.|ngrok/) &&
+    window.location.hostname !== '');
+
 /**
  * Render stage intro into container element
  * @param {HTMLElement} container
@@ -60,6 +66,15 @@ export function renderStageIntro(container, worldIdx, worldsCleared, callbacks) 
 
   stages.forEach((stage, idx) => {
     const stageCleared = isStageCleared(worldIdx, idx, worldsCleared);
+
+    // PM fix (Stage 3 C): production sequential lock — hidden mode
+    // In production: only stage 0 or a stage whose previous world is cleared is visible
+    if (IS_PRODUCTION) {
+      const isUnlocked = idx === 0 || (worldIdx > 0 && worldsCleared.includes(worldIdx - 1));
+      if (!isUnlocked) {
+        return; // skip rendering (hidden mode)
+      }
+    }
 
     // Build monster description
     const monsterDesc = buildMonsterDescription(stage);

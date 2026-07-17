@@ -94,6 +94,25 @@ export function showBattleView(gameState, onEnd) {
   stageIntroView?.classList.remove('active');
   battleView.classList.add('active');
 
+  // PM fix (Stage 3 B3): if hero is already defeated on entry, show modal immediately
+  if (battleState.state === BATTLE_STATE.DEFEAT || battleState.hero.hp === 0) {
+    renderBattleScene(battleView, battleState, equipment, handleAction);
+    showDefeatModal(
+      battleState,
+      () => {
+        // Retry
+        clearBattleState();
+        retryStage();
+      },
+      () => {
+        // Back to map
+        clearBattleState();
+        onBattleEndCallback?.({ type: 'defeat', state: gameState });
+      }
+    );
+    return;
+  }
+
   // Render battle scene
   renderBattleScene(battleView, battleState, equipment, handleAction);
 
