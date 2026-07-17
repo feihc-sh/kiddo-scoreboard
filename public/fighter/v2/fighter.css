@@ -192,13 +192,15 @@ body {
 /* ==================== Views Container ==================== */
 .fighter-views {
   flex: 1;
+  display: flex;       /* flex column so .fighter-view flex: 1 resolves */
+  flex-direction: column;
   position: relative;
   overflow: hidden;
 }
 
 .fighter-view {
-  position: absolute;
-  inset: 0;
+  position: relative;  /* relative instead of absolute: fixes % height propagation in Safari WebKit */
+  flex: 1;             /* fill parent flex height so .dk-main-menu min-height: 100% resolves */
   display: none;
   flex-direction: column;
 }
@@ -211,14 +213,17 @@ body {
 .dk-main-menu {
   background: linear-gradient(180deg, #1e3a5f 0%, #312e81 50%, #1e1b4b 100%);
   min-height: 100%;
-  overflow: hidden;
+  display: flex;            /* PM fix: force flex so children lay out */
+  flex-direction: column;   /* PM fix: stack wrapper vertically */
+  overflow: visible;        /* PM fix: don't clip children */
 }
 
 .dk-menu-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100%;
+  width: 100%;              /* PM fix: was min-height 100%, now width 100% (no % of absolute) */
+  flex: 1;                  /* PM fix: grow to fill parent */
   padding: var(--space-md);
 }
 
