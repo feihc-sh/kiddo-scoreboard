@@ -5,12 +5,12 @@
  */
 
 import { loadState, saveState, $, setText } from './utils.js';
-import { renderWorldMap } from './world-map.js';
+import { renderMainMenu } from './world-map.js';
 import { renderStageIntro } from './stage-intro.js';
 import { showBattleView } from './battle-controller.js';
 
 // View names
-const VIEW_WORLD_MAP = 'world-map';
+const VIEW_MAIN_MENU = 'main-menu';
 const VIEW_STAGE_INTRO = 'stage-intro';
 const VIEW_BATTLE = 'battle';
 
@@ -27,8 +27,8 @@ export function initFighter() {
   // Render HUD
   renderHUD();
 
-  // Render world map by default
-  showView(VIEW_WORLD_MAP);
+  // Render main menu by default
+  showView(VIEW_MAIN_MENU);
 }
 
 /**
@@ -47,31 +47,36 @@ function renderHUD() {
  * @param {object} [viewData] - optional data to pass to view
  */
 function showView(viewName, viewData = {}) {
-  const worldMapView = $('view-world-map');
+  const mainMenuView = $('view-main-menu');
   const stageIntroView = $('view-stage-intro');
   const battleView = $('view-battle');
 
   // Hide all views
-  worldMapView?.classList.remove('active');
+  mainMenuView?.classList.remove('active');
   stageIntroView?.classList.remove('active');
   battleView?.classList.remove('active');
 
   // Show requested view
   switch (viewName) {
-    case VIEW_WORLD_MAP:
-      if (worldMapView) {
-        worldMapView.classList.add('active');
-        renderWorldMap(worldMapView, gameState, handleWorldClick);
+    case VIEW_MAIN_MENU:
+      if (mainMenuView) {
+        mainMenuView.classList.add('active');
+        renderMainMenu(mainMenuView, gameState, {
+          onStartGame: handleStartGame,
+          onLevels: handleLevels,
+          onOptions: handleOptions,
+          onQuit: handleQuit,
+        });
       }
       break;
 
     case VIEW_STAGE_INTRO:
       if (stageIntroView) {
         stageIntroView.classList.add('active');
-        const worldIdx = viewData.worldIdx ?? gameState.session.worldIdx;
+        const worldIdx = viewData.worldIdx ?? 0; // Default to world 0
         renderStageIntro(stageIntroView, worldIdx, gameState.progress.worldsCleared, {
           onStageClick: handleStageClick,
-          onBack: handleBackToWorldMap,
+          onBack: handleBackToMainMenu,
         });
       }
       break;
@@ -88,7 +93,37 @@ function showView(viewName, viewData = {}) {
 }
 
 /**
- * Handle click on a world node
+ * Handle START GAME button click
+ */
+function handleStartGame() {
+  // Start from the first unlocked world (world 0)
+  showView(VIEW_STAGE_INTRO, { worldIdx: 0 });
+}
+
+/**
+ * Handle LEVELS button click
+ */
+function handleLevels() {
+  // Show level selection starting from world 0
+  showView(VIEW_STAGE_INTRO, { worldIdx: 0 });
+}
+
+/**
+ * Handle OPTIONS button click (placeholder)
+ */
+function handleOptions() {
+  // Options not implemented yet - handled in world-map.js with toast
+}
+
+/**
+ * Handle QUIT button click
+ */
+function handleQuit() {
+  window.location.href = '/app';
+}
+
+/**
+ * Handle click on a world node (legacy - for stage intro)
  * @param {number} worldIdx
  */
 function handleWorldClick(worldIdx) {
@@ -140,15 +175,15 @@ function handleBattleEnd(result) {
   saveState(gameState);
   renderHUD();
 
-  // Return to world map
-  showView(VIEW_WORLD_MAP);
+  // Return to main menu
+  showView(VIEW_MAIN_MENU);
 }
 
 /**
- * Handle back button - return to world map
+ * Handle back button - return to main menu
  */
-function handleBackToWorldMap() {
-  showView(VIEW_WORLD_MAP);
+function handleBackToMainMenu() {
+  showView(VIEW_MAIN_MENU);
 }
 
 /**

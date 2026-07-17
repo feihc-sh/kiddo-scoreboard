@@ -5,10 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>单词战士 V2 - 世界地图</title>
+  <title>龙堡冒险 - 单词战士 V2</title>
 
   <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏰</text></svg>">
+
+  <!-- Google Fonts - Cinzel for Dragon's Keep Quest theme -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
 
   <!-- Styles -->
   <link rel="stylesheet" href="fighter.css">
@@ -16,24 +21,41 @@
 <body>
   <div id="fighter-app" class="fighter-app">
     <!-- Top HUD -->
-    <header class="fighter-hud">
-      <div class="fighter-hud__title">
-        ⚔️ 单词战士
-      </div>
-      <div class="fighter-hud__stars">
+    <header class="fighter-hud dk-hud">
+      <div class="dk-hud__stars">
         ⭐ <span id="hud-stars">0</span>
+      </div>
+      <div class="dk-hud__bars">
+        <!-- Mini HP bar -->
+        <div class="dk-mini-bar dk-mini-bar--hp">
+          <svg class="dk-mini-bar__icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+          </svg>
+          <div class="dk-mini-bar__track">
+            <div class="dk-mini-bar__fill" id="hud-hp-fill" style="width: 100%"></div>
+          </div>
+        </div>
+        <!-- Mini MP bar -->
+        <div class="dk-mini-bar dk-mini-bar--mp">
+          <svg class="dk-mini-bar__icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+          </svg>
+          <div class="dk-mini-bar__track">
+            <div class="dk-mini-bar__fill" id="hud-mp-fill" style="width: 100%"></div>
+          </div>
+        </div>
       </div>
     </header>
 
     <!-- Views Container -->
     <main class="fighter-views">
-      <!-- World Map View -->
-      <section id="view-world-map" class="fighter-view" aria-label="世界地图">
+      <!-- Main Menu View -->
+      <section id="view-main-menu" class="fighter-view active dk-main-menu" aria-label="主菜单">
         <!-- Content rendered by world-map.js -->
       </section>
 
       <!-- Stage Intro View -->
-      <section id="view-stage-intro" class="fighter-view" aria-label="关卡选择">
+      <section id="view-stage-intro" class="fighter-view dk-stage-intro" aria-label="关卡选择">
         <!-- Content rendered by stage-intro.js -->
       </section>
 
