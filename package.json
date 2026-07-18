@@ -17,6 +17,11 @@
     "pretest:e2e": "bash scripts/clean-test-db.sh",
     "test:e2e": "playwright test",
     "test:unit": "vitest run",
+    "test:visual": "node scripts/visual-test-suite.mjs",
+    "test:visual:main-menu": "node scripts/visual-test-suite.mjs main-menu",
+    "test:visual:battle-scene": "node scripts/visual-test-suite.mjs battle-scene",
+    "test:visual:defeated-lock": "node scripts/visual-test-suite.mjs defeated-lock",
+    "test:visual:sequential-lock": "node scripts/visual-test-suite.mjs sequential-lock",
     "typecheck": "tsc --noEmit"
   },
   "repository": {
