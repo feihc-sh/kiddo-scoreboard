@@ -21,6 +21,8 @@
     "pretest:e2e": "bash scripts/clean-test-db.sh",
     "test:e2e": "playwright test",
     "test:unit": "vitest run",
+    "test:shared": "vitest run --config vitest.shared.config.ts",
+    "test:miniprogram": "echo 'Phase 1 接入 — stub'",
     "typecheck": "tsc --noEmit"
   },
   "repository": {
