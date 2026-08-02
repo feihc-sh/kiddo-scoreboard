@@ -1,10 +1,15 @@
+/*
+ * Login Page — Warm Playful Style (kiddo Web Visual)
+ * Reuses CSS variables from app.css
+ */
+
 .login-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background-color: #FFF8E7;
+  background-color: var(--bg-cream);
   padding: 40px;
   box-sizing: border-box;
 }
@@ -18,14 +23,14 @@
   display: block;
   font-size: 40px;
   font-weight: bold;
-  color: #FF6B35;
+  color: var(--primary);
   margin-bottom: 16px;
 }
 
 .login-subtitle {
   display: block;
   font-size: 24px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .login-content {
@@ -38,13 +43,13 @@
 .logo-placeholder {
   width: 160px;
   height: 160px;
-  background: linear-gradient(135deg, #FF6B35 0%, #FF8C5A 100%);
-  border-radius: 40px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 60px;
-  box-shadow: 0 8px 24px rgba(255, 107, 53, 0.3);
+  box-shadow: var(--shadow-btn);
 }
 
 .logo-text {
@@ -53,17 +58,24 @@
   color: white;
 }
 
+/* WeChat login button — pill shape, green gradient */
 .wechat-login-btn {
   width: 100%;
   max-width: 400px;
   height: 88px;
   background: linear-gradient(135deg, #07C160 0%, #10B760 100%);
   border: none;
-  border-radius: 44px;
+  border-radius: var(--radius-full);
   font-size: 32px;
   font-weight: bold;
   color: white;
   margin-bottom: 30px;
+  box-shadow: 0 8px 24px rgba(7, 193, 96, 0.3);
+  transition: transform 0.2s var(--ease-bounce), box-shadow 0.2s var(--ease-smooth);
+}
+
+.wechat-login-btn:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .wechat-login-btn::after {
@@ -72,6 +84,6 @@
 
 .login-hint {
   font-size: 24px;
-  color: #999;
+  color: var(--text-muted);
   text-align: center;
 }

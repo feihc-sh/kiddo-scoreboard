@@ -1,6 +1,12 @@
+/*
+ * Questions Page — Warm Playful Style (kiddo Web Visual)
+ * 4 选 1 答题卡片 + 提交按钮 (jelly animation)
+ * Reuses CSS variables from app.css
+ */
+
 .questions-container {
   min-height: 100vh;
-  background-color: #FFF8E7;
+  background-color: var(--bg-cream);
   padding: 30px;
   box-sizing: border-box;
 }
@@ -16,12 +22,12 @@
 .question-number {
   font-size: 32px;
   font-weight: bold;
-  color: #FF6B35;
+  color: var(--primary);
 }
 
 .question-hint {
   font-size: 24px;
-  color: #CCC;
+  color: var(--text-light);
 }
 
 .question-content {
@@ -31,18 +37,19 @@
   gap: 40px;
 }
 
+/* Question card — rounded + soft shadow */
 .question-text-wrapper {
   width: 100%;
   max-width: 600px;
-  background: white;
-  border-radius: 24px;
+  background: var(--bg-white);
+  border-radius: var(--radius-xl);
   padding: 40px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-card);
 }
 
 .question-text {
   font-size: 32px;
-  color: #333;
+  color: var(--text-primary);
   line-height: 1.6;
   text-align: center;
   display: block;
@@ -56,17 +63,25 @@
   gap: 20px;
 }
 
+/* Option card — rounded border + jelly on select */
 .option-btn {
   width: 100%;
   height: 100px;
-  background: white;
-  border: 3px solid #E8E8E8;
-  border-radius: 20px;
+  background: var(--bg-white);
+  border: 3px solid var(--border-light);
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: row;
   align-items: center;
   padding: 0 30px;
   box-sizing: border-box;
+  transition: border-color 0.2s var(--ease-smooth),
+              background 0.2s var(--ease-smooth),
+              transform 0.2s var(--ease-bounce);
+}
+
+.option-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .option-btn::after {
@@ -74,53 +89,63 @@
 }
 
 .option-btn.selected {
-  border-color: #FF6B35;
-  background: #FFF0E8;
+  border-color: var(--primary);
+  background: rgba(255, 107, 53, 0.08);
 }
 
 .option-btn.answered {
   opacity: 0.7;
 }
 
+/* Option letter badge — circle */
 .option-id {
   width: 60px;
   height: 60px;
-  background: #F5F5F5;
+  background: var(--bg-cream);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 28px;
   font-weight: bold;
-  color: #666;
+  color: var(--text-secondary);
   margin-right: 24px;
+  flex-shrink: 0;
+  transition: background 0.2s var(--ease-smooth), color 0.2s var(--ease-smooth);
 }
 
 .option-btn.selected .option-id {
-  background: #FF6B35;
+  background: var(--primary);
   color: white;
 }
 
 .option-text {
   flex: 1;
   font-size: 28px;
-  color: #333;
+  color: var(--text-primary);
   text-align: left;
 }
 
+/* Submit / Next button — pill shape, orange gradient */
 .submit-btn,
 .next-btn {
   width: 100%;
   max-width: 600px;
   height: 96px;
-  background: linear-gradient(135deg, #FF6B35 0%, #FF8C5A 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
   border: none;
-  border-radius: 48px;
+  border-radius: var(--radius-full);
   font-size: 36px;
   font-weight: bold;
   color: white;
-  box-shadow: 0 8px 24px rgba(255, 107, 53, 0.3);
+  box-shadow: var(--shadow-btn);
   margin-top: 20px;
+  transition: transform 0.2s var(--ease-bounce), box-shadow 0.2s var(--ease-smooth);
+}
+
+.submit-btn:active:not(:disabled),
+.next-btn:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .submit-btn::after,
@@ -129,6 +154,6 @@
 }
 
 .submit-btn[disabled] {
-  background: #CCC;
+  background: var(--text-light);
   box-shadow: none;
 }
