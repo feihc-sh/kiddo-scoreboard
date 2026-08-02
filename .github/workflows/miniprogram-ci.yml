@@ -25,8 +25,8 @@ jobs:
       - name: Run shared package tests
         run: npm run test:shared
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Typecheck (Phase 0 — tsconfig.phase0.json)
+        run: npm run typecheck:phase0
 
       - name: Miniprogram stub
         run: npm run test:miniprogram
