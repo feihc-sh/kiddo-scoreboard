@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Family reward/punishment scoreboard web app for kids",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "type": "module",
   "scripts": {
     "dev": "wrangler pages dev --port 8787",
