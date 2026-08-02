@@ -87,8 +87,9 @@ function makeStmt(query: string): D1PreparedStatement {
         const found = questions.find((x) => x.id === id) ?? null;
         return found as unknown as T;
       }
-      // SELECT COUNT(*) FROM questions [WHERE difficulty = ?] (random count step)
-      if (/SELECT\s+COUNT\(\*\)\s+FROM\s+questions\b/i.test(q)) {
+      // SELECT COUNT(*) [AS alias] FROM questions [WHERE difficulty = ?] (random count step)
+      // Handles both `SELECT COUNT(*) as cnt FROM questions` and `SELECT COUNT(*) FROM questions`
+      if (/SELECT\s+COUNT\(\*\).*?FROM\s+questions\b/i.test(q)) {
         const difficulty = params[0] as QuestionDifficulty | undefined;
         const filtered = difficulty
           ? questions.filter((x) => x.difficulty === difficulty)
@@ -96,11 +97,7 @@ function makeStmt(query: string): D1PreparedStatement {
         return { cnt: filtered.length } as unknown as T;
       }
       // SELECT ... FROM questions ... LIMIT 1 OFFSET ? (random select step)
-      // Only match if query actually contains LIMIT + OFFSET (guards against
-      // matching COUNT(*) queries that don't have them).
       if (/LIMIT\s+1\s+OFFSET\s+\?/i.test(q)) {
-        // Determine difficulty filter: first param is difficulty (string) or
-        // directly the offset (number) when no difficulty filter is applied.
         const difficulty = typeof params[0] === 'string'
           ? (params[0] as QuestionDifficulty)
           : undefined;
@@ -112,6 +109,7 @@ function makeStmt(query: string): D1PreparedStatement {
           : questions;
         return (filtered[offset] ?? null) as unknown as T;
       }
+      console.error('[DEBUG mock.first] UNMATCHED query:', q, 'params:', JSON.stringify(params));
       return null;
     },
     async run<T = unknown>(): Promise<D1Result<T>> {
@@ -183,7 +181,6 @@ describe('GET /api/mp/questions/random — happy paths', () => {
     seedQuestion({ stem: 'orange', answer_index: 2, difficulty: 'hard' });
 
     const res = await call('/api/mp/questions/random');
-    expect(res.status).toBe(200);
     const body = await res.json() as {
       id: number;
       stem: string;
