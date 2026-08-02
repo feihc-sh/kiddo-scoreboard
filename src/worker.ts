@@ -19,11 +19,18 @@ import shopExchange from './routes/shop/exchange.ts';
 // the record, rolls any newly-reached point prizes, and returns the
 // updated balance for the home page to refresh.
 import running from './routes/running/index.ts';
+// Phase 1 (Day 2): Miniprogram auth — wx.login bridge + child user lookup
+import mpAuth from './routes/mp/auth.ts';
+// Phase 1 Day 3: Miniprogram question API
+import mpQuestions from './routes/mp/questions.ts';
 
 export interface Env {
   DB: D1Database;
   JWT_SECRET: string;
   ASSETS: Fetcher;
+  // Miniprogram auth: wx.login 桥 — set via `wrangler secret put`
+  WECHAT_APPID: string;
+  WECHAT_SECRET: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -61,5 +68,12 @@ app.route('/api/shop/items', shopItems);
 //   POST /api/running/records   — child submits km, server writes record +
 //     score_event + audit_log atomically.
 app.route('/api/running', running);
+// Phase 1 (Day 2): Miniprogram auth — wx.login bridge
+//   POST /api/mp/auth           — code → openid → userId/role/familyId
+app.route('/api/mp/auth', mpAuth);
+// Phase 1 Day 3: Miniprogram question API
+//   GET  /api/mp/questions/random  — random 4-choice question (no answer_index)
+//   POST /api/mp/questions/attempt — record answer + return correctness
+app.route('/api/mp/questions', mpQuestions);
 
 export default app;

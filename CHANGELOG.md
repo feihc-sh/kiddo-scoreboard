@@ -2,6 +2,49 @@
 
 All notable changes to kiddo-scoreboard are documented here.
 
+## [V0.1.0] - 2026-08-03 — Mecha-Challenge Phase 1 完成
+
+### Added (miniprogram 核心链路)
+- `apps/miniprogram/` — Taro 4 WeChat Mini Program（login / home / questions 3 页面）
+- `src/routes/mp/auth.ts` — POST /api/mp/auth（wx.login 桥：wx code2Session → openid → users 表绑定）
+- `src/routes/mp/questions.ts` — GET /api/mp/questions/random + POST /api/mp/questions/attempt（4 选 1 题型 API）
+- `tests/unit/mp-auth.test.ts` — 9 测试 case（openid 绑定 / 新用户创建 / 错误处理 / 幂等性）
+- `tests/unit/mp-questions.test.ts` — 26 测试 case（RANDOM / ATTEMPT / ANTI-CHEAT 全覆盖）
+- `docs/mecha-challenge-phase1-completion.md` — Phase 1 完成报告
+
+### Added (miniprogram UI)
+- `apps/miniprogram/src/pages/login/` — wx.login 登录页（Warm Playful 风格）
+- `apps/miniprogram/src/pages/home/` — 孩子首页（积分 + 答题入口）
+- `apps/miniprogram/src/pages/questions/` — 答题页（4 选 1 + 结果反馈）
+- Taro UI 组件库接入（沿用 kiddo Web Warm Playful 视觉）
+
+### Added (Phase 1 integration)
+- `apps/miniprogram/dist/` — Taro weapp 编译产物（微信开发者工具可直接导入）
+- 全链路测试路径: wx.login → POST /api/mp/auth → GET /api/mp/questions/random → POST /api/mp/questions/attempt
+
+### Changed (README/CHANGELOG)
+- `README.md` — Mecha-Challenge 章节更新（Phase 0 + Phase 1 状态并行）
+- Phase 1 commit 不破坏 kiddo 现有代码（`public/app.html` / `public/admin/` / `src/worker.ts` 保护）
+
+### Phase 1 验收 Checklist ✅
+- [x] Taro 4 装好 + apps/miniprogram/ 初始化完成
+- [x] wx.login → CF Worker auth 端到端跑通（7 tests）
+- [x] 4 选 1 抽题 + 答题 → question_attempts 写入 D1（26 tests）
+- [x] 小程序 UI 与 kiddo Web 视觉统一（Warm Playful 风格）
+- [x] pre-pr-check.sh 全 PASS（test:unit 547 PASS / test:shared 全绿 / typecheck 无错）
+- [x] kiddo 现有代码未改动
+- [ ] **真机验收（待正式 AppID）** — Phase 1 用 touristappid placeholder，不验证真机
+
+### Phase 2 待办
+- 正式 AppID 申请 + 真机联调
+- 家庭关联（PM 生成邀请码，孩子 join）
+- 积分累计 + 周榜
+- 公开分享页 + 微信分享卡片
+- 答题动画 + 头像/昵称设置
+- 详见 [`docs/mecha-challenge-phase1-completion.md`](./docs/mecha-challenge-phase1-completion.md)
+
+---
+
 ## [V0.0.0] - 2026-08-02 — Mecha-Challenge Phase 0 启动
 
 ### Added (monorepo 骨架)

@@ -1,0 +1,131 @@
+/*
+ * Home Page — Warm Playful Style (kiddo Web Visual)
+ * 今日任务卡片 + 答题按钮 (jelly animation)
+ * Reuses CSS variables from app.css
+ */
+
+.home-container {
+  min-height: 100vh;
+  background-color: var(--bg-cream);
+  padding: 30px;
+  box-sizing: border-box;
+}
+
+.home-header {
+  text-align: center;
+  margin-bottom: 40px;
+  padding-top: 40px;
+}
+
+.home-title {
+  display: block;
+  font-size: 48px;
+  font-weight: bold;
+  color: var(--primary);
+  margin-bottom: 12px;
+}
+
+.home-welcome {
+  display: block;
+  font-size: 28px;
+  color: var(--text-secondary);
+}
+
+.home-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+}
+
+/* Task card — 16px radius + soft shadow (kiddo .card style) */
+.task-card {
+  width: 100%;
+  max-width: 600px;
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  padding: 30px;
+  box-shadow: var(--shadow-card);
+}
+
+.task-card-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--border-light);
+}
+
+.task-icon {
+  font-size: 36px;
+}
+
+.task-title {
+  font-size: 32px;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+.task-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.task-empty {
+  font-size: 28px;
+  color: var(--text-muted);
+}
+
+.task-hint {
+  font-size: 24px;
+  color: var(--text-light);
+}
+
+/* Start button — pill shape, orange gradient, jelly active */
+.start-btn {
+  width: 100%;
+  max-width: 600px;
+  height: 96px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  border: none;
+  border-radius: var(--radius-full);
+  font-size: 36px;
+  font-weight: bold;
+  color: white;
+  box-shadow: var(--shadow-btn);
+  transition: transform 0.2s var(--ease-bounce), box-shadow 0.2s var(--ease-smooth);
+}
+
+.start-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.start-btn::after {
+  border: none;
+}
+
+/* Score display — rounded card */
+.score-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 48px;
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.score-label {
+  font-size: 24px;
+  color: var(--text-muted);
+}
+
+.score-value {
+  font-size: 48px;
+  font-weight: bold;
+  color: var(--primary);
+}

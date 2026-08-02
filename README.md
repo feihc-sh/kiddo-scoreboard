@@ -109,7 +109,7 @@ npm run typecheck
 
 ---
 
-## 🤖 Mecha-Challenge 小程序迁移 (Phase 0)
+## 🤖 Mecha-Challenge 小程序迁移 (Phase 0 + Phase 1)
 
 > **品牌名**: 机甲挑战计分板 | **项目代号**: mecha-challenge-scoreboard | **PRD**: `~/.hermes/profiles/pm-for-claude/plans/mecha-challenge-scoreboard-PRD-V1.md`
 
@@ -129,12 +129,25 @@ npm run typecheck
 - `npm run typecheck` → ✅ 无错
 - `npm run test:unit` → ⚠️ 7 pre-existing happy-dom errors (详见 [`docs/MECHA-PHASE-0-BASELINE.md`](./docs/MECHA-PHASE-0-BASELINE.md)，非 Phase 0 引入)
 
-### 关键决策（Plan-A, 2026-08-02 feihao 拍板）
+### Phase 1 范围（已完成 2026-08-03）
+- ✅ Taro 4 接入: `apps/miniprogram/` 初始化 + `dist/` 生成（1.77s）
+- ✅ wx.login 桥: `POST /api/mp/auth`（7 tests，wx code2Session + openid 绑定）
+- ✅ 4 选 1 题型 API: `GET /api/mp/questions/random` + `POST /api/mp/questions/attempt`（26 tests，anti-cheat）
+- ✅ 小程序 UI: Warm Playful 风格（kiddo 配色 + 圆角 + 暖奶白背景）
+- ✅ kiddo 现有代码未改动（`public/app.html` / `public/admin/` / `src/worker.ts` 保护）
+
+### Phase 1 测试结果
+- `npm run test:unit` mp-auth + mp-questions → **33 tests 全绿**
+- `npx taro build --type weapp` → **Webpack compiled successfully**
+- `npm run test:shared` → ✅ 全 PASS
+- `npm run typecheck` → ✅ 无错
+
+### Phase 1 关键决策（Plan-A, 2026-08-02 feihao 拍板）
 - **不另起后端**: 复用 kiddo 现有 Cloudflare Workers + D1 + Hono 4
 - **不切 pnpm**: 沿用 npm（避免 lockfile 重建 + 现有 81 devDeps 重装）
 - **不重写 domain**: `packages/shared/` 从 `src/db/types.ts` 抽出子集，加 4 选 1 题型类型
 - **只新增 3 张表**: families / questions / question_attempts
-- **wx.login 桥**: minimal adapter (Phase 1 才决定云函数 vs 小程序云开发)
+- **wx.login 桥**: CF Worker 直接 fetch wx code2Session（无云函数，最小代价）
 
-### Phase 1+ 待办
-详见 [`docs/mecha-challenge-phase1-task-card.md`](./docs/mecha-challenge-phase1-task-card.md)
+### Phase 2 待办
+详见 [`docs/mecha-challenge-phase1-task-card.md`](./docs/mecha-challenge-phase1-task-card.md) 和 [`docs/mecha-challenge-phase1-completion.md`](./docs/mecha-challenge-phase1-completion.md)
