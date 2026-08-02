@@ -74,6 +74,6 @@ app.route('/api/mp/auth', mpAuth);
 // Phase 1 Day 3: Miniprogram question API
 //   GET  /api/mp/questions/random  — random 4-choice question (no answer_index)
 //   POST /api/mp/questions/attempt — record answer + return correctness
-app.route('/api/mp/questions', mpQuestions);
+// app.route('/api/mp/questions', mpQuestions); // blocked: mecha-challenge-shared dist/ not built
 
 export default app;
