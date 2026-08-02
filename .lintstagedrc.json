@@ -1,0 +1,4 @@
+{
+  "*.ts": ["tsc --noEmit"],
+  "*.tsx": ["tsc --noEmit"]
+}

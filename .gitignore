@@ -2,6 +2,10 @@
 node_modules/
 .pnp.*
 
+# Monorepo workspace modules
+apps/*/node_modules
+packages/*/node_modules
+
 # Build outputs
 dist/
 .wrangler/

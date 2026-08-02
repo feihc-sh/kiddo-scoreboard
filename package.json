@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Family reward/punishment scoreboard web app for kids",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "type": "module",
   "scripts": {
     "dev": "wrangler pages dev --port 8787",
@@ -17,7 +21,11 @@
     "pretest:e2e": "bash scripts/clean-test-db.sh",
     "test:e2e": "playwright test",
     "test:unit": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "test:shared": "vitest run --config vitest.shared.config.ts",
+    "test:miniprogram": "echo 'Phase 1 接入 — stub'",
+    "typecheck": "tsc --noEmit",
+    "typecheck:phase0": "tsc --noEmit -p tsconfig.phase0.json",
+    "prepare": "husky"
   },
   "repository": {
     "type": "git",
@@ -38,8 +46,13 @@
     "@cloudflare/workers-types": "^4.20260604.1",
     "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8",
     "wrangler": "^4.98.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": ["tsc --noEmit"]
   }
 }
