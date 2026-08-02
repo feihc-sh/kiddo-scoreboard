@@ -106,3 +106,35 @@ npm run typecheck
 **下一步**: M2 — PM 认证（PIN + Session cookie + lockout）
 
 完整进度见 [`docs/PROGRESS.md`](./docs/PROGRESS.md)。
+
+---
+
+## 🤖 Mecha-Challenge 小程序迁移 (Phase 0)
+
+> **品牌名**: 机甲挑战计分板 | **项目代号**: mecha-challenge-scoreboard | **PRD**: `~/.hermes/profiles/pm-for-claude/plans/mecha-challenge-scoreboard-PRD-V1.md`
+
+### 目标
+基于 kiddo-scoreboard 现有 Cloudflare Workers + D1 后端，新增微信小程序前端（机甲挑战计分板）。
+
+### Phase 0 范围（已完成 2026-08-02）
+- ✅ Monorepo 骨架: `apps/miniprogram/` + `packages/shared/` (npm workspaces)
+- ✅ 数据模型扩展: `migrations/0016-0018` (families / questions / question_attempts) + `users.openid` 字段
+- ✅ TS Domain 共享: `packages/shared/src/` (Family / Question / User + openid)
+- ✅ TDD 测试框架: 22+ shared 单测 + vitest projects 配置
+- ✅ PR 门禁: `scripts/pre-pr-check.sh` + husky + lint-staged + GitHub Actions (web-ci + miniprogram-ci)
+- ✅ PR 模板: `.github/PULL_REQUEST_TEMPLATE.md`
+
+### Phase 0 测试 baseline
+- `npm run test:shared` → ✅ 全 PASS (Phase 0 直接产出)
+- `npm run typecheck` → ✅ 无错
+- `npm run test:unit` → ⚠️ 7 pre-existing happy-dom errors (详见 [`docs/MECHA-PHASE-0-BASELINE.md`](./docs/MECHA-PHASE-0-BASELINE.md)，非 Phase 0 引入)
+
+### 关键决策（Plan-A, 2026-08-02 feihao 拍板）
+- **不另起后端**: 复用 kiddo 现有 Cloudflare Workers + D1 + Hono 4
+- **不切 pnpm**: 沿用 npm（避免 lockfile 重建 + 现有 81 devDeps 重装）
+- **不重写 domain**: `packages/shared/` 从 `src/db/types.ts` 抽出子集，加 4 选 1 题型类型
+- **只新增 3 张表**: families / questions / question_attempts
+- **wx.login 桥**: minimal adapter (Phase 1 才决定云函数 vs 小程序云开发)
+
+### Phase 1+ 待办
+详见 [`docs/mecha-challenge-phase1-task-card.md`](./docs/mecha-challenge-phase1-task-card.md)
