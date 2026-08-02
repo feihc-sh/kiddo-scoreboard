@@ -45,6 +45,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260604.1",
     "@playwright/test": "^1.60.0",
+    "@tarojs/cli": "^4.2.1",
     "@types/node": "^25.9.1",
     "husky": "^9.1.7",
     "lint-staged": "^17.3.0",
@@ -53,6 +54,8 @@
     "wrangler": "^4.98.0"
   },
   "lint-staged": {
-    "*.{ts,tsx}": ["tsc --noEmit"]
+    "*.{ts,tsx}": [
+      "tsc --noEmit"
+    ]
   }
 }

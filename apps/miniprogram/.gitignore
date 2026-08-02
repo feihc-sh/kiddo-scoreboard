@@ -1,0 +1,22 @@
+# Taro build output
+.swc/
+.swc-cache/
+
+# Dependencies
+node_modules/
+
+# Build output (regenerate via taro build)
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
