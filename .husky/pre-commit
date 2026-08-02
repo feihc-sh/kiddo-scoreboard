@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# .husky/pre-commit — run pre-pr-check on every commit
+# PRD §A.4: hard gate — fail on any check failure
+bash scripts/pre-pr-check.sh
