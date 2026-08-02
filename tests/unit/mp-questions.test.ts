@@ -81,26 +81,34 @@ function makeStmt(query: string): D1PreparedStatement {
     },
     async first<T = unknown>(): Promise<T | null> {
       const q = query.trim().replace(/\s+/g, ' ');
-      // SELECT COUNT(*) FROM questions [WHERE difficulty = ?]
-      if (/SELECT\s+COUNT\(\*\)\s+FROM\s+questions/i.test(q)) {
+      // SELECT id, answer_index FROM questions WHERE id = ? (attempt endpoint)
+      if (/SELECT\s+id[,\s]+answer_index\s+FROM\s+questions\s+WHERE\s+id\s*=\s*\?/i.test(q)) {
+        const id = params[0] as number;
+        const found = questions.find((x) => x.id === id) ?? null;
+        return found as unknown as T;
+      }
+      // SELECT COUNT(*) FROM questions [WHERE difficulty = ?] (random count step)
+      if (/SELECT\s+COUNT\(\*\)\s+FROM\s+questions\b/i.test(q)) {
         const difficulty = params[0] as QuestionDifficulty | undefined;
         const filtered = difficulty
-          ? questions.filter((q) => q.difficulty === difficulty)
+          ? questions.filter((x) => x.difficulty === difficulty)
           : questions;
         return { cnt: filtered.length } as unknown as T;
       }
-      // SELECT id, answer_index FROM questions WHERE id = ?
-      if (/SELECT\s+id[,\s]+answer_index\s+FROM\s+questions\s+WHERE\s+id\s*=/i.test(q)) {
-        const id = params[0] as number;
-        const found = questions.find((q) => q.id === id) ?? null;
-        return found as unknown as T;
-      }
-      // SELECT ... FROM questions LIMIT 1 OFFSET ...
-      if (/SELECT\s+.+\s+FROM\s+questions\s+LIMIT\s+1\s+OFFSET/i.test(q)) {
-        const difficulty = params[0] as QuestionDifficulty | undefined;
-        const offset = typeof params[1] === 'number' ? (params[1] as number) : 0;
+      // SELECT ... FROM questions ... LIMIT 1 OFFSET ? (random select step)
+      // Only match if query actually contains LIMIT + OFFSET (guards against
+      // matching COUNT(*) queries that don't have them).
+      if (/LIMIT\s+1\s+OFFSET\s+\?/i.test(q)) {
+        // Determine difficulty filter: first param is difficulty (string) or
+        // directly the offset (number) when no difficulty filter is applied.
+        const difficulty = typeof params[0] === 'string'
+          ? (params[0] as QuestionDifficulty)
+          : undefined;
+        const offset = typeof params[0] === 'number'
+          ? (params[0] as number)
+          : (params[1] as number ?? 0);
         const filtered = difficulty
-          ? questions.filter((q) => q.difficulty === difficulty)
+          ? questions.filter((x) => x.difficulty === difficulty)
           : questions;
         return (filtered[offset] ?? null) as unknown as T;
       }

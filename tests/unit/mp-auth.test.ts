@@ -1,42 +1,10 @@
 // tests/unit/mp-auth.test.ts
 // TDD: tests for POST /api/mp/auth (wx.login bridge).
 // Verifies openid → userId binding, new user creation, and error handling.
-// Uses mock fetch (for wx code2Session) + mock D1.
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+// Uses vi.stubGlobal('fetch') + mock D1.
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import app from '../../src/worker.ts';
 import type { D1Database, D1PreparedStatement, D1Result } from '../../src/db/types.ts';
-
-// =============================================================
-// Mock fetch (global)
-// =============================================================
-
-type MockFetch = (
-  url: string,
-  init?: RequestInit,
-) => Promise<Response>;
-
-let mockWxResponse: Partial<{
-  openid: string;
-  session_key: string;
-  errcode: number;
-  errmsg: string;
-}> = {};
-let mockFetch: MockFetch | null = null;
-
-function mockWxCode2Session(resp: typeof mockWxResponse) {
-  mockWxResponse = resp;
-}
-
-function makeFakeFetch(): MockFetch {
-  return async (url: string) => {
-    if (url.includes('api.weixin.qq.com')) {
-      const body = JSON.stringify(mockWxResponse);
-      const status = mockWxResponse.errcode === 0 ? 200 : 400;
-      return new Response(body, { status, headers: { 'Content-Type': 'application/json' } });
-    }
-    return new Response('Not Found', { status: 404 });
-  };
-}
 
 // =============================================================
 // Mock D1
@@ -124,10 +92,8 @@ function makeEnv(db: D1Database) {
 // Helpers
 // =============================================================
 
-async function call(path: string, init: RequestInit = {}, env: ReturnType<typeof makeEnv>) {
-  // Inject mock fetch if provided
-  const globalFetch = mockFetch ?? makeFakeFetch();
-  return app.request(`http://test.local${path}`, init, env as Parameters<typeof app.request>[2]);
+async function call(path: string, init: RequestInit = {}, env?: ReturnType<typeof makeEnv>) {
+  return app.request(`http://test.local${path}`, init, (env ?? makeEnv(makeMockDb())) as Parameters<typeof app.request>[2]);
 }
 
 // =============================================================
@@ -137,28 +103,27 @@ async function call(path: string, init: RequestInit = {}, env: ReturnType<typeof
 describe('POST /api/mp/auth', () => {
   beforeEach(() => {
     resetUsers();
-    mockWxResponse = {};
-    // Reset global fetch mock
-    if (typeof globalThis.fetch === 'function') {
-      // save
-    }
+    // Reset fetch mock between tests
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('returns 400 when body is missing', async () => {
     const db = makeMockDb();
-    const fakeFetch = makeFakeFetch();
-    const r = await app.request('http://test.local/api/mp/auth', { method: 'POST' }, makeEnv(db) as Parameters<typeof app.request>[2]);
-    // No fetch will be called because body parse fails first
+    const r = await call('/api/mp/auth', { method: 'POST' }, makeEnv(db));
     expect(r.status).toBe(400);
   });
 
   it('returns 400 when code is not a string', async () => {
     const db = makeMockDb();
-    const r = await app.request('http://test.local/api/mp/auth', {
+    const r = await call('/api/mp/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: 123 }),
-    }, makeEnv(db) as Parameters<typeof app.request>[2]);
+    }, makeEnv(db));
     expect(r.status).toBe(400);
     const body = (await r.json()) as { error?: { code?: string; message?: string } };
     expect(body.error?.code).toBe('BAD_REQUEST');
@@ -167,11 +132,11 @@ describe('POST /api/mp/auth', () => {
 
   it('returns 400 when code is an empty string', async () => {
     const db = makeMockDb();
-    const r = await app.request('http://test.local/api/mp/auth', {
+    const r = await call('/api/mp/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: '  ' }),
-    }, makeEnv(db) as Parameters<typeof app.request>[2]);
+    }, makeEnv(db));
     expect(r.status).toBe(400);
   });
 
@@ -184,11 +149,11 @@ describe('POST /api/mp/auth', () => {
       WECHAT_APPID: '',
       WECHAT_SECRET: 'test-secret',
     };
-    const r = await app.request('http://test.local/api/mp/auth', {
+    const r = await call('/api/mp/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: 'wx-code-001' }),
-    }, env as Parameters<typeof app.request>[2]);
+    }, env as ReturnType<typeof makeEnv>);
     expect(r.status).toBe(500);
     const body = (await r.json()) as { error?: { code?: string } };
     expect(body.error?.code).toBe('SERVER_MISCONFIG');
@@ -203,35 +168,37 @@ describe('POST /api/mp/auth', () => {
       WECHAT_APPID: 'test-appid',
       WECHAT_SECRET: '',
     };
-    const r = await app.request('http://test.local/api/mp/auth', {
+    const r = await call('/api/mp/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: 'wx-code-001' }),
-    }, env as Parameters<typeof app.request>[2]);
+    }, env as ReturnType<typeof makeEnv>);
     expect(r.status).toBe(500);
   });
 
   it('returns 400 when wx code2Session returns errcode != 0', async () => {
     const db = makeMockDb();
-    const fakeFetch = makeFakeFetch();
-    mockWxCode2Session({ errcode: 40029, errmsg: 'invalid code' });
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = fakeFetch as unknown as typeof fetch;
-    try {
-      const r = await app.request('http://test.local/api/mp/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: 'wx-code-001' }),
-      }, makeEnv(db) as Parameters<typeof app.request>[2]);
-      expect(r.status).toBe(400);
-      const body = (await r.json()) as { error?: { code?: string } };
-      expect(body.error?.code).toBe('WECHAT_API_ERROR');
-    } finally {
-      globalThis.fetch = originalFetch as typeof fetch;
-    }
+    // Mock fetch: wx API returns HTTP 200 with errcode != 0 in body.
+    // Using a factory so each call gets a fresh Response (Response is single-use).
+    globalThis.fetch = vi.fn().mockImplementation(
+      () => Promise.resolve(
+        new Response(JSON.stringify({ errcode: 40029, errmsg: 'invalid code' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+    const r = await call('/api/mp/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'wx-code-001' }),
+    }, makeEnv(db));
+    expect(r.status).toBe(400);
+    const body = (await r.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe('WECHAT_API_ERROR');
   });
 
-  it('returns existing user when openid is already registered', async () => {
+  it('returns 200 + existing user when openid is already registered', async () => {
     const db = makeMockDb();
     // Pre-seed an existing user
     const now = Math.floor(Date.now() / 1000);
@@ -244,86 +211,88 @@ describe('POST /api/mp/auth', () => {
       created_at: now,
       updated_at: now,
     });
-
-    const fakeFetch = makeFakeFetch();
-    mockWxCode2Session({ openid: 'existing-openid-abc123', session_key: 'skey' });
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = fakeFetch as unknown as typeof fetch;
-    try {
-      const r = await app.request('http://test.local/api/mp/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: 'wx-code-existing' }),
-      }, makeEnv(db) as Parameters<typeof app.request>[2]);
-      expect(r.status).toBe(200);
-      const body = (await r.json()) as { openid: string; userId: number; role: string; familyId: number | null };
-      expect(body.openid).toBe('existing-openid-abc123');
-      expect(body.userId).toBe(42);
-      expect(body.role).toBe('child');
-      expect(body.familyId).toBeNull();
-    } finally {
-      globalThis.fetch = originalFetch as typeof fetch;
-    }
+    // Mock fetch: wx API returns openid (factory for fresh Response each call)
+    globalThis.fetch = vi.fn().mockImplementation(
+      () => Promise.resolve(
+        new Response(JSON.stringify({ openid: 'existing-openid-abc123', session_key: 'skey' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+    const r = await call('/api/mp/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'wx-code-existing' }),
+    }, makeEnv(db));
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { openid: string; userId: number; role: string; familyId: number | null };
+    expect(body.openid).toBe('existing-openid-abc123');
+    expect(body.userId).toBe(42);
+    expect(body.role).toBe('child');
+    expect(body.familyId).toBeNull();
   });
 
   it('creates a new child user when openid is not registered', async () => {
     const db = makeMockDb();
-    const fakeFetch = makeFakeFetch();
-    mockWxCode2Session({ openid: 'new-openid-xyz789', session_key: 'skey-new' });
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = fakeFetch as unknown as typeof fetch;
-    try {
-      const r = await app.request('http://test.local/api/mp/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: 'wx-code-new' }),
-      }, makeEnv(db) as Parameters<typeof app.request>[2]);
-      expect(r.status).toBe(200);
-      const body = (await r.json()) as { openid: string; userId: number; role: string; familyId: number | null };
-      expect(body.openid).toBe('new-openid-xyz789');
-      expect(body.userId).toBe(1); // first user, id=1
-      expect(body.role).toBe('child');
-      expect(body.familyId).toBeNull();
-      // Verify user was actually inserted
-      expect(users).toHaveLength(1);
-      expect(users[0].openid).toBe('new-openid-xyz789');
-      expect(users[0].role).toBe('child');
-    } finally {
-      globalThis.fetch = originalFetch as typeof fetch;
-    }
+    // Mock fetch: wx API returns new openid
+    globalThis.fetch = vi.fn().mockImplementation(
+      () => Promise.resolve(
+        new Response(JSON.stringify({ openid: 'new-openid-xyz789', session_key: 'skey-new' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+    const r = await call('/api/mp/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'wx-code-new' }),
+    }, makeEnv(db));
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { openid: string; userId: number; role: string; familyId: number | null };
+    expect(body.openid).toBe('new-openid-xyz789');
+    expect(body.userId).toBe(1);
+    expect(body.role).toBe('child');
+    expect(body.familyId).toBeNull();
+    // Verify user was actually inserted into mock D1
+    expect(users).toHaveLength(1);
+    expect(users[0].openid).toBe('new-openid-xyz789');
+    expect(users[0].role).toBe('child');
   });
 
-  it('returns the correct userId for consecutive logins (openid→userId stable)', async () => {
+  it('returns the same userId for consecutive logins (openid→userId stable)', async () => {
     const db = makeMockDb();
-    const fakeFetch = makeFakeFetch();
-    mockWxCode2Session({ openid: 'stable-openid-001', session_key: 'skey' });
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = fakeFetch as unknown as typeof fetch;
-    try {
-      // First login — creates user
-      const r1 = await app.request('http://test.local/api/mp/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: 'code-001' }),
-      }, makeEnv(db) as Parameters<typeof app.request>[2]);
-      expect(r1.status).toBe(200);
-      const body1 = (await r1.json()) as { openid: string; userId: number; role: string };
-      expect(body1.userId).toBe(1);
+    // Mock fetch: wx API returns same openid (factory = fresh Response per call)
+    globalThis.fetch = vi.fn().mockImplementation(
+      () => Promise.resolve(
+        new Response(JSON.stringify({ openid: 'stable-openid-001', session_key: 'skey' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+    // First login — creates user
+    const r1 = await call('/api/mp/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'code-001' }),
+    }, makeEnv(db));
+    expect(r1.status).toBe(200);
+    const body1 = (await r1.json()) as { openid: string; userId: number; role: string };
+    expect(body1.userId).toBe(1);
 
-      // Second login — same user
-      const r2 = await app.request('http://test.local/api/mp/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: 'code-002' }),
-      }, makeEnv(db) as Parameters<typeof app.request>[2]);
-      expect(r2.status).toBe(200);
-      const body2 = (await r2.json()) as { openid: string; userId: number; role: string };
-      expect(body2.userId).toBe(1);
-      expect(body2.openid).toBe('stable-openid-001');
-      // No duplicate user created
-      expect(users).toHaveLength(1);
-    } finally {
-      globalThis.fetch = originalFetch as typeof fetch;
-    }
+    // Second login — same openid → same userId (no duplicate created)
+    const r2 = await call('/api/mp/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'code-002' }),
+    }, makeEnv(db));
+    expect(r2.status).toBe(200);
+    const body2 = (await r2.json()) as { openid: string; userId: number; role: string };
+    expect(body2.userId).toBe(1);
+    expect(body2.openid).toBe('stable-openid-001');
+    // Only one user created despite two logins
+    expect(users).toHaveLength(1);
   });
 });
