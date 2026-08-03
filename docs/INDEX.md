@@ -11,6 +11,7 @@
 |---|---|---|
 | **新来的 Agent (Code / Qual / Research)** | 上手这个项目 | [`README.md`](#-项目说明) → [`docs/PRD.md`](#-产品需求-prd) → [`docs/PROGRESS.md`](#-项目进度) → [`docs/PLAN.md`](#-实施计划-plan) |
 | **Code Agent** (CC) | 改代码 / 加功能 | [`docs/PRD.md`](#-产品需求-prd) → [`docs/TEST_PLAN.md`](#-测试计划) → [`docs/PLAN.md`](#-实施计划-plan) → [`docs/NIGHTLY-TODO.md`](#-半夜自动化清单) |
+| **Code Agent** (CC) | 改 Fighter V2 | [`CLAUDE.md`](../CLAUDE.md) → [`docs/FIGHTER-V2-STATUS.md`](./FIGHTER-V2-STATUS.md) → 实际 `public/fighter/v2/` 代码；不要用旧 HANDOVER 当现状 |
 | **Qual Agent** | 跑 e2e / 验收 | [`docs/TEST_PLAN.md`](#-测试计划) → [`docs/QUAL_CLEAN_RUN_CHECKLIST.md`](#-qual-验收清单) |
 | **PM / 运维** (本机) | 部署 / D1 操作 / 故障恢复 | [`DEPLOY.md`](#-部署指南) → [`docs/SECURITY-REMOTE-OPS.md`](#-远程操作安全) → [`docs/INCIDENTS.md`](#-故障记录-deploy-failures) (如有) |
 | **PM Agent** (本机 session) | 半夜自动开发任务 | [`docs/NIGHTLY-TODO.md`](#-半夜自动化清单) |
@@ -22,7 +23,7 @@
 ## 📚 完整文档清单 (按类别)
 
 ### 📌 项目说明
-- **[`README.md`](./README.md)** — 项目介绍、核心特性、技术栈、目录结构、quickstart
+- **[`README.md`](../README.md)** — 项目介绍、核心特性、技术栈、目录结构、quickstart
 - **[`DEPLOY.md`](../DEPLOY.md)** — One-time 部署 + 日常 deploy 步骤 (root 目录, 不在 docs/)
 
 ### 📋 产品 & 需求
@@ -36,6 +37,10 @@
 ### 📊 项目进度
 - **[`docs/PROGRESS.md`](./PROGRESS.md)** — 11 段 Module 进度跟踪, 每段 commit 状态、产出、遗留
 - **[`docs/NIGHTLY-TODO.md`](./NIGHTLY-TODO.md)** — 半夜自动化清单 (cron `d100dbff4107` 读这个), Item 模板 + 状态
+
+### 🎮 Fighter V2 RPG
+- **[`docs/FIGHTER-V2-STATUS.md`](./FIGHTER-V2-STATUS.md)** — Fighter V2 实现状态（Source of Truth，实时更新）
+- **[`HANDOVER-fighter-v2.md`](../HANDOVER-fighter-v2.md)** — 历史设计稿（2026-07-15，⚠️ 部分过时）
 
 ### 🧪 测试 & 质量
 - **[`docs/TEST_PLAN.md`](./TEST_PLAN.md)** — Web UI e2e Test Plan, 14 个 §3 场景 + 11 个 sleep lockout 场景
@@ -156,9 +161,10 @@ wrangler d1 execute kiddo-scoreboard-db --remote --file=query.sql               
 
 ## 📅 最后更新
 
-- **本索引**: 2026-06-08 (PM 整理)
-- **生产 deploy**: 2026-06-08 (Pages + 5/5 endpoint 200)
-- **D1 migrations**: 4/4 applied (0001~0004)
-- **e2e baseline**: 182/182 pass (~2 min)
+- **本索引**: 2026-07-20（新增 Fighter V2 Source of Truth 入口）
+- **生产 deploy**: 2026-06-08 (Pages + 5/5 endpoint 200；本轮未重新核对)
+- **D1 migrations**: 4/4 applied (0001~0004；这是 2026-06-08 记录)
+- **旧全站 e2e baseline**: 182/182 pass（2026-06-08，不代表当前）
+- **Fighter V2 unit baseline**: 2026-07-20 实跑 6 files pass / 2 fail；192 tests pass / 12 fail
 
 > 这个文档是给"新来的 agent 找入口"用的。 内容随项目演进, 改架构/改路径时记得同步本索引。

@@ -6,8 +6,8 @@
 **项目**: kiddo-scoreboard（儿子计分板 Web PWA）
 **用户**: 岑斐灏（爸爸 / PM）
 **总模块数**: 11 段
-**当前进度**: 🟢 Module 1/11 完成
-**最近更新**: 2026-06-06（§3.12 edge 完成 commit 9ca3732；109 pass + 1 skip baseline）
+**当前进度**: 核心 PWA 已上线；Fighter V2 为 ⚠️ 可玩原型，P0 流程/视觉/测试待修（见文末 Fighter V2 段）
+**最近更新**: 2026-07-20（新增 `docs/FIGHTER-V2-STATUS.md`；真实 unit baseline 6 files pass / 2 fail）
 
 ---
 
@@ -1079,4 +1079,38 @@ git log --oneline -5  # 看最新进度
 **风险**: 🟢
 - 仅替换 admin revoke 内部实现, 0 schema 改动, 0 新 endpoint, 对外契约 (HTTP 200/400/404/409) 保持
 - 旧 `running:N` source_ref record: cascade 走 skip (找不到 matching award), 行为跟 §1 spec 一致
+
+---
+
+## ⚠️ Fighter V2 — 可玩原型 / 核心流程待修 — 2026-07-20
+
+**触发场景**: feihao 2026-07-15 拍板“V2 = V0 完整重写”（方案 C），5 Phase，PM 自治。
+
+**分支**: `feat/fighter-v2-rpg`（当前无远端 upstream；HEAD `0e585b8`，本地相对 `origin/main` ahead 12 / behind 1）
+
+**已落地**：
+- 11 个 JS + 1 HTML + 1 CSS 的浏览器 RPG 模块
+- 3-view 路由：Main Menu → Stage Intro → Battle
+- World 0 三关可连续挑战；基础攻击、怪物反击、胜负 modal 可运行
+- 3 技能、3 阶装备、商店与 15 个 stage 的数据/函数骨架
+- 10 张核心 asset 文件 + 本地 WIP cropped assets
+
+**当前真实验证**：
+- ✅ 本地 `http://127.0.0.1:8790/fighter/v2/fighter` HTTP 200，Main Menu / Stage Intro / Battle 可进入
+- ❌ `npx vitest run tests/unit/fighter-v2`：6 files pass / 2 fail；192 tests pass / 12 fail
+- ❌ iPad 1024×768 视觉：Hero 显示成剑、懒词菌显示成骑士，白底与背景叠层明显
+
+**P0 未完成**：
+- World 1-2 stage 数据有，但当前 UI 固定 `worldIdx: 0`，无法进入
+- SKILL 只会 fireball；heal/shield 无入口；ITEM 无效果且会浪费回合
+- cooldown 未写入；MP 一次完整攻防循环最多恢复 +20
+- Sprite/frame 映射和 Battle 布局需修
+- Unit/E2E/visual 测试基线需恢复
+
+**Source of Truth**: `docs/FIGHTER-V2-STATUS.md`
+
+**明确 deferred**：
+- BGM/SFX 与 Options
+- World 3-4（法师高塔 / 终极城堡）
+- 成就 / 排行榜 / 后端同步
 

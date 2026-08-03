@@ -1,5 +1,22 @@
 # HANDOVER — Fighter V2 (Monument Valley-grade RPG) — 2026-07-15
 
+> ## ⚠️ 历史设计稿（2026-07-15）— 已过时
+> 本文档记录设计决策，**不代表当前实现**。
+> **Source of Truth**: `docs/FIGHTER-V2-STATUS.md`
+>
+> **已知偏差**（与实际实现的差异）：
+> - **localStorage key**: `fighterV2Bank`（✅ 一致，`utils.js:6`）
+> - **文件结构**: HANDOVER §7 规划 8 个 JS 模块，实际为 11 个 JS + 1 HTML + 1 CSS
+> - **世界流程**: Stage 数据覆盖 World 0-2，但当前 Main Menu 固定进入 World 0，World 1-2 无 UI 入口
+> - **技能/道具**: 当前 3 个按钮（ATTACK/SKILL/ITEM）；SKILL 只触发火球，治愈/护盾不可达，ITEM 无效果
+> - **数值状态**: cooldown 没有写入；MP 每完整攻防循环最多恢复 +20
+> - **美术状态**: 核心 PNG 文件存在，但 2026-07-20 iPad 实测战斗 sprite 映射错误、白底明显
+> - **BGM/SFX**: P5 defer，尚未实现
+> - **World 3-4**: V3 defer，未实现
+> - **测试**: Fighter V2 unit 当前 6 files pass / 2 fail（192 tests pass / 12 fail）；E2E 还有 selector drift
+
+---
+
 > **新 session 第一件事**：扫一眼本文件 §9 完成方表 + §11 checklist，立刻知道下一步做什么。
 > 中间设计讨论、`feihao 拍板`可回查当前 Feishu chat 或 `session_search("fighter v2 rpg")`。
 
