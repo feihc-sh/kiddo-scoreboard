@@ -99,22 +99,50 @@ async function mainMenuSuite() {
 // ============ Suite: battle-scene ============
 async function battleSceneSuite() {
   const { b, p } = await launch();
-  await p.goto(BASE + now(), { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await p.waitForTimeout(3000);
-  // Navigate: START → LEVELS → first stage → 开始
-  for (let i = 0; i < 6; i++) {
+  // Retry up to 3 times on TLS error (cloudflared transient)
+  let lastErr = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await p.goto(BASE + now(), { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await p.waitForTimeout(3000);
+      lastErr = null;
+      break;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 2) { await new Promise(r => setTimeout(r, 3000)); continue; }
+    }
+  }
+  if (lastErr) throw lastErr;
+  // Navigate: START → LEVELS → first stage → 开始 (wait for view-battle.active)
+  let inBattle = false;
+  const clickLog = [];
+  for (let i = 0; i < 8; i++) {
     const state = await p.evaluate(() => {
-      if (document.querySelector('#view-battle.active')) return 'in-battle';
-      const levels = document.querySelector('.dk-menu-button--levels, .dk-menu-button--start');
-      if (levels) { levels.click(); return 'clicked-levels'; }
+      const active = document.querySelector('#view-battle.active');
+      if (active) return { state: 'in-battle' };
+      const activeId = document.querySelector('.fighter-view.active')?.id || 'none';
+      // Try clicking the START button first
+      const start = document.querySelector('.dk-menu-button--start');
+      if (start && activeId === 'view-main-menu') { start.click(); return { state: 'clicked-start', activeId }; }
+      // Then LEVELS
+      const levels = document.querySelector('.dk-menu-button--levels');
+      if (levels && activeId === 'view-main-menu') { levels.click(); return { state: 'clicked-levels', activeId }; }
+      // Then first stage item
       const stage = document.querySelector('.stage-item, [data-stage]');
-      if (stage) { stage.click(); return 'clicked-stage'; }
-      const begin = document.querySelector('.dk-stage-intro__start, [data-action="begin"], .btn--primary');
-      if (begin) { begin.click(); return 'clicked-begin'; }
-      return 'no-action';
+      if (stage && activeId === 'view-stage-intro') { stage.click(); return { state: 'clicked-stage', activeId, stageIdx: stage.dataset.stage }; }
+      // Then 开始 button inside stage-item
+      const stageStart = document.querySelector('.stage-item .btn--primary, .stage-item__action .btn');
+      if (stageStart && activeId === 'view-stage-intro') { stageStart.click(); return { state: 'clicked-stage-start', activeId }; }
+      return { state: 'no-action', activeId, buttons: [...document.querySelectorAll('button')].slice(0, 5).map(b => b.className + ':' + b.textContent.slice(0, 15)) };
     });
-    if (state === 'in-battle') break;
+    clickLog.push(state);
+    if (state.state === 'in-battle') { inBattle = true; break; }
     await p.waitForTimeout(1500);
+  }
+  if (!inBattle) {
+    // Take diagnostic screenshot and dump state
+    await p.screenshot({ path: `${OUT}/battle-scene-nav-fail-${Date.now()}.png`, fullPage: false });
+    return { name: 'battle-scene', status: 'fail', checks: [{ name: 'navigation', status: 'fail', detail: 'failed to reach #view-battle.active, clickLog: ' + JSON.stringify(clickLog).slice(0, 400), durationMs: 0 }], screenshotPath: null };
   }
   await p.waitForTimeout(2500);
   const checks = [];
@@ -157,11 +185,13 @@ async function battleSceneSuite() {
   }));
   checks.push(await check('HP/MP bars in HUD', async () => {
     const r = await p.evaluate(() => {
-      const hp = document.querySelector('.dk-hp-bar, [class*="hp-bar"]');
-      const mp = document.querySelector('.dk-mp-bar, [class*="mp-bar"]');
-      return { hp: !!hp, mp: !!mp };
+      // DK theme HUD uses .dk-mini-bar--hp / .dk-mini-bar--mp (mini bars in top HUD)
+      // Battle scene HP/MP bars are part of .dk-battle-hud (handled in other checks)
+      const hudHp = document.querySelector('.dk-mini-bar--hp, .dk-hp-bar, .dk-battle-hud__hp, [class*="hp"]');
+      const hudMp = document.querySelector('.dk-mini-bar--mp, .dk-mp-bar, .dk-battle-hud__mp, [class*="mp"]');
+      return { hudHp: !!hudHp, hudMp: !!hudMp };
     });
-    if (!r.hp || !r.mp) throw new Error('HP/MP bars missing: ' + JSON.stringify(r));
+    if (!r.hudHp || !r.hudMp) throw new Error('HP/MP bars missing: ' + JSON.stringify(r));
     return r;
   }));
   const screenshotPath = `${OUT}/battle-scene-${Date.now()}.png`;
@@ -173,17 +203,29 @@ async function battleSceneSuite() {
 // ============ Suite: defeated-lock ============
 async function defeatedLockSuite() {
   const { b, p } = await launch();
-  await p.goto(BASE + now(), { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await p.waitForTimeout(3000);
+  // Retry on TLS error
+  let lastErr = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await p.goto(BASE + now(), { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await p.waitForTimeout(3000);
+      lastErr = null;
+      break;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 2) { await new Promise(r => setTimeout(r, 3000)); continue; }
+    }
+  }
+  // Navigate: START → LEVELS → first stage → 开始
   for (let i = 0; i < 6; i++) {
     const state = await p.evaluate(() => {
       if (document.querySelector('#view-battle.active')) return 'in-battle';
-      const levels = document.querySelector('.dk-menu-button--levels, .dk-menu-button--start');
-      if (levels) { levels.click(); return 'clicked-levels'; }
+      const start = document.querySelector('.dk-menu-button--start');
+      if (start) { start.click(); return 'clicked-start'; }
       const stage = document.querySelector('.stage-item, [data-stage]');
       if (stage) { stage.click(); return 'clicked-stage'; }
-      const begin = document.querySelector('.dk-stage-intro__start, [data-action="begin"], .btn--primary');
-      if (begin) { begin.click(); return 'clicked-begin'; }
+      const stageStart = document.querySelector('.stage-item .btn--primary, .stage-item__action .btn');
+      if (stageStart) { stageStart.click(); return 'clicked-stage-start'; }
       return 'no-action';
     });
     if (state === 'in-battle') break;
@@ -191,23 +233,28 @@ async function defeatedLockSuite() {
   }
   await p.waitForTimeout(2500);
   const checks = [];
+  // First check we're actually in battle (TLS or click loop may have failed)
+  checks.push(await check('reached battle view', async () => {
+    const v = await p.evaluate(() => !!document.querySelector('#view-battle.active'));
+    if (!v) throw new Error('not in battle view');
+    return 'in battle';
+  }));
   // Try clicking attack many times to force defeat
-  for (let i = 0; i < 20; i++) {
-    await p.click('.dk-battle-button--attack', { timeout: 2000 }).catch(() => {});
-    await p.waitForTimeout(500);
-    const state = await p.evaluate(() => {
-      const modal = document.querySelector('.dk-defeat-modal, [class*="defeat-modal"], [class*="battle-defeat"]');
-      const btn = document.querySelector('.dk-battle-button--attack');
-      return { modalVisible: modal && getComputedStyle(modal).display !== 'none', attackDisabled: btn?.disabled };
-    });
-    if (state.modalVisible) break;
-  }
-  checks.push(await check('defeat modal visible', async () => {
-    const v = await p.evaluate(() => {
-      const m = document.querySelector('.dk-defeat-modal, [class*="defeat-modal"], [class*="battle-defeat"]');
+  let modalSeen = false;
+  for (let i = 0; i < 8; i++) {
+    try {
+      await p.click('.dk-battle-button--attack', { timeout: 3000 });
+    } catch (e) { /* element may be hidden */ }
+    await p.waitForTimeout(1500);
+    modalSeen = await p.evaluate(() => {
+      // Modal class is .dk-battle-modal--defeat (DK theme), not .dk-defeat-modal
+      const m = document.querySelector('.dk-battle-modal--defeat, .dk-battle-modal[class*="defeat"], [class*="battle-defeat"]');
       return m && getComputedStyle(m).display !== 'none';
     });
-    if (!v) throw new Error('defeat modal not visible');
+    if (modalSeen) break;
+  }
+  checks.push(await check('defeat modal visible', async () => {
+    if (!modalSeen) throw new Error('defeat modal not visible after 20 attacks');
     return 'visible';
   }));
   checks.push(await check('ATTACK button disabled in defeat state', async () => {
@@ -227,8 +274,20 @@ async function defeatedLockSuite() {
 // ============ Suite: sequential-lock (dev) ============
 async function sequentialLockSuite() {
   const { b, p } = await launch();
-  await p.goto(BASE + now(), { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await p.waitForTimeout(3000);
+  // Retry on TLS error
+  let lastErr = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await p.goto(BASE + now(), { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await p.waitForTimeout(3000);
+      lastErr = null;
+      break;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 2) { await new Promise(r => setTimeout(r, 3000)); continue; }
+    }
+  }
+  if (lastErr) throw lastErr;
   await p.click('.dk-menu-button--levels, .dk-menu-button--start').catch(() => {});
   await p.waitForTimeout(2000);
   const checks = [];

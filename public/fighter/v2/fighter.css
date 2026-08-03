@@ -796,13 +796,17 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 60%;
+  height: 50%;
   pointer-events: none;
+  z-index: 1;        /* PM fix: behind hero/monster */
+  overflow: hidden; /* PM fix: clip to bottom 50% */
 }
 
 .dk-castle-battle-bg {
   width: 100%;
   height: 100%;
+  object-fit: cover;       /* PM fix: cover container */
+  object-position: bottom; /* PM fix: anchor to bottom (sky on top, castle bottom) */
 }
 
 /* Battle HUD */
@@ -970,9 +974,12 @@ body {
 
 .dk-battle-knight,
 .dk-battle-dragon {
-  width: 100px;
-  height: 100px;
+  width: 160px;            /* PM fix: 100→160 (bigger) */
+  height: 160px;
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+  object-fit: contain;     /* PM fix: keep aspect ratio */
+  position: relative;      /* PM fix: float above castle BG */
+  z-index: 10;
 }
 
 .dk-defeated-placeholder {
