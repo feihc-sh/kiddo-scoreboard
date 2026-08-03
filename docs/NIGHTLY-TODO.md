@@ -974,8 +974,8 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
    | 🚫 blocked → 归档 | 2 | #003 英语 / #004 老师投诉 |
    | **总计** | **12** | 全部归档 |
 
-   > 📌 **当前清单** (active): #007 hold / #013 ⏳ pending (Stage 2 claim 实际未 commit, 需 PM re-evaluate) / #016 ⏳ pending (暑假作业 modal 临时功能, 2026-07-06 重新入池)
-   > 当前 ⏳ pending = **2** (#013, #016)
+   > 📌 **当前清单** (active): #007 hold (用户 2026-06-08 暂缓, 拍板后入清单)
+   > 当前 ⏳ pending = **0** (无待办, 等用户新需求入池)
    > 当前 ⏸ hold = **1** (#007)
    > 当前 🔧 running = **0**
 
