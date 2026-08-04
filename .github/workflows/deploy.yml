@@ -69,7 +69,9 @@ jobs:
 
       - name: Install project dependencies
         # wrangler needs node_modules to resolve imports like 'hono' in src/
-        run: npm ci
+        # Use npm install (not ci) so workspace 'prepare' scripts run and build packages/shared/dist/
+        # Tip 29 fix: packages/shared/dist/ must exist for wrangler bundle to resolve 'mecha-challenge-shared'
+        run: npm install --no-audit --no-fund --loglevel=error
 
       - name: Apply D1 migrations to remote
         env:

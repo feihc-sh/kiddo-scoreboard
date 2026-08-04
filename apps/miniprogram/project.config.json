@@ -2,7 +2,7 @@
   "miniprogramRoot": "./dist/",
   "projectname": "mecha-challenge-scoreboard",
   "description": "机甲挑战计分板 - Taro 4 WeChat Mini Program",
-  "appid": "touristappid",
+  "appid": "wx0a69442415a53a67",
   "setting": {
     "urlCheck": false,
     "es6": true,
