@@ -1,0 +1,16 @@
+-- =============================================================
+-- Item #016 §7 (2026-09-04 feihao): 临时禁用暑假作业任务
+-- 暑假结束 (~2026-09-01 开学),将"每日完成暑假作业"任务 is_active=0
+-- 临时下架,但 task_completions + summer_homework_subitems 历史数据完全保留
+-- (admin 月历/dot-matrix 报表查询不依赖 is_active,仍可查历史)
+--
+-- 明年暑假手动恢复:
+--   1. UPDATE tasks SET is_active = 1 WHERE name = '每日完成暑假作业';
+--   2. (可选) 把 public/index.html 里的 modal hidden attribute 删掉 (但其实 hidden
+--      只是 UI 层默认隐藏, app.js 的 if (t.is_active === 1) 守卫已能正确放行)
+--   3. (可选) 把 public/admin/index.html 里的两个 <details> 的 hidden 删掉
+--   4. (可选) admin.js loadSummerCalendar/loadSummerSubmatrix 守卫可删 (但保留无害)
+--   5. 跑 wrangler d1 migrations apply kiddo-scoreboard-db --remote (确保 production 同步)
+--   6. 验证: kid 每日任务里能看到"每日完成暑假作业",点进去能弹 modal
+-- =============================================================
+UPDATE tasks SET is_active = 0 WHERE name = '每日完成暑假作业';
