@@ -39,6 +39,10 @@ const state = {
   // Item #016 §2 (2026-07-12 feihao): summer-homework calendar heatmap.
   summerCalendar: null,   // { task_id, task_name, from_date, to_date, kids:[...] }
   summerCalendarTaskId: null,   // selected task (default = first active task)
+  // Item #016 §7 (2026-09-04 feihao): cache "any active summer-homework task?"
+  // (set by loadTasks; consumed by refreshAll + filter handlers to skip
+  // loadSummerCalendar/loadSummerSubitemsMatrix when feature is disabled).
+  summerHomeworkActive: false,
   summerCalendarYear: 2026,
   // feihao 2026-07-12: tabbed month picker (was 2-col grid, now 1 month at a time).
   summerCalendarMonth: (function () { const m = new Date().getMonth() + 1; return [7, 8].includes(m) ? m : 7; })(),
@@ -144,6 +148,13 @@ async function loadAllEvents() {
 async function loadTasks() {
   const r = await api('GET', '/api/admin/tasks?include_inactive=true');
   state.tasks = r.tasks;
+  // Item #016 §7 (2026-09-04 feihao): cache "any active summer-homework task?"
+  // flag on state so refreshAll + filter handlers can skip loadSummerCalendar /
+  // loadSummerSubitemsMatrix network calls without scanning state.tasks each time.
+  // (UI section hidden in admin/index.html; this is defense-in-depth.)
+  state.summerHomeworkActive = state.tasks.some(
+    (t) => t && t.name === '每日完成暑假作业' && t.is_active === 1,
+  );
   // Item #016 §2: refresh summer-calendar task dropdown now that state.tasks
   // is populated. Done here (not inside loadSummerCalendar) so the dropdown
   // is filled BEFORE loadSummerCalendar reads state.summerCalendarTaskId.
@@ -525,11 +536,11 @@ async function refreshAll() {
       loadDeletedRecords(),
       loadPendingRedemptions(),
       loadRunningRecords(),
-      loadSummerCalendar(),
-      // Item #016 §5 (2026-07-12 feihao): subitem dot matrix (uses the
-      // same /by-task endpoint so adding to the same Promise.all batch is
-      // free — just one extra HTTP call).
-      loadSummerSubitemsMatrix(),
+      // Item #016 §7 (2026-09-04 feihao): post-暑假 disabled (tasks.is_active=0)。
+      // UI section 已 hidden (admin/index.html:214/238),这里 defense-in-depth:
+      // 如果 state.tasks 里没有 is_active=1 的 SUMMER_HOMEWORK_TASK_NAME,跳过这俩 network call。
+      state.summerHomeworkActive ? loadSummerCalendar() : Promise.resolve(),
+      state.summerHomeworkActive ? loadSummerSubitemsMatrix() : Promise.resolve(),
     ]);
     renderAll();
   } catch (e) {
@@ -1277,8 +1288,10 @@ function bindFilters() {
     state.runningFilter = e.target.value;
     renderRunningRecords();
   });
-  // Item #016 §2: summer-homework calendar filters.
+  // Item #016 §7 (2026-09-04 feihao): skip network call when summer-homework
+  // task is disabled (UI section hidden, no need to query).
   $('#filter-summer-task').addEventListener('change', async (e) => {
+    if (!state.summerHomeworkActive) return;
     state.summerCalendarTaskId = Number(e.target.value);
     try { await loadSummerCalendar(); renderSummerCalendar(); }
     catch (err) { if (err.message !== 'UNAUTHORIZED') toast('加载失败：' + err.message, 'error'); }

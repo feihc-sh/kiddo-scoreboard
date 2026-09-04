@@ -210,8 +210,10 @@
     <!-- ====== G+. Summer Homework Calendar (Item #016 §2, 2026-07-12 feihao) ======
          GitHub-style per-kid heatmap for the 暑假作业 task across 2026. Shows every
          day of the year; done days are green (active), cancelled days are dim orange
-         (revoked). Hover for tooltip with date + status. -->
-    <details class="pm-section" id="sec-summer-calendar">
+         (revoked). Hover for tooltip with date + status.
+         Item #016 §7 (2026-09-04 feihao): post-暑假 disabled (tasks.is_active=0)。
+         Section hidden 但代码保留,明年暑假手动启用时把 hidden 属性删掉即可。 -->
+    <details class="pm-section" id="sec-summer-calendar" hidden title="暑假作业已禁用,数据保留,明年暑假手动启用">
       <summary>📅 暑假作业打卡月历 <span class="pm-count" id="count-summer-calendar">0</span></summary>
       <div class="pm-section-body">
         <div class="pm-toolbar">
@@ -234,8 +236,10 @@
          sub-items (语词/校内数/单词/绘本/举一反三/外教). Each cell shows whether
          that item was勾 (green) / opened-but-not-勾 (orange-red) / not-checked-in
          that day (dim grey). Last row = per-item total 打卡天数 (SUM checked).
-         Answers feihao's "哪个 item 经常没勾 / 长期没勾" question. -->
-    <details class="pm-section" id="sec-summer-subitems-matrix">
+         Answers feihao's "哪个 item 经常没勾 / 长期没勾" question.
+         Item #016 §7 (2026-09-04 feihao): post-暑假 disabled (tasks.is_active=0)。
+         Section hidden 但代码保留,明年暑假手动启用时把 hidden 属性删掉即可。 -->
+    <details class="pm-section" id="sec-summer-subitems-matrix" hidden title="暑假作业已禁用,数据保留,明年暑假手动启用">
       <summary>📊 暑假作业子项完成度 <span class="pm-count" id="count-summer-subitems-matrix">0</span></summary>
       <div class="pm-section-body">
         <div class="pm-toolbar">

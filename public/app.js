@@ -1232,10 +1232,14 @@ function renderTasks() {
       if (!btn.disabled) {
         btn.addEventListener('click', () => completeTask(t.id));
       }
-    } else if (t.name === SUMMER_HOMEWORK_TASK_NAME) {
+    } else if (t.name === SUMMER_HOMEWORK_TASK_NAME && t.is_active === 1) {
       // Item #016 §1: 暑假作业 modal 拦截 (临时, 开学后下线)
+      // Item #016 §7 (2026-09-04 feihao): post-暑假 is_active=0 → fallback to
+      // normal completeTask (which server will refuse with TASK_INACTIVE 400).
+      // modal code + SUMMER_HOMEWORK_TASK_NAME 保留,明年暑假手动恢复。
       btn.addEventListener('click', () => showSummerHomeworkModal(t));
     } else {
+      // 暑假作业 (is_active=0) 也走这里 — defense-in-depth (server 仍会 TASK_INACTIVE 400)
       btn.addEventListener('click', () => completeTask(t.id));
     }
     // §2 mecha HUD frame: wrap button in .mecha-frame with 4 corner brackets.

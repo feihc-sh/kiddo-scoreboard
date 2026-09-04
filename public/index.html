@@ -71,7 +71,11 @@
   </div>
 
   <!-- Item #016 §1: 暑假作业 modal (临时, 开学后下线 ~2026-09) -->
-  <div id="summer-homework-modal" class="modal-back" hidden>
+  <!-- Item #016 §7 (2026-09-04 feihao): post-暑假 disabled (tasks.is_active=0)。
+       modal 默认 hidden + aria-disabled,明年暑假手动恢复时把这两个属性删掉。
+       modal/showSummerHomeworkModal/submitSummerHomework 完整保留供复用。-->
+  <div id="summer-homework-modal" class="modal-back" hidden aria-disabled="true"
+       title="暑假作业已禁用 (post-2026-暑假),数据保留,明年暑假手动启用">
     <div class="modal">
       <h2 class="modal-title">📚 今日暑假作业</h2>
       <div id="summer-homework-list" class="summer-homework-list"></div>
