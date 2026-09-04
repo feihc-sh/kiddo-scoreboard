@@ -1425,14 +1425,19 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 - `dad77d7` (Stage 3: e2e + renderTasks re-render fix)
 - (pending Stage 4: docs + regression — 本 commit)
 
-### 3.22 暑假作业 Modal (Item #016, v2.x — 临时, 开学后下线)
+### 3.22 暑假作业 Modal (Item #016, v2.x — 临时, **🚫 2026-09-04 已禁用,数据保留**)
+
+> **🚫 Status update (2026-09-04 feihao)**: feature 整体禁用,production D1 `tasks.is_active=0`。代码 + 数据完整保留,明年暑假手动恢复。详见 [`SUMMER-HOMEWORK-DISABLED.md`](./SUMMER-HOMEWORK-DISABLED.md)。
 
 > **来源**: NIGHTLY-TODO Item #016, 2026-07-04 拍板 (Q1=A1 hardcoded + Q2=B2 no photo + Q3-4=N/A).
 > **Scope**: kid UI modal 6 items 全勾才能 submit, 复用现有 `completeTask(task.id)` 走 task_completions 路径。
 > **临时**: 5 min cleanup 开学后 (~2026-09) — 删 task + 删 modal HTML/JS/CSS。
 > **0 新 endpoint / 0 新 schema / 0 新 admin section** (per `feihao-pm-autonomy` §4f pitfall-13 复用现有 flow)。
 
-**Spec file**: `tests/e2e/summer-homework-modal.spec.ts` (4 e2e: happy 1+2+3, edge cancel) + `tests/unit/summer-homework-modal.test.ts` (8 unit: HTML hooks, 6 items, all-checked gate, modal toggle, CSS)
+**Spec file**:
+- `tests/e2e/summer-homework-modal.spec.ts` (4 e2e: happy 1+2+3, edge cancel) — **历史 active 状态测试,current 已 disable**
+- `tests/e2e/summer-homework-disabled.spec.ts` (4 e2e: kid-invisible / API-400 / admin-section-hidden / re-enable smoke) — **当前有效**
+- `tests/unit/summer-homework-modal.test.ts` (8 unit: HTML hooks, 6 items, all-checked gate, modal toggle, CSS + §7 disabled 3 cases)
 
 **Setup (test fixture)**:
 - seed task "每日完成暑假作业" (icon=📝, category=study, target_account=pocket_money, token_reward=1, is_active=1, sort_order=10) — PM 手动在 production admin UI 创建同样 task

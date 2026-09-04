@@ -584,10 +584,15 @@ export async function writeRevokeAuditLog(db, recordId, details): void
 - [ ] **手动步骤 (5 min, PM 在 admin UI)**: 创建 task "每日完成暑假作业" (icon 📝, category=study, target_account=pocket_money, token_reward=1, is_active=1, sort_order=10) — 让 modal trigger 在 production 生效
 
 **Status**: ✅ done (Stage 1 commit `37e3f02` 2026-07-06 22:46, branch `feat/016-summer-homework`, 未 merged to main per cron 红灯规则; 9 files +621/-1: index.html +13 / app.js +66 / app.css +61 / 1 unit (8 tests 全过) / 1 e2e (4 tests) / 4 docs; Stage 2 (docs) 已 in §1 commit, 不再单独跑; 387/389 vitest 绿, 2 pre-existing mecha failures baseline-consistent; 5 min 手动 follow-up: admin UI create task "每日完成暑假作业" 让 modal trigger production 生效)
-**风险**: 🟢 (临时功能, hardcoded 无 schema 改动; 5 min cleanup 开学后)
+
+> **§7 update (2026-09-04 feihao)**: post-暑假 disable 已完成 (开学 9 月 1 日)。Item #016 整体进入"feature shipped then disabled" 终态 — 5 modular commits on `main` (`f05d651` / `e59a9dc` / `5fee3c1` / `df17e99` / `544cdb9`),production D1 `tasks.is_active=0` 已 verify (production `每日完成暑假作业` 不可见,UI modal 不弹,admin 月历 + dot-matrix section hidden),`isAllTasksCompleted()` bonus 逻辑自动排除 is_active=0 tasks。
+> 详细禁用记录 + 明年暑假恢复步骤**:[`docs/SUMMER-HOMEWORK-DISABLED.md`](./SUMMER-HOMEWORK-DISABLED.md) (6.6KB)
+
+**风险**: 🟢 (临时功能, hardcoded 无 schema 改动; 5 min cleanup 开学后 → §7 done 2026-09-04)
 **Started**: 2026-07-06
-**Completed**: 2026-07-06
+**Completed**: 2026-07-06 (shipped) · **Disabled**: 2026-09-04 (post-暑假)
 **Commit (Stage 1)**: `37e3f02` (2026-07-06 22:46, 9 files +621/-1, 8 vitest + 4 e2e 全过, branch: feat/016-summer-homework, NOT merged)
+**Commits (Disable)**: `f05d651` backend · `e59a9dc` frontend · `5fee3c1` test · `df17e99` docs · `544cdb9` cleanup (all on `main`, pushed & Cloudflare Pages deployed)
 **Branch**: `feat/016-summer-homework` (未 merged, PM 决定: 保留 branch 等手动 merge or 留二期)
 
 ---

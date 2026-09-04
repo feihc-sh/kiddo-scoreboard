@@ -1075,7 +1075,11 @@ CREATE INDEX idx_redemptions_user_redeemed ON shop_redemptions(user_id, redeemed
 - toggle 操作幂等，PM 可随时切换
 - child UI 已原生过滤 `is_active=0`
 
-### 3.16 暑假作业 Modal (Item #016, v2.x — 临时, 开学后下线)
+### 3.16 暑假作业 Modal (Item #016, v2.x — 临时, **🚫 2026-09-04 已禁用,数据保留**)
+
+> **🚫 Status update (2026-09-04 feihao)**: 暑假结束 (9 月 1 日开学),feature 整体 disable — kid UI 不显示该 task,modal 不弹,admin 月历 + dot-matrix section hidden,production D1 `tasks.is_active=0`。代码 (modal HTML / showSummerHomeworkModal / SUMMER_HOMEWORK_SUBITEM_IDS) 完整保留供明年暑假复用。
+>
+> 详细禁用范围 + 明年恢复步骤: [`SUMMER-HOMEWORK-DISABLED.md`](./SUMMER-HOMEWORK-DISABLED.md)。
 
 **用户场景** (NIGHTLY-TODO Item #016, 2026-07-04 拍板):
 暑假期间, 孩子每天有一堆作业要做 (语文词语 / 数学 / 英语单词默写 / 英语绘本 / 数学举一反三 / 英语外教课), PM 想让孩子点"暑假每日打卡"时**先确认每项都完成**了, 才算打卡成功 (用户原话 "挨个确认是否都完成了, 然后才算是打卡成功")。

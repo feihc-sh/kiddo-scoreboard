@@ -6,6 +6,8 @@
 
 **生产**: https://kiddo-scoreboard.pages.dev (5/5 endpoint 200) | **状态**: 🟢 上线 (2026-06-08) | **D1**: 4/4 migration | **e2e**: 182/182 pass
 
+> **🚫 2026-09-04 feihao**: 暑假作业 feature 已禁用 (Item #016 §7,生产 D1 `tasks.is_active=0`,kid UI / modal / admin 报表全隐藏)。数据完整保留,详见 [`docs/SUMMER-HOMEWORK-DISABLED.md`](./docs/SUMMER-HOMEWORK-DISABLED.md)。
+
 ---
 
 ## 📑 文档索引 (其他 agent 必看)

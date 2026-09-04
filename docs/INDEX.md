@@ -45,6 +45,7 @@
 ### 🔐 运维 & 安全
 - **[`docs/SECURITY-REMOTE-OPS.md`](./SECURITY-REMOTE-OPS.md)** — 远程 D1 操作安全手册, 🟢/🟡/🔴 分级 + Time Travel
 - **[`docs/INCIDENTS.md`](./INCIDENTS.md)** — **(自动维护)** Deploy/backup 失败记录, GitHub Action 自动 append
+- **[`docs/SUMMER-HOMEWORK-DISABLED.md`](./SUMMER-HOMEWORK-DISABLED.md)** — **🚫 2026-09-04 暑假作业禁用记录** (Item #016 §7,生产 D1 `is_active=0`,明年暑假手动恢复步骤)
 
 ### 🔬 探索 & 发现
 - **[`docs/CHILD_UI_FINDINGS.md`](./CHILD_UI_FINDINGS.md)** — 2026-06-06 PM 儿童端 UI 探索, 2 轮"假装 8 岁小朋友"反馈
