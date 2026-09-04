@@ -91,10 +91,10 @@ tasks.post('/:id/complete', async (c) => {
 
   // 2.6 §5 summer-homework subitems (optional body). Validate keys + values
   //     BEFORE opening any batch so a malformed payload is rejected cleanly.
-  //     Only persisted when task.name === SUMMER_HOMEWORK_TASK_NAME.
+  //     Only persisted when task.name === SUMMER_HOMEWORK_TASK_NAME AND is_active=1.
   let subitemsChecked: string[] = []; // subitem_id list with checked=1
   let rawSubitems: Record<string, unknown> | null = null; // hoisted to outer scope so L230 subitems batch can reference it after this if-block exits
-  if (task.name === SUMMER_HOMEWORK_TASK_NAME) {
+  if (task.name === SUMMER_HOMEWORK_TASK_NAME && task.is_active === 1) {
     try {
       const body = await c.req.json().catch(() => null);
       if (body && typeof body === 'object' && body.subitems && typeof body.subitems === 'object') {
@@ -227,7 +227,8 @@ tasks.post('/:id/complete', async (c) => {
   //     Both 0 (未勾) and 1 (勾了) rows are persisted so admin dot matrix
   //     can distinguish "modal opened, this item not done" from "modal
   //     never opened that day" (no row at all).
-  if (task.name === SUMMER_HOMEWORK_TASK_NAME && completionId > 0 && rawSubitems) {
+  // Skip subitems batch when task is inactive (modal won't open, but defense-in-depth).
+  if (task.name === SUMMER_HOMEWORK_TASK_NAME && task.is_active === 1 && completionId > 0 && rawSubitems) {
     const subitemStmts = Object.entries(rawSubitems)
       .map(([k, v]) =>
         db

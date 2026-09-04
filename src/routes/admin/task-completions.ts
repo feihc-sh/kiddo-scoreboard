@@ -502,12 +502,27 @@ taskCompletions.get('/by-task', async (c) => {
     });
   }
 
+  // Item #016 §7 (2026-09-04 feihao): notice when querying inactive summer homework.
+  // Query the task's is_active flag — if inactive, attach a notice so the UI
+  // can surface "historical data only" without hiding the historical data.
+  const taskActiveRow = await c.env.DB
+    .prepare(`SELECT is_active FROM tasks WHERE id = ?`)
+    .bind(taskId)
+    .first<{ is_active: number }>();
+
   return c.json({
     task_id: taskRow.id,
     task_name: taskRow.name,
     from_date: fromDate,
     to_date: toDate,
     kids: Array.from(kidsMap.values()),
+    ...(taskActiveRow && taskActiveRow.is_active === 0
+      ? {
+          notice:
+            'Summer homework is currently disabled (post-2026-暑假); showing historical data only. ' +
+            'To re-enable: UPDATE tasks SET is_active = 1 WHERE name = \'每日完成暑假作业\';',
+        }
+      : {}),
   });
 });
 
