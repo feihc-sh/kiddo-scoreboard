@@ -194,3 +194,38 @@ describe('Item #016 §1: 暑假作业 modal scaffold', () => {
     expect(css).toMatch(/\.summer-homework-item-hint\s*\{/);
   });
 });
+
+describe('Item #016 §7: 暑假作业 disabled state (is_active=0)', () => {
+  it('showSummerHomeworkModal still opens modal even when called directly (caller guards)', () => {
+    // showSummerHomeworkModal is called only from the button handler when is_active=1.
+    // This test documents that the function itself does NOT guard on is_active —
+    // callers are responsible for the guard (app.js L1235: t.is_active===1 guard).
+    // If is_active=0, showSummerHomeworkModal is never called.
+    document.body.innerHTML =
+      '<div id="summer-homework-modal" class="modal-back" hidden>' +
+        '<div class="modal">' +
+          '<div id="summer-homework-list"></div>' +
+          '<button id="summer-homework-submit" class="btn btn-primary" disabled>✓ 提交</button>' +
+        '</div>' +
+      '</div>';
+
+    const { showSummerHomeworkModal } = loadApp('showSummerHomeworkModal') as {
+      showSummerHomeworkModal: (t: { id: number; name: string }) => void;
+    };
+
+    // Direct call would still open the modal — but caller guards this
+    showSummerHomeworkModal({ id: 7, name: '每日完成暑假作业' });
+    const modal = document.getElementById('summer-homework-modal') as HTMLElement;
+    expect(modal.hasAttribute('hidden')).toBe(false); // modal opens
+  });
+
+  it('modal HTML has hidden + aria-disabled + title when disabled', () => {
+    const html = fs.readFileSync(HTML_PATH, 'utf8');
+    const m = html.match(/<div[^>]*id="summer-homework-modal"[^>]*>/);
+    expect(m).not.toBeNull();
+    // All three attributes are present when disabled
+    expect(m![0]).toContain('hidden');
+    expect(m![0]).toContain('aria-disabled="true"');
+    expect(m![0]).toContain('title=');
+  });
+});
