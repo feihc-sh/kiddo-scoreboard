@@ -5,7 +5,7 @@
 // Auth: child user_id is HARDCODED to 2 in src/routes/me/tasks.ts for now
 // (matches seeds/local.sql). M5 will replace this with proper auth.
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import app from '../../src/worker.ts';
 import type {
   D1Database,
@@ -71,6 +71,9 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     category: 'habit',
     is_active: 1,
     sort_order: 0,
+    cutoff_time: null,
+    is_self_lockout: 0,
+    active_days: null,
     created_at: now,
     updated_at: now,
     ...overrides,
@@ -499,5 +502,78 @@ describe('POST /api/me/tasks/:id/complete', () => {
     // pocket_money. Pre-existing game_time=20 and pocket_money=7 are
     // preserved untouched, and a new +1 coin event lands: coins=1.
     expect(body.new_balance).toEqual({ game_time: 20, pocket_money: 7, coins: 1 });
+  });
+});
+
+// -------------------------------------------------------------
+// task-active-days (Item spec §3.2 + §6, 2026-10-17):
+//   When tasks.active_days is a non-empty array, the server must refuse
+//   completion with 400 TASK_NOT_ACTIVE_TODAY if today (Asia/Shanghai ISO
+//   weekday) is not in the list. Active-days check fires BEFORE the §3.12
+//   cutoff check so the day-of-week gating works even when the task has
+//   no cutoff (or the cutoff has already passed).
+//
+// We freeze the system clock at 2026-10-17T12:00:00Z (= 2026-10-17 20:00
+// Shanghai, ISO weekday 6 = Saturday). The mock DB stores completed_date
+// via todayShanghai() so completions land on 2026-10-17 too.
+// -------------------------------------------------------------
+describe('POST /api/me/tasks/:id/complete — task-active-days gating', () => {
+  beforeEach(reset);
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function freezeSaturdayShanghai() {
+    // 2026-10-17T12:00:00Z == 2026-10-17 20:00 Shanghai → Saturday (ISO 6).
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-17T12:00:00Z'));
+  }
+
+  it('active_days=[1..5] + today is Saturday → 400 TASK_NOT_ACTIVE_TODAY', async () => {
+    freezeSaturdayShanghai();
+    const t = makeTask({ name: 'school-day only', active_days: [1, 2, 3, 4, 5] });
+    const r = await call(`/api/me/tasks/${t.id}/complete`, { method: 'POST' });
+    expect(r.status).toBe(400);
+    const body = (await r.json()) as CompleteBody;
+    expect(body.error?.code).toBe('TASK_NOT_ACTIVE_TODAY');
+    // No batch should have been submitted (refused before §3 atomically writes).
+    expect(lastBatch).toHaveLength(0);
+  });
+
+  it('active_days=[6] + today is Saturday → 200 OK (positive case)', async () => {
+    freezeSaturdayShanghai();
+    const t = makeTask({ name: 'weekend chore', active_days: [6] });
+    const r = await call(`/api/me/tasks/${t.id}/complete`, { method: 'POST' });
+    expect(r.status).toBe(201);
+    const body = (await r.json()) as CompleteBody;
+    expect(body.task_id).toBe(t.id);
+    expect(lastBatch).toHaveLength(3);
+  });
+
+  it('active_days=null → 200 OK regardless of today (regression: every day)', async () => {
+    freezeSaturdayShanghai();
+    const t = makeTask({ name: 'any day', active_days: null });
+    const r = await call(`/api/me/tasks/${t.id}/complete`, { method: 'POST' });
+    expect(r.status).toBe(201);
+    expect(lastBatch).toHaveLength(3);
+  });
+
+  it('active_days check fires BEFORE cutoff check when today is non-active day', async () => {
+    // Saturday + cutoff 00:00 (already passed) + active_days=[1..5]:
+    //   - If active_days ran AFTER cutoff, we'd see CUTOFF_PASSED.
+    //   - If active_days runs BEFORE cutoff (as spec demands), we see
+    //     TASK_NOT_ACTIVE_TODAY.
+    // This is the load-bearing order assertion from spec §3.2.
+    freezeSaturdayShanghai();
+    const t = makeTask({
+      name: 'sleep+school',
+      active_days: [1, 2, 3, 4, 5],
+      is_self_lockout: 1,
+      cutoff_time: '00:00',
+    });
+    const r = await call(`/api/me/tasks/${t.id}/complete`, { method: 'POST' });
+    expect(r.status).toBe(400);
+    const body = (await r.json()) as CompleteBody;
+    expect(body.error?.code).toBe('TASK_NOT_ACTIVE_TODAY');
   });
 });

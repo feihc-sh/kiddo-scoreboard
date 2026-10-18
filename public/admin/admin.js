@@ -1034,9 +1034,41 @@ function startEditTask(id) {
   // → saving clears the sleep task's "准时上床" config. Regression: see #18.
   f.elements['cutoff_time'].value = t.cutoff_time || '';
   f.elements['is_self_lockout'].checked = t.is_self_lockout === 1;
+  // task-active-days (2026-10-17): prefill 7 checkboxes from t.active_days.
+  // null / [] → show all 7 checked (= "every day" — admin UX spec §5).
+  setActiveDaysFromArray(
+    Array.isArray(t.active_days) ? t.active_days : [1, 2, 3, 4, 5, 6, 7],
+  );
   $('#new-task-form-wrap').hidden = false;
   $('#btn-new-task').textContent = '编辑中…';
   f.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+// task-active-days UI helpers (admin.js, 2026-10-17):
+//   setActiveDaysFromArray(arr) — set the 7 checkboxes; arr uses 1-indexed
+//     ISO weekdays (Mon=1..Sun=7).
+//   applyActiveDaysPreset(name) — 'all' = [1..7], 'weekdays' = [1..5],
+//     'weekend' = [6,7]. Spec §5.2.
+//   readActiveDaysFromForm() — read the currently-checked boxes; empty list
+//     → null on the wire (= "every day" / back-compat with D2 NULL semantics).
+function setActiveDaysFromArray(arr) {
+  const set = new Set(arr);
+  document.querySelectorAll('input[name="active_days"]').forEach((el) => {
+    el.checked = set.has(Number(el.value));
+  });
+}
+function applyActiveDaysPreset(name) {
+  let arr;
+  if (name === 'all') arr = [1, 2, 3, 4, 5, 6, 7];
+  else if (name === 'weekdays') arr = [1, 2, 3, 4, 5];
+  else if (name === 'weekend') arr = [6, 7];
+  else return;
+  setActiveDaysFromArray(arr);
+}
+function readActiveDaysFromForm() {
+  const vals = Array.from(
+    document.querySelectorAll('input[name="active_days"]:checked'),
+  ).map((el) => Number(el.value));
+  return vals.length ? vals : null;
 }
 function clearEditTask() {
   state.editingTaskId = null;
@@ -1116,6 +1148,9 @@ async function submitNewTask(form) {
     // public/admin/index.html. Server validates HH:MM regex on cutoff_time.
     cutoff_time: form.cutoff_time.value.trim() || null,
     is_self_lockout: form.is_self_lockout.checked ? 1 : 0,
+    // task-active-days (2026-10-17): number[] (or null = "every day"). The
+    // server canonicalizes to JSON-sorted-unique before storing.
+    active_days: readActiveDaysFromForm(),
   };
   try {
     if (state.editingTaskId) {
@@ -1326,6 +1361,16 @@ function bindForms() {
     $('#new-task-form').reset();
     $('#new-task-form-wrap').hidden = false;
     $('#btn-new-task').textContent = '+ 新建任务（编辑中…）';
+    // task-active-days (2026-10-17): on a fresh create, default the 7
+    // checkboxes to all-checked so the server stores NULL = "every day".
+    setActiveDaysFromArray([1, 2, 3, 4, 5, 6, 7]);
+  });
+  // task-active-days preset buttons (2026-10-17): clicking a preset fills the
+  // 7 checkboxes; PM can still fine-tune after (e.g. weekdays - Wed).
+  document.querySelectorAll('[data-days-preset]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      applyActiveDaysPreset(btn.getAttribute('data-days-preset'));
+    });
   });
   $('#exchange-form').addEventListener('submit', (e) => {
     e.preventDefault();

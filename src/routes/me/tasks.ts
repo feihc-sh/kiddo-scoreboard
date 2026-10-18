@@ -23,7 +23,30 @@
 import { Hono } from 'hono';
 import type { Env } from '../../worker.ts';
 import type { Task } from '../../db/types.ts';
-import { todayShanghai, nowShanghaiHHMM, hhmmAfter } from '../../utils/week.ts';
+import {
+  todayShanghai,
+  nowShanghaiHHMM,
+  hhmmAfter,
+  todayShanghaiISODay,
+} from '../../utils/week.ts';
+
+/** Parse the JSON-encoded tasks.active_days column into number[] | null.
+ *  Tolerates a corrupt value by returning null (treating the task as "every day"),
+ *  mirroring the spec D2 NULL semantics. Returned shape matches the TS Task interface.
+ *  Also accepts an already-parsed array (unit-test mocks store typed objects). */
+function parseActiveDays(raw: string | number[] | null | undefined): number[] | null {
+  if (raw == null || raw === '') return null;
+  if (Array.isArray(raw)) {
+    return raw.filter((n) => Number.isInteger(n) && n >= 1 && n <= 7) as number[];
+  }
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return null;
+    return arr.filter((n) => Number.isInteger(n) && n >= 1 && n <= 7) as number[];
+  } catch {
+    return null;
+  }
+}
 import { computeBalance } from '../../utils/balance.ts';
 import {
   buildTaskCoinGrantSQL,
@@ -56,7 +79,8 @@ const SUMMER_HOMEWORK_TASK_NAME = '每日完成暑假作业';
 
 const TASK_COLUMNS =
   'id, name, token_reward, target_account, icon, category, ' +
-  'is_active, sort_order, cutoff_time, is_self_lockout, created_at, updated_at';
+  'is_active, sort_order, cutoff_time, is_self_lockout, active_days, ' +
+  'created_at, updated_at';
 
 tasks.post('/:id/complete', async (c) => {
   // 1. Validate task_id is a positive integer.
@@ -72,10 +96,16 @@ tasks.post('/:id/complete', async (c) => {
   const db = c.env.DB;
 
   // 2. Load task — 404 if not found, 400 TASK_INACTIVE if disabled.
-  const task = await db
+  const taskRow = await db
     .prepare(`SELECT ${TASK_COLUMNS} FROM tasks WHERE id = ?`)
     .bind(taskId)
     .first<Task>();
+  // task-active-days: D1 stores active_days as JSON text; the TS interface
+  // wants number[] | null — parse it once at the row-read layer so the rest
+  // of the handler can use the typed value directly.
+  const task: Task | null = taskRow
+    ? ({ ...taskRow, active_days: parseActiveDays(taskRow.active_days as unknown as string | null) } as Task)
+    : null;
   if (!task) {
     return c.json(
       { error: { code: 'NOT_FOUND', message: 'task not found' } },
@@ -87,6 +117,19 @@ tasks.post('/:id/complete', async (c) => {
       { error: { code: 'TASK_INACTIVE', message: 'task is no longer active' } },
       400,
     );
+  }
+
+  // 2.4 task-active-days: refuse if today is not an active day for this task.
+  //     Runs BEFORE the §3.12 cutoff check (active_days applies on weekends too,
+  //     when cutoff is null); order mirrors the spec's "cutoff 检查之前插入".
+  if (task.active_days !== null && task.active_days.length > 0) {
+    const today = todayShanghaiISODay();
+    if (!task.active_days.includes(today)) {
+      return c.json(
+        { error: { code: 'TASK_NOT_ACTIVE_TODAY', message: '该任务今天不是生效日' } },
+        400,
+      );
+    }
   }
 
   // 2.6 §5 summer-homework subitems (optional body). Validate keys + values
@@ -330,10 +373,15 @@ tasks.post('/:id/uncomplete', async (c) => {
   const today = todayShanghai();
 
   // 2. Load task — 404 if not found, 400 TASK_INACTIVE if disabled.
-  const task = await db
+  const taskRow = await db
     .prepare(`SELECT ${TASK_COLUMNS} FROM tasks WHERE id = ?`)
     .bind(taskId)
     .first<Task>();
+  // task-active-days: parse JSON-encoded active_days into number[] | null
+  // (mirrors the complete handler — see comment there).
+  const task: Task | null = taskRow
+    ? ({ ...taskRow, active_days: parseActiveDays(taskRow.active_days as unknown as string | null) } as Task)
+    : null;
   if (!task) {
     return c.json(
       { error: { code: 'NOT_FOUND', message: 'task not found' } },

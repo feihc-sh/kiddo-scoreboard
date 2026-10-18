@@ -104,6 +104,9 @@ export interface Task {
   // means no time check (regular task).
   cutoff_time: string | null;
   is_self_lockout: 0 | 1;
+  // task-active-days: ISO weekdays [1..7] (Mon=1) when this task can be
+  // completed. null = every day. Stored as JSON text in D1.
+  active_days: number[] | null;
   created_at: number;
   updated_at: number;
 }

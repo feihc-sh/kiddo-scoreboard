@@ -103,6 +103,16 @@ export function hhmmAfter(a: string, b: string): boolean {
   return a > b;
 }
 
+/**
+ * Today's ISO weekday in Asia/Shanghai (Mon=1 .. Sun=7).
+ * Used by task-active-days enforcement (§3.2): refuse /complete when today
+ * is not in tasks.active_days. Same shift trick as isoWeekString().
+ */
+export function todayShanghaiISODay(): number {
+  const shifted = new Date(Date.now() + SHANGHAI_OFFSET_SECONDS * 1000);
+  return shifted.getUTCDay() || 7;
+}
+
 /** Get range [start, end) of Unix SECONDS for the week containing `input`. */
 export function shanghaiWeekRange(input: number | Date = Date.now()): [number, number] {
   const date = typeof input === 'number' ? new Date(input) : new Date(input);

@@ -69,6 +69,7 @@ function addTask(overrides: Partial<Task> = {}): Task {
     sort_order: 0,
     cutoff_time: null,
     is_self_lockout: 0,
+    active_days: null,
     created_at: nowOverride,
     updated_at: nowOverride,
     ...overrides,
