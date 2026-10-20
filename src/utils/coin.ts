@@ -17,7 +17,7 @@
 // cross-week revoke still finds the original +3 event (RFC §8.1 / TC-X3).
 
 import type { D1Database } from '../db/types.ts';
-import { isoWeekString } from './week.ts';
+import { isoWeekString, todayShanghaiISODay } from './week.ts';
 
 // =============================================================
 // Reads
@@ -81,38 +81,68 @@ export async function getCoinBalanceUpdatedAt(
  * "active task 全完成 = bonus" — 只要还有 active task 没完成就不触发,
  * 完成过几个 inactive task 不影响判定。
  */
+/** Parse the JSON-encoded tasks.active_days column into number[] | null.
+ *  Local copy mirroring the helpers in routes/me/tasks.ts and
+ *  routes/public/tasks.ts (same duplication convention: independent read
+ *  paths, sharing would couple them for no win). null/empty = every day. */
+function parseActiveDays(raw: string | number[] | null | undefined): number[] | null {
+  if (raw == null || raw === '') return null;
+  if (Array.isArray(raw)) {
+    return raw.filter((n) => Number.isInteger(n) && n >= 1 && n <= 7) as number[];
+  }
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return null;
+    return arr.filter((n) => Number.isInteger(n) && n >= 1 && n <= 7) as number[];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Has the user completed every task that is DUE today?
+ * Returns false if zero tasks are due today (vacation / config gap —
+ * the bonus check should require at least one completion to fire).
+ *
+ * "Due today" (task-active-days fix, 2026-10-20): tasks.is_active = 1 AND
+ * (active_days IS NULL/empty → every day, OR today's ISO weekday is in
+ * active_days). Tasks whose active_days exclude today can never be
+ * completed today (server refuses with TASK_NOT_ACTIVE_TODAY), so they
+ * must NOT block the +3 bonus.
+ *
+ * Completions counted: task_completions.status = 'active'. Revoked
+ * completions (TC-F3) don't count, so a revoke+redo cycle can re-arm the
+ * bonus check (TC-F5 / TC-X4).
+ */
 export async function isAllTasksCompleted(
   db: D1Database,
   userId: number,
   date: string,                  // 'YYYY-MM-DD' Asia/Shanghai
 ): Promise<boolean> {
-  // Guard: zero active tasks → no bonus (nothing to "complete all of").
-  const activeRow = await db
-    .prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE is_active = 1`)
-    .first<{ cnt: number }>();
-  const activeCount = Number(activeRow?.cnt ?? 0);
-  if (activeCount === 0) return false;
+  // Tasks due today, computed JS-side (workerd sqlite json_each is not
+  // guaranteed, and the codebase parses active_days in JS elsewhere).
+  const rows = await db
+    .prepare(`SELECT id, active_days FROM tasks WHERE is_active = 1`)
+    .all<{ id: number; active_days: string | null }>();
+  const today = todayShanghaiISODay();
+  const dueToday = (rows.results ?? []).filter((t) => {
+    const days = parseActiveDays(t.active_days);
+    return days === null || days.length === 0 || days.includes(today);
+  });
+  // Guard: zero tasks due today → no bonus (nothing to "complete all of").
+  if (dueToday.length === 0) return false;
 
-  // Bonus fires iff every active task has an active completion today.
-  // undoneCount = active tasks WITHOUT a today's active completion.
-  const undoneRow = await db
+  // Bonus fires iff every due-today task has an active completion today.
+  const doneRows = await db
     .prepare(
-      `SELECT COUNT(*) AS cnt
-       FROM tasks t
-       WHERE t.is_active = 1
-         AND NOT EXISTS (
-           SELECT 1 FROM task_completions tc
-           WHERE tc.task_id = t.id
-             AND tc.user_id = ?
-             AND tc.completed_date = ?
-             AND tc.status = 'active'
-         )`,
+      `SELECT task_id FROM task_completions
+       WHERE user_id = ? AND completed_date = ? AND status = 'active'`,
     )
     .bind(userId, date)
-    .first<{ cnt: number }>();
-  const undoneCount = Number(undoneRow?.cnt ?? 0);
+    .all<{ task_id: number }>();
+  const doneSet = new Set((doneRows.results ?? []).map((r) => r.task_id));
 
-  return undoneCount === 0;
+  return dueToday.every((t) => doneSet.has(t.id));
 }
 
 /**

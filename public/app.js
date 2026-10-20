@@ -1300,7 +1300,17 @@ function renderTaskBonusHint() {
   const hint = $('#task-bonus-hint');
   if (!hint) return;
   if (state.tasks.length === 0) { hint.hidden = true; return; }
-  const allDone = state.tasks.every((t) =>
+  // task-active-days fix (2026-10-20): only tasks DUE today count toward the
+  // "全部完成 +3" bonus. Not-due-today tasks can't be completed today, so
+  // they must not keep the hint grey forever. Mirrors the server-side
+  // isAllTasksCompleted() fix in src/utils/coin.ts.
+  const shifted = new Date(Date.now() + 8 * 3600 * 1000);
+  const todayISODay = shifted.getUTCDay() || 7;
+  const dueToday = state.tasks.filter((t) =>
+    !Array.isArray(t.active_days) || t.active_days.length === 0
+    || t.active_days.includes(todayISODay));
+  if (dueToday.length === 0) { hint.hidden = true; return; }
+  const allDone = dueToday.every((t) =>
     state.completedTaskIds.has(t.id) && !state.uncompletedTodayIds.has(t.id)
   );
   hint.hidden = false;

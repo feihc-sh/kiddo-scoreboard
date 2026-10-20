@@ -7,7 +7,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../../worker.ts';
 import type { Task } from '../../db/types.ts';
-import { todayShanghai } from '../../utils/week.ts';
+import { todayShanghai, todayShanghaiISODay } from '../../utils/week.ts';
 
 const tasks = new Hono<{ Bindings: Env }>();
 
@@ -172,8 +172,8 @@ tasks.get('/progress', async (c) => {
       .bind(userId, yearStart, today)
       .first<{ n: number }>(),
     db
-      .prepare(`SELECT COUNT(*) AS n FROM tasks WHERE is_active = 1`)
-      .first<{ n: number }>(),
+      .prepare(`SELECT id, active_days FROM tasks WHERE is_active = 1`)
+      .all<{ id: number; active_days: string | null }>(),
     db
       .prepare(
         `SELECT monthly_target_count, yearly_target_count
@@ -182,10 +182,18 @@ tasks.get('/progress', async (c) => {
       .first<{ monthly_target_count: number; yearly_target_count: number }>(),
   ]);
 
+  // task-active-days fix (2026-10-20): daily.total = tasks DUE today, not
+  // all is_active tasks. A weekday-only task shouldn't pad Saturday's bar.
+  const todayISODay = todayShanghaiISODay();
+  const dueTodayCount = (activeTasks.results ?? []).filter((t) => {
+    const days = parseActiveDays(t.active_days);
+    return days === null || days.length === 0 || days.includes(todayISODay);
+  }).length;
+
   return c.json({
     daily: {
       completed: dailyCompleted?.n ?? 0,
-      total: activeTasks?.n ?? 0,
+      total: dueTodayCount,
     },
     monthly: {
       completed: monthlyCompleted?.n ?? 0,
