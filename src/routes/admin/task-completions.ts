@@ -74,24 +74,30 @@ taskCompletions.get('/', async (c) => {
     );
   }
 
-  // status: optional, default 'active'
+  // status: optional, default 'active'. 'all' = no status filter (feihao
+  // 2026-10-20: reset-day leaves everything revoked — the admin history
+  // panel defaults to 'all' now so revoked rows stay visible).
   const statusRaw = c.req.query('status') ?? 'active';
-  if (statusRaw !== 'active' && statusRaw !== 'revoked') {
+  if (statusRaw !== 'active' && statusRaw !== 'revoked' && statusRaw !== 'all') {
     return c.json(
-      { error: { code: 'BAD_REQUEST', message: "status must be 'active' or 'revoked'" } },
+      { error: { code: 'BAD_REQUEST', message: "status must be 'active', 'revoked' or 'all'" } },
       400,
     );
   }
-  const status = statusRaw as CompletionStatus;
+  const status = statusRaw as CompletionStatus | 'all';
 
+  const whereStatus = status === 'all' ? '' : 'AND status = ?';
+  const bindAll = status === 'all'
+    ? [userId, date]
+    : [userId, date, status];
   const result = await c.env.DB
     .prepare(
       `SELECT id, task_id, user_id, status, completed_date, completed_at, awarded_event_id
        FROM task_completions
-       WHERE user_id = ? AND completed_date = ? AND status = ?
+       WHERE user_id = ? AND completed_date = ? ${whereStatus}
        ORDER BY completed_at DESC`,
     )
-    .bind(userId, date, status)
+    .bind(...bindAll)
     .all<TaskCompletionListItem>();
 
   const completions = result.results ?? [];
@@ -255,6 +261,139 @@ taskCompletions.post('/:id/revoke', async (c) => {
     // PM UI can display "🪙 -1" alongside the legacy balance update.
     revoke_coin_event_id: revokeCoinEventId,
     revoke_bonus_event_id: revokeBonusEventId,
+  });
+});
+
+// ---------------- POST /reset-day ----------------
+//
+// feihao request (2026-10-20): "重置所有打卡的任务状态" admin button.
+// Revokes ALL active completions for (user_id, date) in one call — the
+// batch equivalent of clicking 撤销 on every row of the 任务完成历史
+// list. Per completion, mirrors POST /:id/revoke exactly:
+//   1. UPDATE task_completions → status='revoked', revoked_at, revoked_by='pm'
+//   2. INSERT -1 coin compensation event (per task)
+//   3. audit_log row
+// Plus ONE -3 bonus reversal for the day if a +3 bonus was granted
+// (findBonusEvent is idempotent — filters change_value=3 AND approved).
+//
+//   body: { user_id: number, date?: 'YYYY-MM-DD' (default todayShanghai), confirm?: true }
+//   Returns { success, reset_count, bonus_reversed, new_balance }
+taskCompletions.post('/reset-day', async (c) => {
+  const pmUserId = await getPmUserId(c);
+  if (pmUserId == null) return unauthorized(c);
+
+  const body = await c.req.json().catch(() => null) as
+    | { user_id?: unknown; date?: unknown; confirm?: unknown }
+    | null;
+  if (!body || !Number.isInteger(Number(body.user_id)) || Number(body.user_id) <= 0) {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'user_id must be a positive integer' } },
+      400,
+    );
+  }
+  const userId = Number(body.user_id);
+
+  const date = typeof body.date === 'string' && body.date !== ''
+    ? body.date
+    : todayShanghai();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return c.json(
+      { error: { code: 'BAD_REQUEST', message: 'date must be YYYY-MM-DD' } },
+      400,
+    );
+  }
+
+  // Explicit confirmation gate — this is a destructive bulk op.
+  if (body.confirm !== true) {
+    return c.json(
+      { error: { code: 'CONFIRM_REQUIRED', message: 'pass confirm:true to reset' } },
+      400,
+    );
+  }
+
+  const db = c.env.DB;
+
+  // Load today's active completions for this user.
+  const actives = await db
+    .prepare(
+      `SELECT id, task_id, user_id, status, completed_date, completed_at,
+              awarded_event_id, revoked_at, revoked_by
+       FROM task_completions
+       WHERE user_id = ? AND completed_date = ? AND status = 'active'`,
+    )
+    .bind(userId, date)
+    .all<TaskCompletion>();
+  const rows = actives.results ?? [];
+  if (rows.length === 0) {
+    const bal = await computeBalance(db, userId);
+    return c.json({ success: true, reset_count: 0, bonus_reversed: false, new_balance: bal });
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+
+  // One atomic batch: per-completion [UPDATE, -1 coin, audit] × N.
+  // (D1 batch = implicit transaction; a mid-way failure rolls back all.)
+  const statements = [];
+  for (const completion of rows) {
+    const revokeCoin = buildRevokeTaskCoinSQL(userId, completion.task_id, date);
+    statements.push(
+      db
+        .prepare(
+          `UPDATE task_completions
+           SET status = 'revoked', revoked_at = ?, revoked_by = ?
+           WHERE id = ? AND status = 'active'`,
+        )
+        .bind(now, pmUserId, completion.id),
+      db.prepare(revokeCoin.query).bind(...revokeCoin.params),
+      db
+        .prepare(
+          `INSERT INTO audit_log
+             (actor, action, target_event_id, target_user_id, details, created_at)
+           VALUES ('pm', 'task_revoke', ?, ?, ?, ?)`,
+        )
+        .bind(
+          completion.awarded_event_id,
+          userId,
+          JSON.stringify({
+            completion_id: completion.id,
+            task_id: completion.task_id,
+            bulk_reset_day: date,
+          }),
+          now,
+        ),
+    );
+  }
+  await db.batch(statements);
+
+  // Bonus reversal (idempotent, own batch — mirrors /:id/revoke §bonus).
+  let bonusReversed = false;
+  const bonusSql = await buildRevokeBonusSQLIfPresent(db, userId, date);
+  if (bonusSql) {
+    await db.batch([
+      db.prepare(bonusSql.query).bind(...bonusSql.params),
+      db
+        .prepare(
+          `INSERT INTO audit_log
+             (actor, action, target_event_id, target_user_id, details, created_at)
+           VALUES ('pm', 'task_revoke', ?, ?, ?, ?)`,
+        )
+        .bind(
+          rows[0].awarded_event_id,
+          userId,
+          JSON.stringify({ change_value: -3, type: 'coins', reason: 'bonus-revoked', bulk_reset_day: date }),
+          now,
+        ),
+    ]);
+    bonusReversed = true;
+  }
+
+  const newBalance = await computeBalance(db, userId);
+
+  return c.json({
+    success: true,
+    reset_count: rows.length,
+    bonus_reversed: bonusReversed,
+    new_balance: newBalance,
   });
 });
 

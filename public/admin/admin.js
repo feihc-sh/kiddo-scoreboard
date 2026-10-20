@@ -26,7 +26,7 @@ const state = {
   auditFilter: '',
   completions: [],       // TaskCompletionListItem[]
   completionDate: '',    // '' = today (server default)
-  completionStatus: 'active',
+  completionStatus: 'all',  // feihao 2026-10-20: default 全部 — revoked rows stay visible after reset-day
   // Stage 4 (NIGHTLY-TODO #009): hard-delete snapshot markers. Key is
   // `${record_type}:${original_id}` so the same id space can carry both
   // score_event and task_completion entries without collision.
@@ -1318,6 +1318,38 @@ function bindFilters() {
     state.completionStatus = e.target.value;
     try { await loadCompletions(); renderCompletions(); }
     catch (err) { if (err.message !== 'UNAUTHORIZED') toast('加载失败：' + err.message, 'error'); }
+  });
+  // ♻️ 重置当天打卡 (2026-10-20 feihao): revoke ALL active completions for
+  // (CHILD_USER_ID, selected date) via POST /api/admin/task-completions/reset-day.
+  // Server mirrors the per-row 撤销 semantics (−1 coin each, one −3 bonus
+  // reversal, audit rows) in a single atomic batch. Two-stage confirm here
+  // because it's a bulk destructive op.
+  $('#btn-reset-day').addEventListener('click', async () => {
+    if (inFlight.has('reset-day')) return;
+    const dateLabel = state.completionDate || '今天';
+    const activeCount = state.completions.filter((c) => c.status === 'active').length;
+    const ok = window.confirm(
+      `确定要重置 ${dateLabel} 的所有打卡任务状态?\n\n` +
+      `• 当前筛选下 active 记录: ${activeCount} 条\n` +
+      `• 每条将撤销并回退 1 枚🪙, 如当天有"全部完成+3"也会反转\n` +
+      `• 此操作会逐条记审计, 但不可一键恢复`
+    );
+    if (!ok) return;
+    inFlight.add('reset-day');
+    try {
+      const r = await api('POST', '/api/admin/task-completions/reset-day', {
+        user_id: CHILD_USER_ID,
+        ...(state.completionDate ? { date: state.completionDate } : {}),
+        confirm: true,
+      });
+      toast(`已重置 ${r.reset_count} 条打卡` + (r.bonus_reversed ? '(+3 bonus 已反转)' : ''), 'success');
+      await Promise.all([loadCompletions(), loadBalance(), loadAllEvents(), loadAudit()]);
+      renderAll();
+    } catch (e) {
+      if (e.message !== 'UNAUTHORIZED') toast('重置失败：' + e.message, 'error');
+    } finally {
+      inFlight.delete('reset-day');
+    }
   });
   $('#filter-running-status').addEventListener('change', function(e) {
     state.runningFilter = e.target.value;

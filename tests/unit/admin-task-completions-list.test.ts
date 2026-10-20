@@ -88,6 +88,35 @@ function makeMockDb(): D1Database {
         },
         first: () => Promise.resolve(null),
         all<T = unknown>(): Promise<D1Result<T>> {
+          // status=all variant drops the `AND status = ?` clause and its
+          // bind param (feihao 2026-10-20 reset-day UX).
+          if (
+            /FROM\s+task_completions/i.test(query) &&
+            /user_id\s*=\s*\?/i.test(query) &&
+            /completed_date\s*=\s*\?/i.test(query) &&
+            !/status\s*=\s*\?/i.test(query)
+          ) {
+            const [userId, completedDate] = params as [number, string];
+            const filtered = completions
+              .filter(
+                (c) =>
+                  c.user_id === userId &&
+                  c.completed_date === completedDate,
+              )
+              .map((c) => ({
+                id: c.id,
+                task_id: c.task_id,
+                user_id: c.user_id,
+                status: c.status,
+                completed_date: c.completed_date,
+                completed_at: c.completed_at,
+                awarded_event_id: c.awarded_event_id,
+              }));
+            return Promise.resolve({
+              results: filtered as unknown as T[],
+              success: true,
+            });
+          }
           if (
             /FROM\s+task_completions/i.test(query) &&
             /user_id\s*=\s*\?/i.test(query) &&
@@ -223,6 +252,21 @@ describe('GET /api/admin/task-completions', () => {
     const body = (await r.json()) as ListResponse;
     expect(body.error?.code).toBe('BAD_REQUEST');
     expect(body.error?.message).toMatch(/status/);
+  });
+
+  it('status=all returns both active and revoked rows (feihao 2026-10-20 reset-day UX)', async () => {
+    addPmUser();
+    addCompletion({ task_id: 1, completed_date: '2026-10-20', status: 'active' });
+    addCompletion({ task_id: 2, completed_date: '2026-10-20', status: 'revoked', revoked_at: 123, revoked_by: 1 });
+    const cookie = await pmCookie();
+    const r = await call('/api/admin/task-completions?user_id=2&status=all', {
+      headers: { cookie },
+    });
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as ListResponse;
+    expect(body.completions).toHaveLength(2);
+    const statuses = body.completions!.map((c) => c.status).sort();
+    expect(statuses).toEqual(['active', 'revoked']);
   });
 
   it('happy path: defaults date=todayShanghai and status=active, returns matching completions', async () => {

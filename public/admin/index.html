@@ -234,9 +234,11 @@
           <input type="date" id="filter-completion-date">
           <label style="font-size:13px;color:var(--text-soft);font-weight:600;">状态</label>
           <select id="filter-completion-status">
+            <option value="all">全部</option>
             <option value="active">active</option>
             <option value="revoked">revoked</option>
           </select>
+          <button class="pm-btn warn" id="btn-reset-day" title="撤销该孩子当天所有 active 打卡(含积分回退+bonus 反转,逐条记审计)">♻️ 重置当天打卡</button>
         </div>
         <div id="completions-list"></div>
         <div class="pm-empty" id="completions-empty" hidden>没有完成记录</div>
