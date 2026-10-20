@@ -259,7 +259,9 @@ describe('GET /api/admin/task-completions', () => {
     addCompletion({ task_id: 1, completed_date: '2026-10-20', status: 'active' });
     addCompletion({ task_id: 2, completed_date: '2026-10-20', status: 'revoked', revoked_at: 123, revoked_by: 1 });
     const cookie = await pmCookie();
-    const r = await call('/api/admin/task-completions?user_id=2&status=all', {
+    // Explicit date — the server default is todayShanghai(), which rolls
+    // over at midnight and made this test date-dependent.
+    const r = await call('/api/admin/task-completions?user_id=2&date=2026-10-20&status=all', {
       headers: { cookie },
     });
     expect(r.status).toBe(200);
