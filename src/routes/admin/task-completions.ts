@@ -283,7 +283,7 @@ taskCompletions.post('/reset-day', async (c) => {
   if (pmUserId == null) return unauthorized(c);
 
   const body = await c.req.json().catch(() => null) as
-    | { user_id?: unknown; date?: unknown; confirm?: unknown }
+    | { user_id?: unknown; date?: unknown; confirm?: unknown; mode?: unknown }
     | null;
   if (!body || !Number.isInteger(Number(body.user_id)) || Number(body.user_id) <= 0) {
     return c.json(
@@ -313,17 +313,137 @@ taskCompletions.post('/reset-day', async (c) => {
 
   const db = c.env.DB;
 
-  // Load today's active completions for this user.
-  const actives = await db
+  // mode: 'revoke' (default) = bulk-revoke actives (original behavior);
+  //       'restore'           = un-revoke the day's revoked rows (feihao
+  //                            2026-10-20: "重置不能重置撤销的任务" — reset-day
+  //                            left revoked rows stuck with no bulk undo).
+  //                            Restore is the exact mirror: status back to
+  //                            'active' + a +1 compensation coin per task +
+  //                            a +3 bonus re-grant if the -3 reversal exists.
+  const mode = body.mode === 'restore' ? 'restore' : 'revoke';
+
+  if (mode === 'restore') {
+    const revokedRows = await db
+      .prepare(
+        `SELECT id, task_id, user_id, status, completed_date, completed_at,
+                awarded_event_id, revoked_at, revoked_by
+         FROM task_completions
+         WHERE user_id = ? AND completed_date = ? AND status = 'revoked'`,
+      )
+      .bind(userId, date)
+      .all<TaskCompletion>();
+    const rows = revokedRows.results ?? [];
+    if (rows.length === 0) {
+      const bal = await computeBalance(db, userId);
+      return c.json({ success: true, restored_count: 0, bonus_restored: false, new_balance: bal });
+    }
+
+    const now2 = Math.floor(Date.now() / 1000);
+    const stmts = [];
+    for (const completion of rows) {
+      stmts.push(
+        db
+          .prepare(
+            `UPDATE task_completions
+             SET status = 'active', revoked_at = NULL, revoked_by = NULL
+             WHERE id = ? AND status = 'revoked'`,
+          )
+          .bind(completion.id),
+        db
+          .prepare(
+            `INSERT INTO score_events
+               (user_id, type, change_value, reason, status, submitted_by, source, source_ref, week_of, created_at)
+             VALUES (?, 'coins', 1, ?, 'approved', 'pm', 'task', ?, NULL, unixepoch())`,
+          )
+          .bind(userId, `task:#${completion.task_id}`, `restore:task:${completion.task_id}:${date}:${userId}`),
+        db
+          .prepare(
+            `INSERT INTO audit_log
+               (actor, action, target_event_id, target_user_id, details, created_at)
+             VALUES ('pm', 'task_restore', ?, ?, ?, ?)`,
+          )
+          .bind(
+            completion.awarded_event_id,
+            userId,
+            JSON.stringify({
+              completion_id: completion.id,
+              task_id: completion.task_id,
+              bulk_restore_day: date,
+            }),
+            now2,
+          ),
+      );
+    }
+    await db.batch(stmts);
+
+    // Bonus restore: only when the -3 reversal exists AND no +3 restore has
+    // been written yet (idempotent on source_ref 'restore:bonus:...').
+    let bonusRestored = false;
+    const reversal = await db
+      .prepare(
+        `SELECT id FROM score_events
+         WHERE user_id = ? AND type = 'coins' AND change_value = -3
+           AND source_ref = ? AND status = 'approved'`,
+      )
+      .bind(userId, `revoke:bonus:${date}:${userId}`)
+      .first<{ id: number }>();
+    if (reversal) {
+      const alreadyRestored = await db
+        .prepare(
+          `SELECT id FROM score_events
+           WHERE user_id = ? AND type = 'coins' AND change_value = 3
+             AND source_ref = ? AND status = 'approved'`,
+        )
+        .bind(userId, `restore:bonus:${date}:${userId}`)
+        .first<{ id: number }>();
+      if (!alreadyRestored) {
+        await db.batch([
+          db
+            .prepare(
+              `INSERT INTO score_events
+                 (user_id, type, change_value, reason, status, submitted_by, source, source_ref, week_of, created_at)
+               VALUES (?, 'coins', 3, ?, 'approved', 'pm', 'task', ?, NULL, unixepoch())`,
+            )
+            .bind(userId, `bonus:${date}:${userId}`, `restore:bonus:${date}:${userId}`),
+          db
+            .prepare(
+              `INSERT INTO audit_log
+                 (actor, action, target_event_id, target_user_id, details, created_at)
+               VALUES ('pm', 'task_restore', ?, ?, ?, ?)`,
+            )
+            .bind(
+              rows[0].awarded_event_id,
+              userId,
+              JSON.stringify({ change_value: 3, type: 'coins', reason: 'bonus-restored', bulk_restore_day: date }),
+              now2,
+            ),
+        ]);
+        bonusRestored = true;
+      }
+    }
+
+    const bal = await computeBalance(db, userId);
+    return c.json({
+      success: true,
+      restored_count: rows.length,
+      bonus_restored: bonusRestored,
+      new_balance: bal,
+    });
+  }
+
+  // Load ALL of the day's completions (both statuses) for this user — the
+  // delete-based reset (feihao 拍板 2026-10-20 "清空重来") wipes the whole
+  // day so the kid sees every task back to 未完成 and can check in again.
+  const allRows = await db
     .prepare(
       `SELECT id, task_id, user_id, status, completed_date, completed_at,
               awarded_event_id, revoked_at, revoked_by
        FROM task_completions
-       WHERE user_id = ? AND completed_date = ? AND status = 'active'`,
+       WHERE user_id = ? AND completed_date = ?`,
     )
     .bind(userId, date)
     .all<TaskCompletion>();
-  const rows = actives.results ?? [];
+  const rows = allRows.results ?? [];
   if (rows.length === 0) {
     const bal = await computeBalance(db, userId);
     return c.json({ success: true, reset_count: 0, bonus_reversed: false, new_balance: bal });
@@ -331,7 +451,8 @@ taskCompletions.post('/reset-day', async (c) => {
 
   const now = Math.floor(Date.now() / 1000);
 
-  // One atomic batch: per-completion [UPDATE, -1 coin, audit] × N.
+  // One atomic batch per completion:
+  //   snapshot → delete subitems → delete completion → -1 coin → audit.
   // (D1 batch = implicit transaction; a mid-way failure rolls back all.)
   const statements = [];
   for (const completion of rows) {
@@ -339,11 +460,17 @@ taskCompletions.post('/reset-day', async (c) => {
     statements.push(
       db
         .prepare(
-          `UPDATE task_completions
-           SET status = 'revoked', revoked_at = ?, revoked_by = ?
-           WHERE id = ? AND status = 'active'`,
+          `INSERT INTO deleted_records
+             (record_type, original_id, original_data, deleted_at, deleted_by, original_table)
+           VALUES ('task_completion', ?, ?, ?, ?, 'task_completions')`,
         )
-        .bind(now, pmUserId, completion.id),
+        .bind(completion.id, JSON.stringify(completion), now, pmUserId),
+      db
+        .prepare(`DELETE FROM summer_homework_subitems WHERE task_completion_id = ?`)
+        .bind(completion.id),
+      db
+        .prepare(`DELETE FROM task_completions WHERE id = ?`)
+        .bind(completion.id),
       db.prepare(revokeCoin.query).bind(...revokeCoin.params),
       db
         .prepare(
@@ -358,6 +485,7 @@ taskCompletions.post('/reset-day', async (c) => {
             completion_id: completion.id,
             task_id: completion.task_id,
             bulk_reset_day: date,
+            mode: 'delete',
           }),
           now,
         ),

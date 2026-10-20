@@ -149,19 +149,23 @@ function makeStmt(query: string): D1PreparedStatement & TaggedStmt {
       return stmt;
     },
     first<T = unknown>(): Promise<T | null> {
-      // findBonusEvent: SELECT id FROM score_events ... change_value = 3 ...
-      //                reason LIKE 'bonus:%' AND source_ref = ? AND approved
+      // Generic coins lookup by (user_id, change_value, source_ref):
+      //   findBonusEvent (+3, reason LIKE 'bonus:%'), restore's reversal
+      //   lookup (-3, revoke:bonus:...) and already-restored check (+3,
+      //   restore:bonus:...). All share this shape.
       if (
         /FROM\s+score_events/i.test(query) &&
-        /change_value\s*=\s*3/i.test(query) &&
+        /change_value\s*=\s*(-?3)/i.test(query) &&
         /source_ref\s*=\s*\?/i.test(query)
       ) {
+        const cvMatch = /change_value\s*=\s*(-?3)/i.exec(query);
+        const cv = Number(cvMatch![1]);
         const uid = params[0] as number;
         const ref = params[1] as string;
         const found = events.find(
           (e) =>
             e.user_id === uid &&
-            e.change_value === 3 &&
+            e.change_value === cv &&
             e.status === 'approved' &&
             e.source_ref === ref,
         );
@@ -170,20 +174,22 @@ function makeStmt(query: string): D1PreparedStatement & TaggedStmt {
       return Promise.resolve(null);
     },
     all<T = unknown>(): Promise<D1Result<T>> {
-      // reset-day actives query:
-      //   SELECT ... FROM task_completions
-      //   WHERE user_id = ? AND completed_date = ? AND status = 'active'
+      // reset-day day query (both statuses — 清空重来):
+      //   SELECT ... FROM task_completions WHERE user_id = ? AND completed_date = ?
+      // (restore path still inlines status = 'revoked'.)
       if (
         /FROM\s+task_completions/i.test(query) &&
         /completed_date\s*=\s*\?/i.test(query)
       ) {
         const uid = params[0] as number;
         const date = params[1] as string;
+        const statusMatch = /status\s*=\s*'([^']+)'/.exec(query);
+        const wantStatus = statusMatch ? statusMatch[1] : null;
         const results = completions.filter(
           (c) =>
             c.user_id === uid &&
             c.completed_date === date &&
-            c.status === 'active',
+            (wantStatus === null || c.status === wantStatus),
         );
         return Promise.resolve({ results: (results as unknown) as T[], success: true });
       }
@@ -204,29 +210,65 @@ function makeStmt(query: string): D1PreparedStatement & TaggedStmt {
       return Promise.resolve({ results: [], success: true });
     },
     run<T = unknown>(): Promise<D1Result<T>> {
+      // 清空重来: DELETE FROM task_completions WHERE id = ?
+      if (/DELETE\s+FROM\s+task_completions/i.test(query)) {
+        const id = params[0] as number;
+        const idx = completions.findIndex((x) => x.id === id);
+        if (idx >= 0) completions.splice(idx, 1);
+        return Promise.resolve({ success: true } as D1Result<T>);
+      }
+      if (/INSERT\s+INTO\s+deleted_records/i.test(query)) {
+        return Promise.resolve({ success: true } as D1Result<T>);
+      }
+      if (/DELETE\s+FROM\s+summer_homework_subitems/i.test(query)) {
+        return Promise.resolve({ success: true } as D1Result<T>);
+      }
       if (/UPDATE\s+task_completions/i.test(query)) {
-        // params: [now, pmUserId, id] (the extra `AND status='active'`
-        // guard in reset-day doesn't change the bind order).
-        const [now, pmUserId, id] = params as [number, number, number];
-        const c = completions.find((x) => x.id === id);
-        if (c) {
-          c.status = 'revoked';
-          c.revoked_at = now;
-          c.revoked_by = pmUserId;
+        // Revoke UPDATE binds (now, pmUserId, id); restore UPDATE binds
+        // just (id) — distinguish by the SET clause.
+        if (/SET\s+status\s*=\s*'active'/i.test(query)) {
+          const id = params[0] as number;
+          const c = completions.find((x) => x.id === id);
+          if (c) {
+            c.status = 'active';
+            c.revoked_at = null;
+            c.revoked_by = null;
+          }
+        } else {
+          const [now, pmUserId, id] = params as [number, number, number];
+          const c = completions.find((x) => x.id === id);
+          if (c) {
+            c.status = 'revoked';
+            c.revoked_at = now;
+            c.revoked_by = pmUserId;
+          }
         }
-        return Promise.resolve({
-          success: true,
-          meta: { changes: c ? 1 : 0, last_row_id: 0, duration: 0 },
-        });
+        return Promise.resolve({ success: true } as D1Result<T>);
       }
       if (/INSERT\s+INTO\s+score_events/i.test(query)) {
-        const [user_id, type, change_value, reason, source_ref] = params as [
-          number,
-          ScoreEvent['type'],
-          number,
-          string,
-          string,
-        ];
+        // Two param layouts exist:
+        //   revoke path:  VALUES (?, ?, ?, ...) → [user_id, type, change_value, reason, source_ref]
+        //   restore path: VALUES (?, 'coins', <n>, ...) → type/change_value inlined
+        //                 → [user_id, reason, source_ref]
+        const inlined = /'coins',\s*(-?\d+),/.exec(query);
+        let user_id: number;
+        let type: ScoreEvent['type'];
+        let change_value: number;
+        let reason: string;
+        let source_ref: string | null;
+        if (inlined) {
+          [user_id, reason, source_ref] = params as [number, string, string];
+          type = 'coins';
+          change_value = Number(inlined[1]);
+        } else {
+          [user_id, type, change_value, reason, source_ref] = params as [
+            number,
+            ScoreEvent['type'],
+            number,
+            string,
+            string,
+          ];
+        }
         const newEvent: ScoreEvent = {
           id: events.length + 1,
           user_id,
@@ -316,6 +358,8 @@ interface ResetResponse {
   success?: boolean;
   reset_count?: number;
   bonus_reversed?: boolean;
+  restored_count?: number;
+  bonus_restored?: boolean;
   new_balance?: Record<string, number>;
   error?: { code: string; message: string };
 }
@@ -370,7 +414,7 @@ describe('POST /api/admin/task-completions/reset-day', () => {
     expect(body.error?.code).toBe('BAD_REQUEST');
   });
 
-  it('no active completions → success no-op with reset_count 0', async () => {
+  it('no-op day: returns success with reset_count 0 (no rows to delete)', async () => {
     addPmUser();
     const cookie = await pmCookie();
     const r = await post({ user_id: 2, date: '2026-10-20', confirm: true }, cookie);
@@ -382,7 +426,7 @@ describe('POST /api/admin/task-completions/reset-day', () => {
     expect(batchStatements).toHaveLength(0);
   });
 
-  it('happy path: 2 active completions → both revoked, -1 coin each, audit each, one atomic batch', async () => {
+  it('happy path: 2 active completions → both DELETED (清空重来), -1 coin each, snapshot+audit each', async () => {
     addPmUser();
     addTask(); // task 1
     addTask(); // task 2
@@ -399,17 +443,20 @@ describe('POST /api/admin/task-completions/reset-day', () => {
     expect(body.reset_count).toBe(2);
     expect(body.bonus_reversed).toBe(false);
 
-    // Both target-day completions are revoked; the other day's is not.
-    expect(completions.find((c) => c.id === c1.id)?.status).toBe('revoked');
-    expect(completions.find((c) => c.id === c2.id)?.status).toBe('revoked');
+    // Both target-day completions are GONE; the other day's is untouched.
+    expect(completions.find((c) => c.id === c1.id)).toBeUndefined();
+    expect(completions.find((c) => c.id === c2.id)).toBeUndefined();
     expect(completions.find((c) => c.id === otherDay.id)?.status).toBe('active');
 
-    // One atomic batch: [UPDATE, -1 coin, audit] × 2 = 6 statements.
-    expect(batchStatements).toHaveLength(6);
-    const updates = batchStatements.filter((s) => /^UPDATE task_completions/i.test(s.query));
+    // One atomic batch: [snapshot, del subitems, del completion, -1 coin,
+    // audit] × 2 = 10 statements.
+    expect(batchStatements).toHaveLength(10);
+    const snapshots = batchStatements.filter((s) => /^INSERT INTO deleted_records/i.test(s.query));
+    const deletes = batchStatements.filter((s) => /^DELETE FROM task_completions/i.test(s.query));
     const coinInserts = batchStatements.filter((s) => /^INSERT INTO score_events/i.test(s.query));
     const audits = batchStatements.filter((s) => /^INSERT INTO audit_log/i.test(s.query));
-    expect(updates).toHaveLength(2);
+    expect(snapshots).toHaveLength(2);
+    expect(deletes).toHaveLength(2);
     expect(coinInserts).toHaveLength(2);
     expect(audits).toHaveLength(2);
     // Each -1 coin is anchored on the original (date, userId, taskId) tuple.
@@ -418,6 +465,20 @@ describe('POST /api/admin/task-completions/reset-day', () => {
 
     // Balance math: no prior events → -1 + -1 = -2 coins.
     expect(body.new_balance?.coins).toBe(-2);
+  });
+
+  it('清空 also deletes revoked rows of the day (feihao "重置不能重置撤销的任务")', async () => {
+    addPmUser();
+    addTask();
+    addCompletion({ task_id: 1, completed_date: '2026-10-20', status: 'active' });
+    addCompletion({ task_id: 1, completed_date: '2026-10-20', status: 'revoked', revoked_at: 111, revoked_by: 1 });
+
+    const cookie = await pmCookie();
+    const r = await post({ user_id: 2, date: '2026-10-20', confirm: true }, cookie);
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as ResetResponse;
+    expect(body.reset_count).toBe(2);
+    expect(completions.filter((c) => c.completed_date === '2026-10-20')).toHaveLength(0);
   });
 
   it('bonus day: +3 existed → one -3 reversal written, bonus_reversed=true', async () => {
@@ -441,8 +502,9 @@ describe('POST /api/admin/task-completions/reset-day', () => {
     expect(body.reset_count).toBe(1);
     expect(body.bonus_reversed).toBe(true);
 
-    // Second batch = [-3 bonus reversal, bonus audit].
-    const bonusBatch = batchStatements.slice(3);
+    // Second batch = [-3 bonus reversal, bonus audit] (after the 5-statement
+    // primary batch for the single completion).
+    const bonusBatch = batchStatements.slice(5);
     expect(bonusBatch).toHaveLength(2);
     expect(bonusBatch[0].query).toMatch(/^INSERT INTO score_events/i);
     expect(bonusBatch[0].params[2]).toBe(-3);
@@ -450,5 +512,86 @@ describe('POST /api/admin/task-completions/reset-day', () => {
 
     // Balance math: +3 (existing) -1 (task revoke) -3 (bonus reversal) = -1.
     expect(body.new_balance?.coins).toBe(-1);
+  });
+});
+
+describe('POST /api/admin/task-completions/reset-day — mode:restore', () => {
+  beforeEach(reset);
+
+  it('no revoked rows → success no-op with restored_count 0', async () => {
+    addPmUser();
+    const cookie = await pmCookie();
+    const r = await post({ user_id: 2, date: '2026-10-20', confirm: true, mode: 'restore' }, cookie);
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as ResetResponse;
+    expect(body.success).toBe(true);
+    expect(body.restored_count).toBe(0);
+    expect(body.bonus_restored).toBe(false);
+  });
+
+  it('happy path: 2 revoked rows → both active again, +1 coin each, one atomic batch', async () => {
+    addPmUser();
+    addTask();
+    addTask();
+    const c1 = addCompletion({ task_id: 1, completed_date: '2026-10-20', status: 'revoked', revoked_at: 111, revoked_by: 1 });
+    const c2 = addCompletion({ task_id: 2, completed_date: '2026-10-20', status: 'revoked', revoked_at: 111, revoked_by: 1 });
+    // An active row on the same day must NOT be touched.
+    const activeRow = addCompletion({ task_id: 1, completed_date: '2026-10-20', status: 'active' });
+
+    const cookie = await pmCookie();
+    const r = await post({ user_id: 2, date: '2026-10-20', confirm: true, mode: 'restore' }, cookie);
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as ResetResponse;
+    expect(body.success).toBe(true);
+    expect(body.restored_count).toBe(2);
+
+    expect(completions.find((c) => c.id === c1.id)?.status).toBe('active');
+    expect(completions.find((c) => c.id === c2.id)?.status).toBe('active');
+    expect(completions.find((c) => c.id === activeRow.id)?.status).toBe('active');
+    expect(completions.find((c) => c.id === c1.id)?.revoked_at).toBeNull();
+
+    // [UPDATE, +1 coin, audit] × 2 = 6 statements in one batch.
+    expect(batchStatements).toHaveLength(6);
+    const coinInserts = batchStatements.filter((s) => /^INSERT INTO score_events/i.test(s.query));
+    expect(coinInserts).toHaveLength(2);
+    // Restore INSERT inlines user_id/type/change_value; bound params are
+    // [reason, source_ref]. The +1 is asserted via the SQL literal.
+    expect(coinInserts[0].query).toMatch(/'coins',\s*1,/);
+    expect(coinInserts[0].params[2]).toBe('restore:task:1:2026-10-20:2');
+
+    // Balance math: +1 +1 = 2 coins restored, no prior events.
+    expect(body.new_balance?.coins).toBe(2);
+  });
+
+  it('bonus restore: -3 reversal existed → one +3 re-grant, idempotent on rerun', async () => {
+    addPmUser();
+    addTask();
+    addCompletion({ task_id: 1, completed_date: '2026-10-20', status: 'revoked', revoked_at: 111, revoked_by: 1 });
+    // The -3 reversal from a previous reset-day.
+    addEvent({
+      user_id: 2,
+      type: 'coins',
+      change_value: -3,
+      reason: 'revoke:bonus:2026-10-20:2',
+      source_ref: 'revoke:bonus:2026-10-20:2',
+      status: 'approved',
+    });
+
+    const cookie = await pmCookie();
+    const r = await post({ user_id: 2, date: '2026-10-20', confirm: true, mode: 'restore' }, cookie);
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as ResetResponse;
+    expect(body.restored_count).toBe(1);
+    expect(body.bonus_restored).toBe(true);
+
+    // Second batch = [+3 restore, bonus audit]. +3 is inlined in SQL;
+    // bound params are [reason, source_ref].
+    const bonusBatch = batchStatements.slice(3);
+    expect(bonusBatch).toHaveLength(2);
+    expect(bonusBatch[0].query).toMatch(/'coins',\s*3,/);
+    expect(bonusBatch[0].params[2]).toBe('restore:bonus:2026-10-20:2');
+
+    // Balance math: -3 (existing) +1 (task restore) +3 (bonus restore) = +1.
+    expect(body.new_balance?.coins).toBe(1);
   });
 });

@@ -1319,20 +1319,28 @@ function bindFilters() {
     try { await loadCompletions(); renderCompletions(); }
     catch (err) { if (err.message !== 'UNAUTHORIZED') toast('加载失败：' + err.message, 'error'); }
   });
-  // ♻️ 重置当天打卡 (2026-10-20 feihao): revoke ALL active completions for
-  // (CHILD_USER_ID, selected date) via POST /api/admin/task-completions/reset-day.
-  // Server mirrors the per-row 撤销 semantics (−1 coin each, one −3 bonus
-  // reversal, audit rows) in a single atomic batch. Two-stage confirm here
-  // because it's a bulk destructive op.
-  $('#btn-reset-day').addEventListener('click', async () => {
+  // ♻️ 清空当天打卡 (feihao 拍板 2026-10-20 "清空重来"): DELETE all of the
+  // day's completions (both statuses) — tasks go back to 未完成 and the kid
+  // can check in again. Coins are reversed (-1 each, bonus -3 if granted);
+  // every row is snapshotted to deleted_records + audited before delete.
+  // ↩️ 恢复已撤销打卡: un-revoke the day's revoked rows (mirror op, only
+  // meaningful when rows were revoked individually or by an older reset).
+  async function bulkDayAction(kind) {
+    const isRestore = kind === 'restore';
     if (inFlight.has('reset-day')) return;
     const dateLabel = state.completionDate || '今天';
-    const activeCount = state.completions.filter((c) => c.status === 'active').length;
+    const targetCount = isRestore
+      ? state.completions.filter((c) => c.status === 'revoked').length
+      : state.completions.length; // 清空 = both statuses
+    const verb = isRestore ? '恢复' : '清空';
     const ok = window.confirm(
-      `确定要重置 ${dateLabel} 的所有打卡任务状态?\n\n` +
-      `• 当前筛选下 active 记录: ${activeCount} 条\n` +
-      `• 每条将撤销并回退 1 枚🪙, 如当天有"全部完成+3"也会反转\n` +
-      `• 此操作会逐条记审计, 但不可一键恢复`
+      `确定要${verb} ${dateLabel} 的打卡?\n\n` +
+      (isRestore
+        ? `• 已撤销记录: ${targetCount} 条 → 恢复为完成,每条补回 1 枚🪙\n`
+        : `• 全部记录(含已撤销): ${targetCount} 条 将删除\n` +
+          `• 任务回到"未完成",孩子可重新打卡\n` +
+          `• 每条回退 1 枚🪙,当天"全部完成+3"如有也反转\n` +
+          `• 删除前自动快照备份+记审计\n`)
     );
     if (!ok) return;
     inFlight.add('reset-day');
@@ -1341,16 +1349,21 @@ function bindFilters() {
         user_id: CHILD_USER_ID,
         ...(state.completionDate ? { date: state.completionDate } : {}),
         confirm: true,
+        ...(isRestore ? { mode: 'restore' } : {}),
       });
-      toast(`已重置 ${r.reset_count} 条打卡` + (r.bonus_reversed ? '(+3 bonus 已反转)' : ''), 'success');
+      const n = isRestore ? r.restored_count : r.reset_count;
+      const bonus = isRestore ? r.bonus_restored : r.bonus_reversed;
+      toast(`已${verb} ${n} 条打卡` + (bonus ? '(bonus 已同步处理)' : ''), 'success');
       await Promise.all([loadCompletions(), loadBalance(), loadAllEvents(), loadAudit()]);
       renderAll();
     } catch (e) {
-      if (e.message !== 'UNAUTHORIZED') toast('重置失败：' + e.message, 'error');
+      if (e.message !== 'UNAUTHORIZED') toast(`${verb}失败：` + e.message, 'error');
     } finally {
       inFlight.delete('reset-day');
     }
-  });
+  }
+  $('#btn-reset-day').addEventListener('click', () => bulkDayAction('revoke'));
+  $('#btn-restore-day').addEventListener('click', () => bulkDayAction('restore'));
   $('#filter-running-status').addEventListener('change', function(e) {
     state.runningFilter = e.target.value;
     renderRunningRecords();

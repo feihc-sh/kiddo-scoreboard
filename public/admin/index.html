@@ -238,7 +238,8 @@
             <option value="active">active</option>
             <option value="revoked">revoked</option>
           </select>
-          <button class="pm-btn warn" id="btn-reset-day" title="撤销该孩子当天所有 active 打卡(含积分回退+bonus 反转,逐条记审计)">♻️ 重置当天打卡</button>
+          <button class="pm-btn warn" id="btn-reset-day" title="清空该孩子当天全部打卡(含已撤销),任务回到未完成可重新打卡;积分回退,删除前快照备份">♻️ 清空当天打卡</button>
+          <button class="pm-btn" id="btn-restore-day" title="恢复该孩子当天所有 revoked 打卡(含 +1 积分补偿 + bonus 恢复)">↩️ 恢复已撤销打卡</button>
         </div>
         <div id="completions-list"></div>
         <div class="pm-empty" id="completions-empty" hidden>没有完成记录</div>
