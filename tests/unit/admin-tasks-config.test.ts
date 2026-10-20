@@ -87,6 +87,9 @@ function addTask(overrides: Partial<Task> = {}): Task {
     category: 'habit' as TaskCategory,
     is_active: 1,
     sort_order: 0,
+    cutoff_time: null,
+    is_self_lockout: 0,
+    active_days: null,
     created_at: nowOverride,
     updated_at: nowOverride,
     ...overrides,
@@ -184,9 +187,26 @@ function makeStmt(query: string): D1PreparedStatement & TaggedStmt {
           icon,
           category,
           sort_order,
+          cutoff_time,
+          is_self_lockout,
+          // active_days may come as null (every day) or a JSON-encoded "[1,2,3]"
+          // string. The mock stores it as-is on the in-memory Task.
+          active_days_raw,
           created_at,
           updated_at,
-        ] = params as [string, number, string, string | null, string, number, number, number];
+        ] = params as [
+          string,
+          number,
+          string,
+          string | null,
+          string,
+          number,
+          string | null,
+          number,
+          string | null,
+          number,
+          number,
+        ];
         const newTask: Task = {
           id: nextTaskId++,
           name,
@@ -196,6 +216,9 @@ function makeStmt(query: string): D1PreparedStatement & TaggedStmt {
           category: category as TaskCategory,
           is_active: 1,
           sort_order,
+          cutoff_time: cutoff_time ?? null,
+          is_self_lockout: (is_self_lockout as 0 | 1) ?? 0,
+          active_days: active_days_raw ? (JSON.parse(active_days_raw) as number[]) : null,
           created_at,
           updated_at,
         };

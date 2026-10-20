@@ -26,7 +26,7 @@ const state = {
   auditFilter: '',
   completions: [],       // TaskCompletionListItem[]
   completionDate: '',    // '' = today (server default)
-  completionStatus: 'active',
+  completionStatus: 'all',  // feihao 2026-10-20: default 全部 — revoked rows stay visible after reset-day
   // Stage 4 (NIGHTLY-TODO #009): hard-delete snapshot markers. Key is
   // `${record_type}:${original_id}` so the same id space can carry both
   // score_event and task_completion entries without collision.
@@ -1034,9 +1034,41 @@ function startEditTask(id) {
   // → saving clears the sleep task's "准时上床" config. Regression: see #18.
   f.elements['cutoff_time'].value = t.cutoff_time || '';
   f.elements['is_self_lockout'].checked = t.is_self_lockout === 1;
+  // task-active-days (2026-10-17): prefill 7 checkboxes from t.active_days.
+  // null / [] → show all 7 checked (= "every day" — admin UX spec §5).
+  setActiveDaysFromArray(
+    Array.isArray(t.active_days) ? t.active_days : [1, 2, 3, 4, 5, 6, 7],
+  );
   $('#new-task-form-wrap').hidden = false;
   $('#btn-new-task').textContent = '编辑中…';
   f.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+// task-active-days UI helpers (admin.js, 2026-10-17):
+//   setActiveDaysFromArray(arr) — set the 7 checkboxes; arr uses 1-indexed
+//     ISO weekdays (Mon=1..Sun=7).
+//   applyActiveDaysPreset(name) — 'all' = [1..7], 'weekdays' = [1..5],
+//     'weekend' = [6,7]. Spec §5.2.
+//   readActiveDaysFromForm() — read the currently-checked boxes; empty list
+//     → null on the wire (= "every day" / back-compat with D2 NULL semantics).
+function setActiveDaysFromArray(arr) {
+  const set = new Set(arr);
+  document.querySelectorAll('input[name="active_days"]').forEach((el) => {
+    el.checked = set.has(Number(el.value));
+  });
+}
+function applyActiveDaysPreset(name) {
+  let arr;
+  if (name === 'all') arr = [1, 2, 3, 4, 5, 6, 7];
+  else if (name === 'weekdays') arr = [1, 2, 3, 4, 5];
+  else if (name === 'weekend') arr = [6, 7];
+  else return;
+  setActiveDaysFromArray(arr);
+}
+function readActiveDaysFromForm() {
+  const vals = Array.from(
+    document.querySelectorAll('input[name="active_days"]:checked'),
+  ).map((el) => Number(el.value));
+  return vals.length ? vals : null;
 }
 function clearEditTask() {
   state.editingTaskId = null;
@@ -1116,6 +1148,9 @@ async function submitNewTask(form) {
     // public/admin/index.html. Server validates HH:MM regex on cutoff_time.
     cutoff_time: form.cutoff_time.value.trim() || null,
     is_self_lockout: form.is_self_lockout.checked ? 1 : 0,
+    // task-active-days (2026-10-17): number[] (or null = "every day"). The
+    // server canonicalizes to JSON-sorted-unique before storing.
+    active_days: readActiveDaysFromForm(),
   };
   try {
     if (state.editingTaskId) {
@@ -1284,6 +1319,51 @@ function bindFilters() {
     try { await loadCompletions(); renderCompletions(); }
     catch (err) { if (err.message !== 'UNAUTHORIZED') toast('加载失败：' + err.message, 'error'); }
   });
+  // ♻️ 清空当天打卡 (feihao 拍板 2026-10-20 "清空重来"): DELETE all of the
+  // day's completions (both statuses) — tasks go back to 未完成 and the kid
+  // can check in again. Coins are reversed (-1 each, bonus -3 if granted);
+  // every row is snapshotted to deleted_records + audited before delete.
+  // ↩️ 恢复已撤销打卡: un-revoke the day's revoked rows (mirror op, only
+  // meaningful when rows were revoked individually or by an older reset).
+  async function bulkDayAction(kind) {
+    const isRestore = kind === 'restore';
+    if (inFlight.has('reset-day')) return;
+    const dateLabel = state.completionDate || '今天';
+    const targetCount = isRestore
+      ? state.completions.filter((c) => c.status === 'revoked').length
+      : state.completions.length; // 清空 = both statuses
+    const verb = isRestore ? '恢复' : '清空';
+    const ok = window.confirm(
+      `确定要${verb} ${dateLabel} 的打卡?\n\n` +
+      (isRestore
+        ? `• 已撤销记录: ${targetCount} 条 → 恢复为完成,每条补回 1 枚🪙\n`
+        : `• 全部记录(含已撤销): ${targetCount} 条 将删除\n` +
+          `• 任务回到"未完成",孩子可重新打卡\n` +
+          `• 每条回退 1 枚🪙,当天"全部完成+3"如有也反转\n` +
+          `• 删除前自动快照备份+记审计\n`)
+    );
+    if (!ok) return;
+    inFlight.add('reset-day');
+    try {
+      const r = await api('POST', '/api/admin/task-completions/reset-day', {
+        user_id: CHILD_USER_ID,
+        ...(state.completionDate ? { date: state.completionDate } : {}),
+        confirm: true,
+        ...(isRestore ? { mode: 'restore' } : {}),
+      });
+      const n = isRestore ? r.restored_count : r.reset_count;
+      const bonus = isRestore ? r.bonus_restored : r.bonus_reversed;
+      toast(`已${verb} ${n} 条打卡` + (bonus ? '(bonus 已同步处理)' : ''), 'success');
+      await Promise.all([loadCompletions(), loadBalance(), loadAllEvents(), loadAudit()]);
+      renderAll();
+    } catch (e) {
+      if (e.message !== 'UNAUTHORIZED') toast(`${verb}失败：` + e.message, 'error');
+    } finally {
+      inFlight.delete('reset-day');
+    }
+  }
+  $('#btn-reset-day').addEventListener('click', () => bulkDayAction('revoke'));
+  $('#btn-restore-day').addEventListener('click', () => bulkDayAction('restore'));
   $('#filter-running-status').addEventListener('change', function(e) {
     state.runningFilter = e.target.value;
     renderRunningRecords();
@@ -1326,6 +1406,16 @@ function bindForms() {
     $('#new-task-form').reset();
     $('#new-task-form-wrap').hidden = false;
     $('#btn-new-task').textContent = '+ 新建任务（编辑中…）';
+    // task-active-days (2026-10-17): on a fresh create, default the 7
+    // checkboxes to all-checked so the server stores NULL = "every day".
+    setActiveDaysFromArray([1, 2, 3, 4, 5, 6, 7]);
+  });
+  // task-active-days preset buttons (2026-10-17): clicking a preset fills the
+  // 7 checkboxes; PM can still fine-tune after (e.g. weekdays - Wed).
+  document.querySelectorAll('[data-days-preset]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      applyActiveDaysPreset(btn.getAttribute('data-days-preset'));
+    });
   });
   $('#exchange-form').addEventListener('submit', (e) => {
     e.preventDefault();

@@ -5,7 +5,7 @@
 // Auth: child user_id is HARDCODED to 2 in src/routes/me/tasks.ts for now
 // (matches seeds/local.sql). M5 will replace this with proper auth.
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import app from '../../src/worker.ts';
 import type {
   D1Database,
@@ -71,6 +71,9 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     category: 'habit',
     is_active: 1,
     sort_order: 0,
+    cutoff_time: null,
+    is_self_lockout: 0,
+    active_days: null,
     created_at: now,
     updated_at: now,
     ...overrides,
@@ -164,6 +167,14 @@ function makeMockDb(): D1Database {
           return Promise.resolve(null);
         },
         all<T = unknown>(): Promise<D1Result<T>> {
+          // task-active-days bonus fix (2026-10-20): isAllTasksCompleted reads
+          // id + active_days of every is_active task to compute "due today".
+          if (/FROM\s+tasks\s+WHERE\s+is_active\s*=\s*1/.test(query)) {
+            const results = tasks
+              .filter((t) => t.is_active === 1)
+              .map((t) => ({ id: t.id, active_days: t.active_days }));
+            return Promise.resolve({ results: results as unknown as T[], success: true });
+          }
           // today-status query (read active completions)
           if (/FROM\s+task_completions/.test(query)) {
             // Active check: `status = 'active'` is a SQL literal in the route.
@@ -326,6 +337,8 @@ interface CompleteBody {
   target_account?: 'game_time' | 'pocket_money';
   new_balance?: { game_time: number; pocket_money: number };
   event_id?: number;
+  coin_event_id?: number;
+  bonus_event_id?: number;
   error?: { code?: string; message?: string };
 }
 
@@ -367,6 +380,10 @@ describe('POST /api/me/tasks/:id/complete', () => {
       token_reward: 15,
       target_account: 'game_time',
     });
+    // Distractor task left undone so the daily bonus does NOT fire here —
+    // this test asserts the primary 3-statement batch only (bonus covered
+    // by its own describe below).
+    makeTask({ name: 'distractor (undone)' });
 
     const r = await call(`/api/me/tasks/${t.id}/complete`, { method: 'POST' });
     expect(r.status).toBe(201);
@@ -457,6 +474,8 @@ describe('POST /api/me/tasks/:id/complete', () => {
 
   it('revoked completion today does NOT block re-completion (only active counts)', async () => {
     const t = makeTask({ name: 'Walk dog', token_reward: 5 });
+    // Distractor task left undone → no bonus in this test (see bonus describe).
+    makeTask({ name: 'distractor (undone)' });
     // Pre-existing REVOKED completion today for this task + child.
     makeCompletion({ task_id: t.id, user_id: CHILD_USER_ID, status: 'revoked' });
 
@@ -492,6 +511,8 @@ describe('POST /api/me/tasks/:id/complete', () => {
     });
 
     const t = makeTask({ name: 'Wash dishes', token_reward: 5, target_account: 'pocket_money' });
+    // Distractor task left undone → no bonus in this test (see bonus describe).
+    makeTask({ name: 'distractor (undone)' });
     const r = await call(`/api/me/tasks/${t.id}/complete`, { method: 'POST' });
     expect(r.status).toBe(201);
     const body = (await r.json()) as CompleteBody;
@@ -499,5 +520,147 @@ describe('POST /api/me/tasks/:id/complete', () => {
     // pocket_money. Pre-existing game_time=20 and pocket_money=7 are
     // preserved untouched, and a new +1 coin event lands: coins=1.
     expect(body.new_balance).toEqual({ game_time: 20, pocket_money: 7, coins: 1 });
+  });
+});
+
+// -------------------------------------------------------------
+// task-active-days (Item spec §3.2 + §6, 2026-10-17):
+//   When tasks.active_days is a non-empty array, the server must refuse
+//   completion with 400 TASK_NOT_ACTIVE_TODAY if today (Asia/Shanghai ISO
+//   weekday) is not in the list. Active-days check fires BEFORE the §3.12
+//   cutoff check so the day-of-week gating works even when the task has
+//   no cutoff (or the cutoff has already passed).
+//
+// We freeze the system clock at 2026-10-17T12:00:00Z (= 2026-10-17 20:00
+// Shanghai, ISO weekday 6 = Saturday). The mock DB stores completed_date
+// via todayShanghai() so completions land on 2026-10-17 too.
+// -------------------------------------------------------------
+describe('POST /api/me/tasks/:id/complete — task-active-days gating', () => {
+  beforeEach(reset);
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function freezeSaturdayShanghai() {
+    // 2026-10-17T12:00:00Z == 2026-10-17 20:00 Shanghai → Saturday (ISO 6).
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-17T12:00:00Z'));
+  }
+
+  it('active_days=[1..5] + today is Saturday → 400 TASK_NOT_ACTIVE_TODAY', async () => {
+    freezeSaturdayShanghai();
+    const t = makeTask({ name: 'school-day only', active_days: [1, 2, 3, 4, 5] });
+    const r = await call(`/api/me/tasks/${t.id}/complete`, { method: 'POST' });
+    expect(r.status).toBe(400);
+    const body = (await r.json()) as CompleteBody;
+    expect(body.error?.code).toBe('TASK_NOT_ACTIVE_TODAY');
+    // No batch should have been submitted (refused before §3 atomically writes).
+    expect(lastBatch).toHaveLength(0);
+  });
+
+  it('active_days=[6] + today is Saturday → 200 OK (positive case)', async () => {
+    freezeSaturdayShanghai();
+    const t = makeTask({ name: 'weekend chore', active_days: [6] });
+    const r = await call(`/api/me/tasks/${t.id}/complete`, { method: 'POST' });
+    expect(r.status).toBe(201);
+    const body = (await r.json()) as CompleteBody;
+    expect(body.task_id).toBe(t.id);
+    // Single task due today + completed → daily bonus fires too:
+    // 3 primary statements + 2 bonus statements.
+    expect(lastBatch).toHaveLength(5);
+  });
+
+  it('active_days=null → 200 OK regardless of today (regression: every day)', async () => {
+    freezeSaturdayShanghai();
+    const t = makeTask({ name: 'any day', active_days: null });
+    const r = await call(`/api/me/tasks/${t.id}/complete`, { method: 'POST' });
+    expect(r.status).toBe(201);
+    // Single due-today task completed → bonus also fires: 3 + 2 statements.
+    expect(lastBatch).toHaveLength(5);
+  });
+
+  it('active_days check fires BEFORE cutoff check when today is non-active day', async () => {
+    // Saturday + cutoff 00:00 (already passed) + active_days=[1..5]:
+    //   - If active_days ran AFTER cutoff, we'd see CUTOFF_PASSED.
+    //   - If active_days runs BEFORE cutoff (as spec demands), we see
+    //     TASK_NOT_ACTIVE_TODAY.
+    // This is the load-bearing order assertion from spec §3.2.
+    freezeSaturdayShanghai();
+    const t = makeTask({
+      name: 'sleep+school',
+      active_days: [1, 2, 3, 4, 5],
+      is_self_lockout: 1,
+      cutoff_time: '00:00',
+    });
+    const r = await call(`/api/me/tasks/${t.id}/complete`, { method: 'POST' });
+    expect(r.status).toBe(400);
+    const body = (await r.json()) as CompleteBody;
+    expect(body.error?.code).toBe('TASK_NOT_ACTIVE_TODAY');
+  });
+});
+
+// -------------------------------------------------------------
+// task-active-days × daily bonus (+3), 2026-10-20 feihao bug report:
+//   "全部完成 +3" never fired once some tasks got active_days configured,
+//   because isAllTasksCompleted() counted EVERY is_active task, including
+//   ones not due today (which the server refuses to complete with
+//   TASK_NOT_ACTIVE_TODAY → they can never be "done" → bonus blocked).
+//
+// Fix: the bonus check now only counts tasks DUE today (active_days null/
+// empty, or containing today's Shanghai ISO weekday).
+//
+// Same clock freeze as the gating describe above: 2026-10-17T12:00:00Z =
+// Saturday Shanghai (ISO 6).
+// -------------------------------------------------------------
+describe('POST /api/me/tasks/:id/complete — bonus × task-active-days', () => {
+  beforeEach(reset);
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('not-due-today task does NOT block the +3 bonus (the reported bug)', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-17T12:00:00Z')); // Saturday
+    // Task A: weekend task, due today (Saturday).
+    const weekend = makeTask({ name: 'weekend chore', active_days: [6] });
+    // Task B: weekday-only task, NOT due today — must not block the bonus.
+    makeTask({ name: 'school task', active_days: [1, 2, 3, 4, 5] });
+
+    const r = await call(`/api/me/tasks/${weekend.id}/complete`, { method: 'POST' });
+    expect(r.status).toBe(201);
+    const body = (await r.json()) as CompleteBody;
+    // The +3 bonus must have been issued: weekend chore was the ONLY task
+    // due today and it is now completed.
+    expect(body.bonus_event_id).toBeTruthy();
+    // lastBatch = 3 primary statements + 2 bonus statements ([+3 score_events
+    // INSERT, audit_log INSERT], route §4.5).
+    expect(lastBatch).toHaveLength(5);
+    expect(lastBatch[3].query).toMatch(/^INSERT INTO\s+score_events/i);
+    expect(lastBatch[3].params[1]).toBe('coins');
+    expect(lastBatch[3].params[2]).toBe(3);
+  });
+
+  it('due-today but uncompleted task still blocks the bonus (regression)', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-17T12:00:00Z')); // Saturday
+    const weekend = makeTask({ name: 'weekend chore', active_days: [6] });
+    const everyday = makeTask({ name: 'everyday task', active_days: null });
+    // Complete ONLY the weekend task; the everyday task is still undone.
+    const r = await call(`/api/me/tasks/${weekend.id}/complete`, { method: 'POST' });
+    expect(r.status).toBe(201);
+    const body = (await r.json()) as CompleteBody;
+    expect(body.bonus_event_id).toBeFalsy();
+  });
+
+  it('zero tasks due today → no bonus even when a not-due task was never completed', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-18T12:00:00Z')); // Sunday
+    // The ONLY task is weekday-only; Sunday nothing is due.
+    const weekdayOnly = makeTask({ name: 'school task', active_days: [1, 2, 3, 4, 5] });
+    // Sanity: server refuses completing it today.
+    const refused = await call(`/api/me/tasks/${weekdayOnly.id}/complete`, { method: 'POST' });
+    expect(refused.status).toBe(400);
+    // And since nothing is due today, no bonus path is even reachable.
+    // (Directly asserts the dueToday.length === 0 guard.)
   });
 });

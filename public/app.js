@@ -1171,17 +1171,37 @@ function renderTasks() {
     root.innerHTML = '<div class="empty"><div class="empty-icon">📡</div><div>等待任务指令…</div></div>';
     return;
   }
+  // task-active-days (PM, 2026-10-17): compute today's ISO weekday in Shanghai
+  // once per render. app.js runs without a build step, so we inline the
+  // 8h offset trick instead of importing from a module.
+  const todayISODay = (function () {
+    const shifted = new Date(Date.now() + 8 * 3600 * 1000);
+    return shifted.getUTCDay() || 7;
+  })();
+  const WEEKDAY_ZH = { 1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六', 7: '日' };
+  function activeDaysLabel(days) {
+    if (!Array.isArray(days) || days.length === 0) return '每天';
+    return days.map((d) => WEEKDAY_ZH[d] || String(d)).join('·');
+  }
   state.tasks.forEach((t) => {
     const done = state.completedTaskIds.has(t.id);
     const revoked = state.uncompletedTodayIds.has(t.id);
+    // task-active-days: today is an active day for this task iff
+    //   - active_days is null/empty (== every day), OR
+    //   - today (1..7) is included.
+    const isActiveToday = !Array.isArray(t.active_days) || t.active_days.length === 0
+      || t.active_days.includes(todayISODay);
+    // State machine (spec §4.1): revoked → done → notActiveToday → isSleepLocked → normal.
+    const notActiveToday = !done && !revoked && !isActiveToday;
     // §3.12 sleep task (Item #002): self-lockout state fires before revoked/done/normal.
-    const isSleepLocked = !done && !revoked
+    const isSleepLocked = !done && !revoked && isActiveToday
       && t.is_self_lockout === 1 && t.cutoff_time;
     const btn = document.createElement('button');
     btn.className = 'task-btn'
       + (done && !revoked ? ' task-btn-done' : '')
       + (revoked ? ' task-btn-revoked' : '')
-      + (isSleepLocked ? ' task-btn-locked' : '');
+      + (isSleepLocked ? ' task-btn-locked' : '')
+      + (notActiveToday ? ' task-btn-locked-out' : '');
     btn.dataset.taskId = t.id;
     if (revoked) {
       btn.disabled = true;
@@ -1196,6 +1216,15 @@ function renderTasks() {
         <span class="task-name">${escapeHtml(t.name)}</span>
         <span class="task-reward">${taskRewardIcon(t.target_account)}</span>
         <span class="task-done-badge">✓ 任务完成</span>
+      `;
+    } else if (notActiveToday) {
+      // task-active-days: today isn't an allowed day for this task. Disable
+      // + show the list of active days so the kid knows when to come back.
+      btn.disabled = true;
+      btn.innerHTML = `
+        <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
+        <span class="task-name">${escapeHtml(t.name)}</span>
+        <span class="task-done-badge">生效日: ${escapeHtml(activeDaysLabel(t.active_days))}</span>
       `;
     } else if (isSleepLocked) {
       // Initial render: compute diff once. setInterval(updateCountdowns) keeps it fresh.
@@ -1227,6 +1256,8 @@ function renderTasks() {
       // no-op (disabled)
     } else if (done) {
       btn.addEventListener('click', () => tryUncompleteTask(t));
+    } else if (notActiveToday) {
+      // no click handler — disabled
     } else if (isSleepLocked) {
       // Only attach click if button not already past cutoff (disabled).
       if (!btn.disabled) {
@@ -1248,7 +1279,7 @@ function renderTasks() {
     const frame = document.createElement('div');
     frame.className = 'mecha-frame mecha-glow'
       + (done && !revoked ? ' frame-done' : '')
-      + (revoked || isSleepLocked ? ' frame-locked' : '');
+      + (revoked || isSleepLocked || notActiveToday ? ' frame-locked' : '');
     frame.innerHTML = '<span class="mecha-corner tl"></span>'
       + '<span class="mecha-corner tr"></span>'
       + '<span class="mecha-corner bl"></span>'
@@ -1269,7 +1300,17 @@ function renderTaskBonusHint() {
   const hint = $('#task-bonus-hint');
   if (!hint) return;
   if (state.tasks.length === 0) { hint.hidden = true; return; }
-  const allDone = state.tasks.every((t) =>
+  // task-active-days fix (2026-10-20): only tasks DUE today count toward the
+  // "全部完成 +3" bonus. Not-due-today tasks can't be completed today, so
+  // they must not keep the hint grey forever. Mirrors the server-side
+  // isAllTasksCompleted() fix in src/utils/coin.ts.
+  const shifted = new Date(Date.now() + 8 * 3600 * 1000);
+  const todayISODay = shifted.getUTCDay() || 7;
+  const dueToday = state.tasks.filter((t) =>
+    !Array.isArray(t.active_days) || t.active_days.length === 0
+    || t.active_days.includes(todayISODay));
+  if (dueToday.length === 0) { hint.hidden = true; return; }
+  const allDone = dueToday.every((t) =>
     state.completedTaskIds.has(t.id) && !state.uncompletedTodayIds.has(t.id)
   );
   hint.hidden = false;
@@ -1391,7 +1432,17 @@ async function completeTask(taskId, body = {}) {
     state.balance = r.new_balance;
     renderBalance();
     renderTasks();
-    toast(`+${r.token_awarded} ${taskRewardIcon(r.target_account)} 到账`, 'success');
+    // Bug fix (feihao 2026-10-20): token_awarded is the legacy informational
+    // token_reward (e.g. 5) — the ACTUAL grant is a uniform +1 coin per task
+    // (Bug #1 2026-06-14), plus a one-off +3 bonus when all due-today tasks
+    // are done (bonus_event_id present). Show what really landed, not the
+    // stale legacy number.
+    toast(
+      r.bonus_event_id
+        ? '+1 🪙 到账，今日全部完成 +3 🪙！'
+        : '+1 🪙 到账',
+      'success',
+    );
     // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
     loadProgress().then(() => {

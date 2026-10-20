@@ -7,14 +7,32 @@
 import { Hono } from 'hono';
 import type { Env } from '../../worker.ts';
 import type { Task } from '../../db/types.ts';
-import { todayShanghai } from '../../utils/week.ts';
+import { todayShanghai, todayShanghaiISODay } from '../../utils/week.ts';
 
 const tasks = new Hono<{ Bindings: Env }>();
 
 const TASK_COLUMNS =
   'id, name, token_reward, target_account, icon, category, ' +
-  'is_active, sort_order, cutoff_time, is_self_lockout, ' +
+  'is_active, sort_order, cutoff_time, is_self_lockout, active_days, ' +
   'created_at, updated_at';
+
+/** Parse the JSON-encoded tasks.active_days column into number[] | null.
+ *  Mirrors the helper in src/routes/me/tasks.ts — kept duplicated because both
+ *  routes are independent read paths and sharing would couple them for no win.
+ *  Also accepts an already-parsed array (unit-test mocks store typed objects). */
+function parseActiveDays(raw: string | number[] | null | undefined): number[] | null {
+  if (raw == null || raw === '') return null;
+  if (Array.isArray(raw)) {
+    return raw.filter((n) => Number.isInteger(n) && n >= 1 && n <= 7) as number[];
+  }
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return null;
+    return arr.filter((n) => Number.isInteger(n) && n >= 1 && n <= 7) as number[];
+  } catch {
+    return null;
+  }
+}
 
 tasks.get('/', async (c) => {
   const userId = c.req.query('user_id');
@@ -35,8 +53,15 @@ tasks.get('/', async (c) => {
     );
   const bound = activeFlag === 'true' ? stmt.bind(1) : stmt.bind();
   const rows = await bound.all<Task>();
+  // task-active-days: D1 stores active_days as JSON text; the TS interface
+  // wants number[] | null — parse each row so the public /tasks endpoint
+  // returns the typed value (kid-side renderTasks() relies on it).
+  const tasksOut = (rows.results ?? []).map((t) => ({
+    ...t,
+    active_days: parseActiveDays(t.active_days as unknown as string | null),
+  }));
 
-  return c.json({ tasks: rows.results ?? [] });
+  return c.json({ tasks: tasksOut });
 });
 
 tasks.get('/today-status', async (c) => {
@@ -147,8 +172,8 @@ tasks.get('/progress', async (c) => {
       .bind(userId, yearStart, today)
       .first<{ n: number }>(),
     db
-      .prepare(`SELECT COUNT(*) AS n FROM tasks WHERE is_active = 1`)
-      .first<{ n: number }>(),
+      .prepare(`SELECT id, active_days FROM tasks WHERE is_active = 1`)
+      .all<{ id: number; active_days: string | null }>(),
     db
       .prepare(
         `SELECT monthly_target_count, yearly_target_count
@@ -157,10 +182,18 @@ tasks.get('/progress', async (c) => {
       .first<{ monthly_target_count: number; yearly_target_count: number }>(),
   ]);
 
+  // task-active-days fix (2026-10-20): daily.total = tasks DUE today, not
+  // all is_active tasks. A weekday-only task shouldn't pad Saturday's bar.
+  const todayISODay = todayShanghaiISODay();
+  const dueTodayCount = (activeTasks.results ?? []).filter((t) => {
+    const days = parseActiveDays(t.active_days);
+    return days === null || days.length === 0 || days.includes(todayISODay);
+  }).length;
+
   return c.json({
     daily: {
       completed: dailyCompleted?.n ?? 0,
-      total: activeTasks?.n ?? 0,
+      total: dueTodayCount,
     },
     monthly: {
       completed: monthlyCompleted?.n ?? 0,

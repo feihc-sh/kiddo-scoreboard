@@ -1,6 +1,6 @@
 // tests/unit/week.test.ts
 // Tests for src/utils/week.ts — no D1 dependency, pure functions.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   shanghaiDateString,
   todayShanghai,
@@ -9,6 +9,7 @@ import {
   shanghaiDateToUnix,
   shanghaiWeekRange,
   nowUnix,
+  todayShanghaiISODay,
 } from '../../src/utils/week.ts';
 
 describe('shanghaiDateString', () => {
@@ -168,5 +169,50 @@ describe('nowUnix', () => {
 describe('currentWeek', () => {
   it('equals isoWeekString(Date.now())', () => {
     expect(currentWeek()).toBe(isoWeekString(Date.now()));
+  });
+});
+
+// task-active-days (Item spec §3.1, 2026-10-17): todayShanghaiISODay() returns
+// the ISO weekday in Asia/Shanghai (Mon=1..Sun=7). Server uses this to refuse
+// /api/me/tasks/:id/complete when today is not in tasks.active_days — so the
+// function MUST be deterministic under fixed system time.
+describe('todayShanghaiISODay', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns a value in [1..7]', () => {
+    const d = todayShanghaiISODay();
+    expect(Number.isInteger(d)).toBe(true);
+    expect(d).toBeGreaterThanOrEqual(1);
+    expect(d).toBeLessThanOrEqual(7);
+  });
+
+  // Pick instants where Shanghai is on a known weekday; verify the helper
+  // returns the matching ISO weekday. Each instant is at 12:00 UTC, well
+  // inside Shanghai's working day (UTC+8 → 20:00 Shanghai same day).
+  const cases: Array<{ utc: string; shanghaiDate: string; iso: number }> = [
+    { utc: '2026-10-12T12:00:00Z', shanghaiDate: '2026-10-12', iso: 1 }, // Mon
+    { utc: '2026-10-13T12:00:00Z', shanghaiDate: '2026-10-13', iso: 2 }, // Tue
+    { utc: '2026-10-14T12:00:00Z', shanghaiDate: '2026-10-14', iso: 3 }, // Wed
+    { utc: '2026-10-15T12:00:00Z', shanghaiDate: '2026-10-15', iso: 4 }, // Thu
+    { utc: '2026-10-16T12:00:00Z', shanghaiDate: '2026-10-16', iso: 5 }, // Fri
+    { utc: '2026-10-17T12:00:00Z', shanghaiDate: '2026-10-17', iso: 6 }, // Sat
+    { utc: '2026-10-18T12:00:00Z', shanghaiDate: '2026-10-18', iso: 7 }, // Sun
+  ];
+
+  for (const c of cases) {
+    it(`returns ${c.iso} (${c.shanghaiDate}) when system clock is ${c.utc}`, () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(c.utc));
+      expect(todayShanghaiISODay()).toBe(c.iso);
+    });
+  }
+
+  it('rolls forward across UTC midnight to next Shanghai day', () => {
+    // 2026-10-15 17:00 UTC == 2026-10-16 01:00 Shanghai → Friday still.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-15T17:00:00Z'));
+    expect(todayShanghaiISODay()).toBe(5);
   });
 });

@@ -21,11 +21,40 @@ const tasksRoute = new Hono<{ Bindings: Env }>();
 
 const TASK_COLUMNS =
   'id, name, token_reward, target_account, icon, category, ' +
-  'is_active, sort_order, cutoff_time, is_self_lockout, ' +
+  'is_active, sort_order, cutoff_time, is_self_lockout, active_days, ' +
   'created_at, updated_at';
 
 const ALLOWED_ACCOUNTS: AccountType[] = ['game_time', 'pocket_money'];
 const ALLOWED_CATEGORIES: TaskCategory[] = ['habit', 'study', 'chore', 'custom'];
+
+/**
+ * Normalize a raw active_days value from the request body into either
+ *   - `null`         (= "every day" — what gets stored as NULL in the D1 row)
+ *   - JSON string    (= the canonical "[1,3,5]" representation)
+ * Spec §1 D2 / §3.4 (PM, 2026-10-17). null/undefined/[] → null.
+ * Non-integer or out-of-[1..7] items → return a 400 reason string; caller
+ * turns it into a BAD_REQUEST response.
+ */
+function normalizeActiveDays(raw: unknown): { ok: true; value: string | null } | { ok: false; message: string } {
+  if (raw === undefined || raw === null) {
+    return { ok: true, value: null };
+  }
+  if (!Array.isArray(raw)) {
+    return { ok: false, message: 'active_days must be an array of integers 1-7' };
+  }
+  if (raw.length === 0) {
+    return { ok: true, value: null };
+  }
+  const seen = new Set<number>();
+  for (const v of raw) {
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 7) {
+      return { ok: false, message: 'active_days must be an array of integers 1-7' };
+    }
+    seen.add(v);
+  }
+  const sorted = Array.from(seen).sort((a, b) => a - b);
+  return { ok: true, value: JSON.stringify(sorted) };
+}
 
 // ---------------- helpers ----------------
 
@@ -88,6 +117,8 @@ interface CreateBody {
   sort_order: number;
   cutoff_time: string | null;
   is_self_lockout: 0 | 1;
+  // task-active-days: JSON-encoded "[1,3,5]" or null = every day.
+  active_days: string | null;
 }
 
 function parseCreateBody(raw: unknown):
@@ -163,6 +194,12 @@ function parseCreateBody(raw: unknown):
     }
     isSelfLockout = body.is_self_lockout;
   }
+  // task-active-days: validate + canonicalize. Empty array → null ("every day").
+  const ad = normalizeActiveDays(body.active_days);
+  if (!ad.ok) {
+    return { ok: false, code: 'BAD_REQUEST', message: ad.message };
+  }
+  const activeDaysJson = ad.value;
 
   return {
     ok: true,
@@ -175,6 +212,7 @@ function parseCreateBody(raw: unknown):
       sort_order: sortOrder,
       cutoff_time: cutoffTime,
       is_self_lockout: isSelfLockout,
+      active_days: activeDaysJson,
     },
   };
 }
@@ -206,9 +244,9 @@ tasksRoute.post('/', async (c) => {
       .prepare(
         `INSERT INTO tasks
            (name, token_reward, target_account, icon, category,
-            is_active, sort_order, cutoff_time, is_self_lockout,
+            is_active, sort_order, cutoff_time, is_self_lockout, active_days,
             created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         body.name,
@@ -219,6 +257,7 @@ tasksRoute.post('/', async (c) => {
         body.sort_order,
         body.cutoff_time,
         body.is_self_lockout,
+        body.active_days,
         now,
         now,
       ),
@@ -241,6 +280,23 @@ tasksRoute.post('/', async (c) => {
   // meta of the first statement (INSERT INTO tasks) carries last_row_id.
   const newId = Number(insertResult[0]?.meta?.last_row_id ?? 0);
 
+  // task-active-days: body.active_days is the JSON-encoded value
+  // (e.g. "[6]") — parse it back to number[] | null so the POST response
+  // shape matches the PUT response and the Task TS type (admin UI pre-fills
+  // from this). Mirrors the parse in the PUT handler. Defensive: also
+  // accepts an already-parsed array for unit-test mocks.
+  const activeDaysOut = (() => {
+    const raw = body.active_days;
+    if (raw == null) return null;
+    if (Array.isArray(raw)) return raw as number[];
+    try {
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? (arr as number[]) : null;
+    } catch {
+      return null;
+    }
+  })();
+
   return c.json(
     {
       id: newId,
@@ -253,6 +309,7 @@ tasksRoute.post('/', async (c) => {
       sort_order: body.sort_order,
       cutoff_time: body.cutoff_time,
       is_self_lockout: body.is_self_lockout,
+      active_days: activeDaysOut,
       created_at: now,
       updated_at: now,
     },
@@ -274,6 +331,8 @@ interface UpdateBody {
   is_active?: 0 | 1;
   cutoff_time?: string | null;
   is_self_lockout?: 0 | 1;
+  // task-active-days: JSON-encoded "[1,3,5]" or null = every day.
+  active_days?: string | null;
 }
 
 function parseUpdateBody(raw: unknown):
@@ -358,6 +417,14 @@ function parseUpdateBody(raw: unknown):
       return { ok: false, code: 'BAD_REQUEST', message: 'is_self_lockout must be 0 or 1' };
     }
     out.is_self_lockout = body.is_self_lockout;
+  }
+  // task-active-days: validate + canonicalize.
+  if ('active_days' in body) {
+    const ad = normalizeActiveDays(body.active_days);
+    if (!ad.ok) {
+      return { ok: false, code: 'BAD_REQUEST', message: ad.message };
+    }
+    out.active_days = ad.value;
   }
 
   const provided: UpdateField[] = (
@@ -448,6 +515,10 @@ tasksRoute.put('/:id', async (c) => {
     sets.push('is_self_lockout = ?');
     params.push(patch.is_self_lockout);
   }
+  if (patch.active_days !== undefined) {
+    sets.push('active_days = ?');
+    params.push(patch.active_days);
+  }
   sets.push('updated_at = unixepoch()');
   params.push(id);
   const setClause = sets.join(', ');
@@ -457,7 +528,7 @@ tasksRoute.put('/:id', async (c) => {
   const newValues: Record<string, unknown> = {};
   const fields: UpdateField[] = [
     'name', 'token_reward', 'target_account', 'icon', 'category', 'sort_order', 'is_active',
-    'cutoff_time', 'is_self_lockout',
+    'cutoff_time', 'is_self_lockout', 'active_days',
   ];
   for (const f of fields) {
     if (patch[f] !== undefined && patch[f] !== existing[f]) {
@@ -496,7 +567,27 @@ tasksRoute.put('/:id', async (c) => {
     );
   }
 
-  return c.json(updated);
+  // task-active-days: parse JSON → number[] | null so the admin UI gets the
+  // typed value (not a raw string). Mirrors the row-read layer in
+  // src/routes/public/tasks.ts and src/routes/me/tasks.ts. Accepts both
+  // the JSON-text form (real D1) and an already-parsed array (unit-test mocks).
+  const updatedActiveDays = parseActiveDaysOutput(updated.active_days);
+
+  function parseActiveDaysOutput(raw: unknown): number[] | null {
+    if (raw == null) return null;
+    if (Array.isArray(raw)) return raw as number[];
+    if (typeof raw === 'string') {
+      try {
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? (arr as number[]) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  return c.json({ ...updated, active_days: updatedActiveDays });
 });
 
 // ---------------- DELETE /:id (soft-delete) ----------------

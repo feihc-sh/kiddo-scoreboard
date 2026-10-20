@@ -106,6 +106,42 @@
                 </label>
               </div>
             </div>
+            <!-- task-active-days (2026-10-17 PM): 7-day free checkbox + 3 preset buttons.
+                 Spec §5: server stores JSON array of ISO weekdays [1..7] (Mon=1).
+                 Empty selection = NULL = every day (back-compat for existing tasks). -->
+            <div class="pm-form-row single">
+              <div><label>生效日（勾选=该天允许打卡）</label>
+                <div class="active-days-presets" id="active-days-presets" style="display:flex;gap:6px;margin:6px 0;">
+                  <button type="button" data-days-preset="all" class="pm-btn ghost">每天</button>
+                  <button type="button" data-days-preset="weekdays" class="pm-btn ghost">工作日</button>
+                  <button type="button" data-days-preset="weekend" class="pm-btn ghost">周末</button>
+                </div>
+                <div class="active-days-row" id="active-days-row" style="display:flex;flex-wrap:wrap;gap:8px;">
+                  <label style="display:flex;align-items:center;gap:4px;font-weight:normal;">
+                    <input type="checkbox" name="active_days" value="1"> 一
+                  </label>
+                  <label style="display:flex;align-items:center;gap:4px;font-weight:normal;">
+                    <input type="checkbox" name="active_days" value="2"> 二
+                  </label>
+                  <label style="display:flex;align-items:center;gap:4px;font-weight:normal;">
+                    <input type="checkbox" name="active_days" value="3"> 三
+                  </label>
+                  <label style="display:flex;align-items:center;gap:4px;font-weight:normal;">
+                    <input type="checkbox" name="active_days" value="4"> 四
+                  </label>
+                  <label style="display:flex;align-items:center;gap:4px;font-weight:normal;">
+                    <input type="checkbox" name="active_days" value="5"> 五
+                  </label>
+                  <label style="display:flex;align-items:center;gap:4px;font-weight:normal;">
+                    <input type="checkbox" name="active_days" value="6"> 六
+                  </label>
+                  <label style="display:flex;align-items:center;gap:4px;font-weight:normal;">
+                    <input type="checkbox" name="active_days" value="7"> 日
+                  </label>
+                </div>
+                <small style="color:var(--text-soft);font-weight:normal;">不勾任何天 = 每天</small>
+              </div>
+            </div>
             <div class="pm-row" style="background:transparent;padding:0;margin-top:4px;">
               <div class="pm-row-actions" style="margin-left:auto;">
                 <button type="button" id="new-task-cancel" class="pm-btn ghost">取消</button>
@@ -198,9 +234,12 @@
           <input type="date" id="filter-completion-date">
           <label style="font-size:13px;color:var(--text-soft);font-weight:600;">状态</label>
           <select id="filter-completion-status">
+            <option value="all">全部</option>
             <option value="active">active</option>
             <option value="revoked">revoked</option>
           </select>
+          <button class="pm-btn warn" id="btn-reset-day" title="清空该孩子当天全部打卡(含已撤销),任务回到未完成可重新打卡;积分回退,删除前快照备份">♻️ 清空当天打卡</button>
+          <button class="pm-btn" id="btn-restore-day" title="恢复该孩子当天所有 revoked 打卡(含 +1 积分补偿 + bonus 恢复)">↩️ 恢复已撤销打卡</button>
         </div>
         <div id="completions-list"></div>
         <div class="pm-empty" id="completions-empty" hidden>没有完成记录</div>
