@@ -1432,7 +1432,17 @@ async function completeTask(taskId, body = {}) {
     state.balance = r.new_balance;
     renderBalance();
     renderTasks();
-    toast(`+${r.token_awarded} ${taskRewardIcon(r.target_account)} 到账`, 'success');
+    // Bug fix (feihao 2026-10-20): token_awarded is the legacy informational
+    // token_reward (e.g. 5) — the ACTUAL grant is a uniform +1 coin per task
+    // (Bug #1 2026-06-14), plus a one-off +3 bonus when all due-today tasks
+    // are done (bonus_event_id present). Show what really landed, not the
+    // stale legacy number.
+    toast(
+      r.bonus_event_id
+        ? '+1 🪙 到账，今日全部完成 +3 🪙！'
+        : '+1 🪙 到账',
+      'success',
+    );
     // refresh events + progress in background
     loadEvents().then(renderEvents).catch(() => {});
     loadProgress().then(() => {
