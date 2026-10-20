@@ -944,7 +944,49 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 ---
 
 ```markdown
-## Item #XXX — <一句话标题>
+## Item #017 — 打卡全完成时微信通知家长 📲 ⏳ pending
+
+**用户原话**:
+> 我想当每当他打卡打全的时候发个提醒给我，这个提醒最好是微信通知，或者什么通知发到我手机上，这个看看有哪些渠道可以发
+
+**Clarification** (PM 整理):
+- 触发时机: 孩子完成当天**全部应做任务**的瞬间（即 +3 bonus 发放那一刻，`bonus_event_id` 非空）——服务端 `me/tasks.ts` bonus 写入点之后同步/异步发通知
+- "打全" 判定已存在: `isAllTasksCompleted()` (2026-10-20 刚修过 active_days 语义) + `buildDailyBonusSQLIfAllDone()` 返回非 null 的分支 = 唯一挂点，**一处触发，无需新轮询**
+- 收件人: feihao 手机（一台 iPhone，已知有 Bark 候选）；不发给孩子
+- 渠道调研结论（PM 2026-10-20，实现时按 A→C 顺序验证，若额度/接口有变再刷新）:
+
+| 渠道 | 原理 | 免费? | iOS 实达性 | 评 |
+|---|---|---|---|---|
+| **A. Bark** (推荐) | App Store 装 Bark → 设备 token → `curl https://api.day.app/<token>/<标题>/<内容>` 一条 HTTP | 完全免费, 无需注册, 自建服务端也可 | 原生推送, 锁屏+通知中心+角标 | ✅ 最轻, iPhone 单机首选; 缺点: 仅 iOS |
+| B. Server酱³ (ServerChan) | 微信服务号「方糖」模板消息, `https://sct.ftqq.com/<SENDKEY>.send` | 免费版 5 条/天 (打全每天最多 1 条, 够用) | 微信服务号消息, 不装新 App | ✅ 真·微信通知; 缺点: 需微信扫码注册, 免费额度按月重置需关注 |
+| C. PushPlus / WxPusher | 微信公众号模板消息, HTTP API | 免费有限额 | 同上 | 备选, 接口风格类似 Server酱 |
+| D. 飞书机器人 webhook | 项目已有飞书生态 (lark-cli), 群机器人 webhook 一条 POST | 免费 | 需装飞书 App 且开通知 | 已有基建, 但 feihao 手机通知习惯未知 |
+| E. Apple SMTP→短信网关 | 不存在通用方案 | — | — | 🚫 排除 |
+| F. Cloudflare Workers 发邮件 (Resend/Mailgun) | worker 内 fetch SMTP API | 免费额度存在 | 邮件推送 | 延迟高, 体验差, 仅兜底 |
+
+- 推荐**先 A (Bark)**: 零注册零依赖, feihao 是 iPhone; 若想要"微信里收"再叠加 B (Server酱)——两者可并存 (双渠道 fallback)
+- 配置存放: `.dev.vars` / CF 环境变量 `BARK_URL`(含 token), `SERVERCHAN_SENDKEY`(可选)
+- 失败策略: 通知失败**不影响打卡主流程** (try-catch 包裹, 类似 audit best-effort 模式)
+- 范围: 只做"打全"这一个事件 (不是每次打卡都发, 避免打扰); 管理端是否要手动"测试通知"按钮 → 留给实施时问 feihao (建议加, 5 行代码)
+
+**Action Plan** (PM 拟定, 逐步可执行):
+- [ ] feihao 手机装 Bark (App Store), 复制 token 给 PM; (可选) Server酱扫码拿 SENDKEY
+- [ ] `src/utils/notify.ts`: `notifyParents(title, body)` — fetch Bark URL (+ 可选 Server酱), 8s timeout, 全 try-catch, 返回 {ok, channel}
+- [ ] `me/tasks.ts` bonus 分支 (`if (bonusSql)` 成功写入后) 调 `notifyParents('全部打卡完成 🎉', '<孩子> 今日 N/N 全部完成, +3 已发放')`; env 读 `BARK_URL` / `SERVERCHAN_SENDKEY`, 未配置时静默跳过 (dev 不炸)
+- [ ] admin 任务 Config 面板加「测试通知」按钮 → 调 `POST /api/admin/notify/test` (PM auth) → notifyParents('测试', 'kiddo-scoreboard 通知链路 OK')
+- [ ] 单测: notify util mock fetch (ok/fail/timeout 三态, 断言主流程不因通知失败而 500); bonus 触发时 notify 被调 1 次; 未配置 env 时不 fetch
+- [ ] e2e (可选): seed 全部任务 → 完成最后一张 → 断言 notify endpoint 收到调用
+- [ ] `git commit -m "feat(notify): all-tasks-complete parent push via Bark (+optional ServerChan)"`
+
+**Status**: ⏳ pending
+**风险**: 🟡 (外部 HTTP 依赖 + CF Workers 出网免费额度; 渠道额度以实施时实测为准)
+**Started**: —
+**Completed**: —
+**Commit**: —
+
+---
+
+## Item #XXX — <一句话标题> (模板, 勿删)
 
 **用户原话**:
 > (引用用户原始 message, 越完整越好)
