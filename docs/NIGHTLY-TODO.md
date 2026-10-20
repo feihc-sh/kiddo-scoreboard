@@ -56,6 +56,8 @@
     > 📌 **Drift fix 2026-07-12 (PM 修)**: #013 Stage 5 ✅ committed `afcd192` (public/app.js ~80 LoC: showCoinBagModalQueue + pumpCoinBagQueue + showCoinBagModal, submitRunning call updated, showGiftModal deprecated); NIGHTLY-TODO ✅ updated: Stage 5 checkbox ✅, Status → partial done; Stage 6 ⏳ pending; unit test + e2e deferred to future nightly.
     >
     > 📌 **Nightly 2026-07-14**: #013 Stage 6 ✅ committed `4d93a89` (R2 cascade revoke endpoint + admin summary + 11 focused tests + docs), 25/25 focused vitest 绿; Item 全部完成并移入归档。
+    >
+    > 📌 **Nightly 2026-10-21 (cron 补跑 deferred 测试)**: #013 早已 ✅ done 但 Stage 5 明写 "unit test + e2e deferred to future nightly" — 本次把这两块补齐: `dc29098` 单测 `tests/unit/coin-bag-modal-trigger.test.ts` (12 tests, 覆盖 showCoinBagModal + 串行队列 latch), `44fd592` e2e `tests/e2e/ui-coin-bag.spec.ts` (3 tests, SMOKE + HAPPY-1 双里程碑串行 + EDGE)。全套 vitest 773 pass / 15 pre-existing fail (未变)。**踩坑记录**: ① 本机 8787 被另一 worktree (`kiddo-scoreboard-task-days`) 的 workerd 占着, `reuseExistingServer: true` 会静默测错 app — 必须换端口验证 (CLAUDE.md 已记此 gotcha, 本次再次踩中); ② Playwright webkit 二进制未装, 首跑 3 个全挂在 `browserType.launch` 基础设施错误 (非断言失败), `npx playwright install webkit` 后 3/3 过, `--repeat-each=2` 6/6 稳。
 
     ## Item #014 — Admin 暂停任务 (suspend / 恢复, 不删) ✅ done (2026-07-05, PR #45 merged)
 
@@ -494,8 +496,8 @@ export async function writeRevokeAuditLog(db, recordId, details): void
  - `public/app.js` 改: `showCoinBagModal(point, coins)` 函数 (~50 LoC) — 替代 `showGiftModal()`, 接 award_coins, 触发 3 阶段动画 ✓
  - `public/app.js` 改: `submitRunning()` 成功后, 遍历 `response.new_points_reached[]`, **sequential 队列** (1 个 bag modal 完才弹下 1 个) ✓
  - `public/app.js` 改: `running-gift-modal` 移除 (or mark deprecated, Stage 6 删) ✓
- - 单测: `tests/unit/coin-bag-modal-trigger.test.ts` (~40 LoC, 6 case) — **Deferred to future nightly**
- - E2E: `tests/e2e/ui-coin-bag.spec.ts` (~60 LoC, 跑 8 km → 看到 bag drop 动画 + 数字 +2 + 按钮) — **Deferred to future nightly**
+ - 单测: `tests/unit/coin-bag-modal-trigger.test.ts` (~40 LoC, 6 case) — **Deferred to future nightly** ✅ **已补 (2026-10-21 cron, commit `dc29098`, 扩到 12 case: 加串行队列 latch / 空 payload / 中途新批次不叠弹)**
+ - E2E: `tests/e2e/ui-coin-bag.spec.ts` (~60 LoC, 跑 8 km → 看到 bag drop 动画 + 数字 +2 + 按钮) — **Deferred to future nightly** ✅ **已补 (2026-10-21 cron, commit `44fd592`, 3 test: SMOKE 动画 gate + HAPPY-1 双里程碑串行 + EDGE 空数组)**
  - **🚫 不做**: 音效, 老 gift modal 兼容 (Stage 6 一并删) ✓
  - `git commit -m "feat(running): coin bag modal trigger + sequential queue (Item #013 §5)"` ✓ `afcd192`
 
@@ -514,9 +516,9 @@ export async function writeRevokeAuditLog(db, recordId, details): void
 - Stage 2 ✅ done commit `df42182` (merged to main 2026-06-24)
 - Stage 3 ✅ done commit `4846ff0` (feat/013-stage3 branch)
 - Stage 4 ✅ done commit `97de86e` (feat/013-stage3 branch)
-- Stage 5 ✅ done 2026-07-12 (public/app.js queue + modal trigger, commit pending sandbox approval)
+- Stage 5 ✅ done 2026-07-12 commit `afcd192` (public/app.js queue + modal trigger; 2026-10-21 cron drift fix: 原文写 "commit pending sandbox approval" 有误, 实测 `git cat-file -t afcd192` = commit, 已存在于 main)
 - Stage 6 ✅ done 2026-07-14 commit `4d93a89` (R2 cascade endpoint + admin summary + 11 focused tests + docs)
-- Stage 5 trigger 单测 + e2e deferred to future nightly run
+- Stage 5 trigger 单测 + e2e deferred to future nightly run → ✅ **2026-10-21 cron 已补**: 单测 `dc29098` (12 case) + e2e `44fd592` (3 test, 6/6 repeat-each 稳)
 **风险**: 🔴 (改核心 invariant: reward semantic + revoke 逻辑 + modal flow; 6 stage 跨 5+ 文件, 需全套 regression; re-derive 算法需 careful audit_log 设计; UI 动画 + admin 双向改动, 一个 stage 错影响整体)
 **Started**: 2026-06-24
 **Completed**: 2026-07-14
@@ -978,6 +980,8 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
    > 当前 ⏳ pending = **0** (无待办, 等用户新需求入池)
    > 当前 ⏸ hold = **1** (#007)
    > 当前 🔧 running = **0**
+   >
+   > 📌 **2026-10-21 cron**: 全表 0 条真 pending (header 计数与实际一致)。唯一可做的活是 #013 Stage 5 自我标注 "deferred to future nightly" 的两块测试 — 已补齐 (`dc29098` 单测 12 case + `44fd592` e2e 3 test), 全套 vitest 773 pass / 15 pre-existing fail 未变。下次 cron 若仍 0 pending, 建议 PM 加新需求入池, 否则夜间空跑。
 
 > #006 2026-06-20 PM-fix: status → ✅ done, NIGHTLY-TODO 归档 (从主清单移到此处, 跟 #001/#002/#005/#009 同档; 完整 commit 历史 `0389c85` / `569e10c` / `c5d8c57` / `5abe507` / `f2c82e6` / `a4eb27b` / `ade11a1` / `064622a`, e2e 12/12 + unit 313/313, Qual verified, Iron Rule #25 added)
 
