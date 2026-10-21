@@ -452,11 +452,19 @@ taskCompletions.post('/reset-day', async (c) => {
   const now = Math.floor(Date.now() / 1000);
 
   // One atomic batch per completion:
-  //   snapshot → delete subitems → delete completion → -1 coin → audit.
+  //   snapshot → delete subitems → delete completion → (-1 coin, ACTIVE ONLY) → audit.
   // (D1 batch = implicit transaction; a mid-way failure rolls back all.)
+  // Bug fix (feihao 2026-10-21 "清空已撤销任务也扣金币"): a revoked row's +1
+  // was ALREADY reversed at revoke time — writing another -1 here would
+  // double-deduct. Revoked rows get snapshot+delete+audit only, no coin.
   const statements = [];
+  let coinReversals = 0;
   for (const completion of rows) {
-    const revokeCoin = buildRevokeTaskCoinSQL(userId, completion.task_id, date);
+    const wasActive = completion.status === 'active';
+    const revokeCoin = wasActive
+      ? buildRevokeTaskCoinSQL(userId, completion.task_id, date)
+      : null;
+    if (revokeCoin) coinReversals++;
     statements.push(
       db
         .prepare(
@@ -471,7 +479,9 @@ taskCompletions.post('/reset-day', async (c) => {
       db
         .prepare(`DELETE FROM task_completions WHERE id = ?`)
         .bind(completion.id),
-      db.prepare(revokeCoin.query).bind(...revokeCoin.params),
+      ...(revokeCoin
+        ? [db.prepare(revokeCoin.query).bind(...revokeCoin.params)]
+        : []),
       db
         .prepare(
           `INSERT INTO audit_log
