@@ -479,6 +479,14 @@ describe('POST /api/admin/task-completions/reset-day', () => {
     const body = (await r.json()) as ResetResponse;
     expect(body.reset_count).toBe(2);
     expect(completions.filter((c) => c.completed_date === '2026-10-20')).toHaveLength(0);
+    // Bug fix 2026-10-21 (清空已撤销任务也扣金币): the revoked row's +1 was
+    // already reversed at revoke time — the reset must NOT write another -1
+    // for it. Exactly ONE coin event total (for the active row).
+    const coinEvents = events.filter(
+      (e) => e.type === 'coins' && e.source_ref === 'revoke:task:1:2026-10-20:2',
+    );
+    expect(coinEvents).toHaveLength(1);
+    expect(coinEvents[0].change_value).toBe(-1);
   });
 
   it('bonus day: +3 existed → one -3 reversal written, bonus_reversed=true', async () => {
