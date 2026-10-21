@@ -2,7 +2,7 @@
 
 **需求原话 (feihao)**: 给每一个任务设置打卡的生效日 — 勾选 active 周一~周五 还是周六周日这种。
 
-**状态**: spec 已冻结。clarify 10min 未回复 → PM 按 `feihao-pm-autonomy` 以推荐方案 A (7 天自由勾选 + 每天/工作日/周末 3 快捷键) 推进; worktree + CC dispatch 因 terminal approval timeout (feihao 不在电脑前) 排队中 → 降级路径见本 skill R5。等 feihao 回"继续"。
+**状态**: ✅ 已实现并 deploy 到生产。后续同批上线: admin reset-day/restore (`fe8e1a7`, `58027df`)、bonus 只算当天到期 (`c4f51d1`)、status=all (`e8962d9`)、打卡 toast 修正 (`3b477c1`)、编辑预填 active_days 解析修复 (`ea7e64e`)。
 
 **feihao 恢复后的下一步**:
 1. 在 shop-tunnel repo: `git worktree add /Users/tidusmaomao/workspace/kiddo-scoreboard-task-days -b feature/task-active-days origin/main` (先 fetch)
@@ -19,7 +19,7 @@
 **Feature ID**: task-active-days
 **Date**: 2026-10-17
 **Owner**: PM Agent (spec) / Code Agent (impl)
-**Status**: ready-for-impl
+**Status**: ✅ **已实现并上线** (merge `37bda08` … `58027df` + 预填修复 `ea7e64e`, 2026-10-20/21)
 
 ## 0. 一句话需求 (feihao 原话)
 
@@ -146,6 +146,7 @@ const notActiveToday = !done && !revoked && !isActiveToday;
 ### 5.2 admin.js
 
 - 预填 (L1032 附近): `active_days` 数组 → 勾对应 checkbox; null/空 → 全勾 (显示为每天)。
+  > ✏️ **勘误 (2026-10-21)**: 上线初版 `GET /api/admin/tasks` 返回的是未解析的 JSON TEXT, `Array.isArray` 恒 false → 预填恒回退全勾, 直接保存会把"仅周末"任务静默改成每天。已在 `ea7e64e` 修复 (server 端解析后返回, 含 2 个回归测试)。本条描述自该 commit 起成立。
 - 提交 (L1116 附近): `active_days: vals.length ? vals.map(Number) : null`。
 - preset: all→[1..7], weekdays→[1-5], weekend→[6,7]; preset 后可再手动微调 (工作日 preset 然后取消周三 = 一二四五)。
 
@@ -157,6 +158,8 @@ const notActiveToday = !done && !revoked && !isActiveToday;
 | `me-tasks-complete.test.ts` 新增 describe | ① active_days=[1..5] + mock 今天=周六 → 400 `TASK_NOT_ACTIVE_TODAY`; ② [6] + 周六 → 200; ③ null → 任意天 200 (回归); ④ [6] 且过 cutoff → 生效日检查先于 cutoff (顺序断言) |
 | admin 校验测试 (`admin-tasks-active-days.test.ts`, 无现成 admin task 测试则新建) | `[0]`/`[8]`/`[1.5]`/`"1,2"` → 400; `[1,1,2]` → 归一化 `[1,2]` |
 | `lockout.test.ts` / `public-tasks.test.ts` | 原样通过 (回归, 不改断言) |
+
+> **同批新增的其它 suite** (原表未列): `admin-task-completions-reset-day.test.ts` (605 行, 清空 8 its + restore 3 its)、`admin-task-completions-list.test.ts` (`status=all` + 跨午夜钉日期)、`me-tasks-complete.test.ts` 新增 bonus × active-days describe (`c4f51d1`)、`admin-tasks-active-days.test.ts` GET 解析回归 2 its (`ea7e64e`)。
 
 时间 mock 跟随 `me-tasks-complete.test.ts` 现有模式, 不发明新机制。
 

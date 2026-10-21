@@ -1828,3 +1828,20 @@ Unit tests for `tests/unit/admin-auth.test.ts` (and any other unit suites) are *
 ---
 
 **End of Test Plan v1.**
+
+---
+
+### 3.23 任务生效日 + 清空/恢复当天打卡 (v2.x, 2026-10-20/21)
+
+> 详细用例矩阵见 `FEATURE_MATRIX.md` §3.16 / §3.23 / §3.24 行与 `task-active-days-spec.md` §6; 本节只登记 suite 清单与验收口径。
+
+**Unit suites (全部绿, 共 593 pass / 56 spec 基线)**:
+- `tests/unit/admin-tasks-active-days.test.ts` — POST/PUT 校验 (null/[]/越界/去重) + GET 解析回归 (`ea7e64e`) 17 its
+- `tests/unit/me-tasks-complete.test.ts` — 生效日 gating (400 `TASK_NOT_ACTIVE_TODAY`, 顺序先于 cutoff) + bonus × active-days (非生效日不计入分母) describe
+- `tests/unit/admin-task-completions-reset-day.test.ts` — 清空模式 8 its (confirm 门禁/参数校验/删除+快照+审计/**仅 active 行 -1**/bonus -3 反转) + restore 模式 3 its
+- `tests/unit/admin-task-completions-list.test.ts` — `status=all` 用例 (显式钉 `date=`, 跨午夜稳定)
+- `tests/unit/week.test.ts` — `todayShanghaiISODay()` Mon/Sun 边界
+
+**e2e**: ⚠️ 待补 — reset-day 按钮、7-checkbox 预设、小孩端灰置均无 Playwright spec (gap 已记 FEATURE_MATRIX)。
+
+**验收口径 (F18/F19)**: 见 `PRD.md` §F18/F19 行。

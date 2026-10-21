@@ -23,8 +23,9 @@
 | **3.12** | 准时上床 (self-lockout 任务类型, v2.1) | `tasks.cutoff_time` + `tasks.is_self_lockout` | 3.14 | (覆盖在 me-tasks-complete.test.ts) | `sleep-lockout.spec.ts` `ui-child-main.spec.ts` | ✅ 100% |
 | **3.15** | Task Lifecycle — Suspend/Resume (Item #014, v2.x) | `routes/admin/tasks.ts :: POST /:id/toggle` | 3.21 | `admin-task-toggle.test.ts` | `admin-task-toggle.spec.ts` | ✅ 100% |
 | **3.5** | 边界 case (软删/审计/锁 + **硬删 v2.2**) | `utils/audit.ts` + `auth/lockout.ts` + `utils/deleted-records.ts` + `routes/admin/events.ts` + `routes/admin/task-completions.ts` + `routes/admin/deleted-records.ts` | 3.1, 3.6, **3.15** | `lockout.test.ts` `audit.test.ts` `deleted-records.test.ts` `admin-events-hard-delete.test.ts` `admin-task-completions-hard-delete.test.ts` | `flow-pm-lockout.spec.ts` `smoke-admin-audit.spec.ts` **`ui-admin-hard-delete.spec.ts`** **`ui-admin-hard-delete-fk.spec.ts`** ⚠️ NEW (P0, FK 约束, 2026-06-09) | ⚠️ 95% — FK 路径未覆盖 (新 spec RED 待 PM 修) |
+| **3.16** | 任务生效日 (active_days) + 清空/恢复当天打卡 (v2.x, 2026-10-20) | `migrations/0020` + `routes/me/tasks.ts` (400 `TASK_NOT_ACTIVE_TODAY`) + `utils/coin.ts :: isAllTasksCompleted` (只算当天到期) + `routes/admin/task-completions.ts :: POST /reset-day` (delete-based 清空 / `mode:'restore'` 恢复) | 3.23 (新增) | `admin-tasks-active-days.test.ts` `me-tasks-complete.test.ts` (gating + bonus describe) `admin-task-completions-reset-day.test.ts` (11 its) `admin-task-completions-list.test.ts` (status=all) | (待补 e2e) | ⚠️ 100% unit / 0% e2e |
 
-| **业务规则侧覆盖率**: **7/7 = 100%** ✅ (含 Item #014 §3.15 Task Lifecycle)
+| **业务规则侧覆盖率**: **8/8** ✅ (含 §3.15 + §3.16; §3.16 仅 unit 覆盖, e2e 待补)
 **gap (已补)**: PRD 3.5 新增硬删 (v2.2) — 物理删 event/completion + `deleted_records` snapshot + audit log, 全部由 §3.15 e2e + 2 unit spec 覆盖。
 **gap (待补)**: PRD 3.5 硬删 FK 路径 — `task_completions.awarded_event_id → score_events.id` 的 FK 约束导致硬删 event 失败 (500)。新增 `ui-admin-hard-delete-fk.spec.ts` (3 case, 1 通过/2 RED) 等 PM 修。
 **gap (已补)**: PRD §3.15 Task Lifecycle (Item #014) — §3.21 + §3.5 交叉覆盖, 业务规则侧 +7/7。
@@ -43,8 +44,9 @@
 | **5.6** | PM 审批 | PM | `POST /api/admin/events/:id/approve\|reject\|revoke` | `ui-admin-pending.spec.ts` `smoke-admin-pending.spec.ts` `flow-deduct-revoke.spec.ts` |
 | **5.7** | 双账户兑换 | PM | `POST /api/admin/exchange` | `ui-admin-exchange.spec.ts` `smoke-admin-exchange-grant.spec.ts` `flow-exchange.spec.ts` |
 | **5.8** | 周额度发放 | PM | `POST /api/admin/weekly-grant` | `ui-admin-grant.spec.ts` `flow-weekly-payout.spec.ts` |
+| **5.9** | PM 清空当天打卡 / 恢复当天 (v2.x, 2026-10-20) | PM | `POST /api/admin/task-completions/reset-day` (`mode` 缺省=清空 delete-based; `mode:'restore'`=恢复) | 走 unit 覆盖 (`admin-task-completions-reset-day.test.ts`), **e2e 尚缺** |
 
-**交互流程侧覆盖率**: **8/8 = 100%** ✅ (每流程都有专属 e2e spec)
+**交互流程侧覆盖率**: **8/9 有专属 e2e** (5.9 仅 unit 覆盖, e2e 待补)
 
 ---
 
@@ -67,6 +69,8 @@
 | **3.13** | Child Recent Events | ✓ | — | — | `ui-child-events.spec.ts` `smoke-child-recent.spec.ts` |
 | **3.14** | Child Sleep Lockout (v2.1) | ✓ | ✓ | ✓ | `sleep-lockout.spec.ts` `ui-child-main.spec.ts` (含 cutoff 行为) |
 | **3.15** | Admin Hard Delete (v2.2) | ✓ | ✓ | ✓ | `ui-admin-hard-delete.spec.ts` (smoke + 2 happy) |
+| **3.23** | Admin 任务生效日 UI (7 checkbox + 每天/工作日/周末 3 预设, v2.x 2026-10-17) | — | — | — | (unit: `admin-tasks-active-days.test.ts` 17 its, API 层) e2e 待补 |
+| **3.24** | 小孩端非生效日灰置 + 打卡 toast 文案 (v2.x) | — | — | — | (unit: `me-tasks-complete.test.ts` gating) e2e 待补; toast 修正 `3b477c1` |
 | **3.16.1** | Child Shop Page (v3) | ✓ | ✓ | ✓ | `coin-system.spec.ts` F9-F10 + `coin-visual-regression.spec.ts` (5 visual) |
 | **3.16.2** | Child Balance Card 跳转 (v3) | ✓ | ✓ | — | `coin-system.spec.ts` F12 |
 | **3.16.3** | Child 兑换历史 (v3) | ✓ | ✓ | — | `coin-system.spec.ts` F11 |
@@ -138,9 +142,12 @@
 - `balance.test.ts` (余额计算)
 - `audit.test.ts` (审计写入)
 - `deleted-records.test.ts` (v2.2 snapshot 写入 + JSON 序列化)
+- `admin-tasks-active-days.test.ts` (v2.x, 17 its: POST 校验 + GET 解析回归 + PUT 更新)
+- `admin-task-completions-reset-day.test.ts` (v2.x, 11 its: 清空模式 8 + restore 模式 3)
+- `admin-task-completions-list.test.ts` (v2.x 增补: `status=all` 用例)
 - (Me-events-submit 等覆盖)
 
-**单元测试总数**: 26 文件 / ~147 用例 (v2.2 baseline + #014)
+**单元测试总数**: **56 个 spec 文件** (2026-10-21 实测 `ls tests/unit/*.test.ts | wc -l`), v2.2 baseline 26 + 后续累计 (coin/shop/running/mecha/active-days)
 
 ---
 

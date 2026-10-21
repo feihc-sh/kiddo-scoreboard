@@ -1836,7 +1836,7 @@ async function showDayDetailModal(dateStr) {
       <div class="calendar-completion-item">
         <span class="calendar-completion-icon">${c.task_icon || '⭐'}</span>
         <span class="calendar-completion-name">${escapeHtml(c.task_name)}</span>
-        <span class="calendar-completion-reward">+${c.token_reward} 🪙</span>
+        <span class="calendar-completion-reward">+1 🪙</span>
         <span class="calendar-completion-time">${time}</span>
       </div>
     `;
