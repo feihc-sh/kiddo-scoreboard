@@ -40,8 +40,11 @@
 │        Cloudflare D1 (kiddo-scoreboard-db, APAC)               │
 │        database_id: b584ebbf-bcb3-45d2-85e8-3ca2d5cb297c        │
 │                                                                │
-│  Tables (7): users / score_events / tasks / task_completions   │
-│              audit_log / auth_attempts / app_config             │
+│  Tables (14): users / score_events / tasks / task_completions  │
+│              audit_log / auth_attempts / app_config /           │
+│              deleted_records / shop_items / shop_redemptions /  │
+│              health_events / running 系列表 / families /         │
+│              questions / question_attempts                      │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -95,8 +98,10 @@ https://kiddo-scoreboard.pages.dev/
     │   └── /:id                      DELETE 删除任务
     │
     ├── task-completions/
-    │   ├── /                         GET    完成记录列表
-    │   └── /:id/revoke               POST   撤销完成 (软删)
+    │   ├── /                         GET    完成记录列表 (status: active|revoked|all, 服务端默认 active)
+    │   ├── /:id/revoke               POST   撤销完成 (软删)
+    │   └── /reset-day                POST   清空当天打卡 (delete-based, 需 confirm:true)
+    │                                        / mode:'restore' 恢复当天已撤销打卡
     │
     ├── audit-log/                    GET    审计 log
     ├── weekly-grant/                 POST   周额度发放
@@ -130,6 +135,7 @@ src/
 │   ├── week.ts                # Asia/Shanghai 时区 + ISO 周
 │   ├── balance.ts             # 余额计算 (运行期聚合, 不存视图)
 │   └── audit.ts               # 审计 log 写入 (status='revoked' 软删)
+│   └── coin.ts                # +1 打卡币 / -1 回退 / ±3 每日 bonus (isAllTasksCompleted 只算当天到期任务)
 │
 └── routes/                    # Hono 路由 (按 prefix 分目录)
     ├── public/                # /api/public/* (不需登录)
@@ -269,7 +275,7 @@ src/
 
 ---
 
-## 📦 数据库 Schema 速查 (7 表)
+## 📦 数据库 Schema 速查 (14 表, migration 0001-0020)
 
 | Migration | 表 | 用途 |
 |---|---|---|
@@ -281,6 +287,20 @@ src/
 | 0002 | `auth_attempts` | PM 登录失败计数 (5 次/15min 锁) |
 | 0003 | `app_config` | PM-tunable 设置 (k/v) |
 | 0004 | (无新表) | tasks 加 `cutoff_time` + `is_self_lockout` 字段 |
+| 0006 | `deleted_records` | 硬删除快照 (record_type / original_id / original_data JSON) |
+| 0007 | `score_events` (重建) | 加 `type='coins'` + `source_ref`; coin 系统上线 |
+| 0008 | `shop_items` / `shop_redemptions` | 商店 + 周限额兑换 |
+| 0008 | `health_events` | 健康打卡事件 |
+| 0009 | running 系列表 | 跑步地图 / 站点 / 记录 |
+| 0011 | `running_progress` | 跑步进度 |
+| 0012 | (无新表) | `awarded_minutes` → `awarded_coins` 重命名 |
+| 0014 | `summer_homework_subitems` | 暑假作业 6 子项 (2026-09-04 起任务已停用) |
+| 0015 | (无新表) | 商店项游戏时长 60 分钟档 |
+| 0016 | `families` | PM ↔ 孩子归属 + `users.openid` |
+| 0017 | `questions` | 4 选 1 题库 |
+| 0018 | `question_attempts` | 答题流水 |
+| 0019 | (无新表) | 一行 `UPDATE` 停用暑假作业 (`tasks.is_active=0`) |
+| 0020 | (无新表) | **`tasks.active_days TEXT`** — ISO 星期 JSON 数组 `[1..7]`, NULL = 每天; 配套 400 `TASK_NOT_ACTIVE_TODAY` + bonus 只算当天到期任务 |
 
 **核心设计原则**:
 - 余额 = 运行期 `SELECT SUM(delta_minutes) FROM score_events WHERE child_id=?` (不存视图, 避免数据不一致)

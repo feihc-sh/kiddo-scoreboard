@@ -1080,3 +1080,23 @@ git log --oneline -5  # 看最新进度
 - 仅替换 admin revoke 内部实现, 0 schema 改动, 0 新 endpoint, 对外契约 (HTTP 200/400/404/409) 保持
 - 旧 `running:N` source_ref record: cascade 走 skip (找不到 matching award), 行为跟 §1 spec 一致
 
+
+## ✅ v2.x — 任务生效日 + 清空/恢复当天打卡 + bonus 语义修正 (2026-10-20/21)
+
+**commits (已 merge main + deploy 生产)**: `37bda08` `c4f51d1` `e8962d9` `fe8e1a7` `58027df` `3b477c1` `de89a45` `4b8faff` `ea7e64e` + 文档回填 commit
+
+**改动**
+- `migrations/0020_task_active_days.sql` — `tasks.active_days TEXT` (ISO 星期 JSON 数组 `[1..7]`, NULL = 每天)
+- **服务端生效日拦截**: `POST /api/me/tasks/:id/complete` → 400 `TASK_NOT_ACTIVE_TODAY`, 先于 §3.12 cutoff 检查; helper `todayShanghaiISODay()` (`src/utils/week.ts`)
+- **Admin 配置**: 7 checkbox + 每天/工作日/周末 3 预设; create/update 归一化 (去重升序), 越界 → 400; **GET 解析 active_days 后返回** (`ea7e64e`, 修复编辑预填静默重置 bug)
+- **`POST /api/admin/task-completions/reset-day`** (PM only, 需 `confirm:true`):
+  - 默认 "清空当天打卡" = **delete-based**, 删除当天全部 completion (含已撤销), 每行快照进 `deleted_records`; 仅对原本 active 的行回退 -1 (双倍扣修复 `58027df`)
+  - `mode:'restore'` = 把当天 revoked 行改回 active + 每条补 +1; 存在 -3 反转则补回 +3 (幂等)
+- **`GET .../task-completions?status=all`**; admin 历史面板默认「全部」
+- **bonus "+3 全部完成" 改为只统计当天到期任务** (`c4f51d1`); 同步修正 progress 分母 + 小孩端 hint
+- **小孩端打卡 toast 修正** (`3b477c1`): `+1 🪙 到账` (+ bonus 追加 +3); 日历 day-detail 同步修正
+- **文档回填 (2026-10-21)**: 按 CC 审计 `DOC-GAP-AUDIT-2026-10-21.md` 补 PRD/ARCHITECTURE/FEATURE_MATRIX/INDEX/spec 状态 + 新建 POSTMORTEMS.md (5 个 bug 归档)
+
+**测试状态**: unit 593/593 绿 (新增 `admin-task-completions-reset-day` 11 its、`admin-tasks-active-days` 17 its、`admin-task-completions-list` status=all、me-tasks-complete bonus×active-days describe)。e2e **未覆盖** reset-day / active_days UI (已记 FEATURE_MATRIX gap)。
+
+**风险**: 🟡 e2e 缺口待补; 清空模式历史多扣核查 (见 POSTMORTEMS) 未做

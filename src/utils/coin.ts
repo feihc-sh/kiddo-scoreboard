@@ -85,7 +85,13 @@ export async function getCoinBalanceUpdatedAt(
  *  Local copy mirroring the helpers in routes/me/tasks.ts and
  *  routes/public/tasks.ts (same duplication convention: independent read
  *  paths, sharing would couple them for no win). null/empty = every day. */
-function parseActiveDays(raw: string | number[] | null | undefined): number[] | null {
+/** Parse a stored active_days value (JSON text from D1, or an already-parsed
+ *  array from unit mocks) into a validated number[] | null. null = every day.
+ *  Single source of truth — me/public routes and coin.ts all parse via this
+ *  semantic (kept as local copies until a shared util module is warranted). */
+export function parseActiveDays(
+  raw: string | number[] | null | undefined,
+): number[] | null {
   if (raw == null || raw === '') return null;
   if (Array.isArray(raw)) {
     return raw.filter((n) => Number.isInteger(n) && n >= 1 && n <= 7) as number[];

@@ -32,6 +32,8 @@
 - **[`docs/coin-system-test-plan.md`](./coin-system-test-plan.md)** — 金币系统测试计划 (F1-F12 + TC-X1-X8 + visual regression)
 - **[`docs/coin-system-m2-test-regressions.md`](./coin-system-m2-test-regressions.md)** — M2 实施 4 个 fail 修复 + 2 clarification
 - **[`docs/coin-shop-requirements.md`](./coin-shop-requirements.md)** — M3-M6 实施需求 (feihao 拍板 + 冲突清单, 本 PR)
+- **[`docs/task-active-days-spec.md`](./task-active-days-spec.md)** — **✅ 2026-10-20 已上线** 任务生效日 (active_days) spec + 实施记录 (7 天自由勾选 + 每天/工作日/周末 3 预设, 服务端 400 `TASK_NOT_ACTIVE_TODAY`)
+- **[`docs/DOC-GAP-AUDIT-2026-10-21.md`](./DOC-GAP-AUDIT-2026-10-21.md)** — CC 文档差距审计 (900 行, 42 条缺口 + 修复建议, 本轮文档回填的依据)
 
 ### 📊 项目进度
 - **[`docs/PROGRESS.md`](./PROGRESS.md)** — 11 段 Module 进度跟踪, 每段 commit 状态、产出、遗留
@@ -65,7 +67,7 @@
 | 用途 | 路径 | 备注 |
 |---|---|---|
 | **Cloudflare 配置** (D1 binding / Pages settings) | [`../wrangler.toml`](../wrangler.toml) | name + pages_build_output_dir + compatibility_date 三行必备 |
-| **NPM scripts** | [`../package.json`](../package.json) | `dev` / `test` / `test:e2e` / `deploy` |
+| **NPM scripts** | [`../package.json`](../package.json) | `dev` / `test` / `test:unit` / `test:e2e` / `typecheck` / `pre-pr-check` / `deploy` (以 package.json 为准) |
 | **Vitest 配置** (unit) | [`../vitest.config.ts`](../vitest.config.ts) | |
 | **Playwright 配置** (e2e) | [`../playwright.config.ts`](../playwright.config.ts) | webServer 用 `wrangler pages dev` |
 | **TypeScript 配置** | [`../tsconfig.json`](../tsconfig.json) | |
@@ -82,9 +84,9 @@
 | `src/` | 后端 (Hono + D1) | `routes/admin/*` `routes/me/*` `routes/public/*` `auth/pin.ts` `db/*` |
 | `public/` | 前端静态资源 (admin + child SPA) | `app.js` `admin.js` `app.css` `index.html` `admin.html` |
 | `functions/` | Cloudflare Pages Functions | `api/[[path]].ts` (catch-all /api/*) + `health.ts` |
-| `migrations/` | D1 schema | `0001_initial.sql` `0002_auth.sql` `0003_app_config.sql` `0004_sleep_cutoff.sql` |
-| `tests/unit/` | Vitest 单元测试 | 22 spec, 192 pass |
-| `tests/e2e/` | Playwright e2e 测试 | 50+ spec, 182 pass |
+| `migrations/` | D1 schema | `0001_initial.sql` … **`0020_task_active_days.sql`** (共 20 个, 0005/0013 编号空缺) |
+| `tests/unit/` | Vitest 单元测试 | **56 个 spec**, 593 pass (2026-10-21 实测) |
+| `tests/e2e/` | Playwright e2e 测试 | **75 个 spec** (2026-10-21 实测) |
 | `scripts/` | 工具脚本 | `hash-pin.mjs` `kiddo-scoreboard-backup.sh` (备用) |
 | `remote-backup/` | **(本地, gitignored)** D1 每日 backup | `YYYY-MM-DD.sql` (30 天 retention) |
 | `seeds/` | 测试 seed data | dev/staging 用 |

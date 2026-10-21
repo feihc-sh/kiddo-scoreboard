@@ -133,6 +133,9 @@ PM 发放周额度时选择"60 元 → 零花钱账户"或"30+30"或"全发游�
 - **每个任务每天只能完成 1 次**（防刷分，简单方案）
 - 完成任务**自动 approved**（无需 PM 审批）
 - PM 可**撤销**任务完成（关联的 score_event 也会变 revoked）
+- **批量清空当天打卡**（v2.x, 2026-10-20）：`POST /api/admin/task-completions/reset-day`（PM only，必须 `confirm:true`）。默认"清空重来"模式**物理删除**当天全部 `task_completions`（含已撤销行），每行先快照进 `deleted_records` 再删。**金币回退只针对删除前 `status='active'` 的行写 -1**——已撤销行当初撤销时已回退过，再扣就是双倍扣（2026-10-21 修）。已发的 +3 bonus 反转 -3。
+- **批量恢复当天打卡**（v2.x, 2026-10-20）：同一端点传 `mode:'restore'`，把当天 `status='revoked'` 的行改回 `active` 并每条补 +1 🪙；若存在对应的 -3 反转行则再补 +3（对 `restore:bonus:` source_ref 幂等）。注意：清空模式已把行删掉，因此**两个模式不是互逆的**，restore 只对"逐条撤销"留下的 revoked 行有意义。
+- 当天没有任何记录时两个模式都是幂等 no-op（`reset_count: 0` / `restored_count: 0`），不写任何行。
 - 撤销后该任务**当天**可重新完成（按"每天 1 次"逻辑，今天还剩 0 次 → 撤销后回到 1 次可用）
 - 写 audit_log: `actor`, `action=task_complete`, `target_event_id`, `details={task_id, task_name}`
 - **§3.12 自锁任务（cutoff）**: 若 `is_self_lockout=1` 且当前 Asia/Shanghai 时间 > `cutoff_time` → server 返回 400 `CUTOFF_PASSED`，拒绝 /complete。Client 端额外在 UI 倒计时到 0 后禁用按钮（防卡顿造成的"刚跨线还能点"），但**以 server 校验为准**
@@ -204,6 +207,7 @@ PM 发放周额度时选择"60 元 → 零花钱账户"或"30+30"或"全发游�
 - **周额度跨周**: 余额不归零，跨周累积（除非 PM 手动清零）
 - **双账户透支**: 兑换时允许负数（如 30 元 → 60 分钟游戏，零花钱变 -30 元），由 PM 自行判断合理性
 - **任务重复完成**: 儿子尝试完成已今天的任务 → API 返回 409 冲突
+- **任务非生效日**（v2.x）: 今天的 ISO 星期不在 `active_days` 内 → API 返回 400 `TASK_NOT_ACTIVE_TODAY`（先于 cutoff 检查判定）
 
 #### 硬删 (Hard Delete)（v2.2 新增, Item #009）
 - **触发场景**: PM 软删（`status='revoked'`）某条打卡后, 记录仍在 `task_completions` UNIQUE 约束里, 孩子当天**不能**再打卡。需要把记录**完全抹掉**, 让孩子能重新打卡。
@@ -538,8 +542,9 @@ WHERE user_id = ? AND type = 'pocket_money' AND status = 'approved';
 | **POST** | **`/api/admin/tasks`** | PM | 新建任务 |
 | **PUT** | **`/api/admin/tasks/:id`** | PM | 编辑任务 |
 | **DELETE** | **`/api/admin/tasks/:id`** | PM | 删除/停用任务 |
-| **GET** | **`/api/admin/task-completions?date=&user_id=`** | PM | 任务完成记录 |
+| **GET** | **`/api/admin/task-completions?date=&user_id=&status=`** | PM | 任务完成记录。`status` ∈ `active`（服务端默认）/ `revoked` / `all` |
 | **POST** | **`/api/admin/task-completions/:id/revoke`** | PM | 撤销任务完成 |
+| **POST** | **`/api/admin/task-completions/reset-day`** | PM | 清空当天打卡（默认，delete-based）/ 恢复当天（`mode:'restore'`），需 `confirm:true` |
 | PATCH | `/api/admin/users/:id` | PM | 改儿子名（v2 已砍，保留但禁用）|
 | GET | `/api/admin/audit-log?limit=100&actor=` | PM | 审计 log |
 
@@ -653,6 +658,8 @@ WHERE user_id = ? AND type = 'pocket_money' AND status = 'approved';
    
    跨天后：ACTIVE 自动失效（"今天"窗口滚动）
 ```
+
+> **v2.x 补充**（2026-10-20）：批量操作引入了图中未画的两条边 —— `ACTIVE → (物理删除)`（reset-day 默认模式，走 `deleted_records` 快照）和 `REVOKED → ACTIVE`（reset-day `mode:'restore'`）。逐条 revoke 仍是唯一的软删边。
 
 ### 8.3 任务每日窗口（v2 新增）
 ```
@@ -910,7 +917,9 @@ CREATE INDEX idx_redemptions_user_redeemed ON shop_redemptions(user_id, redeemed
 | # | 项 | 验收标准 | Given/When/Then |
 |---|----|----------|-----------------|
 | F1 | 任务完成 +1 金币 | 完成任务后金币立即 +1，child UI 第 3 个 card 数字更新 | Given: 金币 = 10<br>When: 完成 1 个 active 任务<br>Then: 金币 = 11，1s 内 UI 更新 |
-| F2 | 全任务完成 +3 bonus | 当天所有 active 任务完成时，bonus +3 金币，弹出"🎉 全任务完成！"提示 3 秒 | Given: 5 个 active 任务，已完成 4 个<br>When: 完成第 5 个<br>Then: 金币 +3（含任务本身的 +1 = +4），弹提示 |
+| F2 | 全任务完成 +3 bonus | **当天所有"到期"任务完成时**（到期 = `is_active=1` 且 `active_days` 为空/含今天），bonus +3 金币，弹出"🎉 全任务完成！"提示 3 秒。**非当天的生效日任务不参与判定**（v2.x，2026-10-20 修正） | Given: 3 个到期任务（另有 1 个 `active_days=[1,2,3,4,5]` 的任务，今天=周六），已完成 2 个<br>When: 完成第 3 个<br>Then: 金币 +3（含任务本身的 +1 = +4），弹提示 |
+| F18 | 任务生效日拦截（active_days, v2.x） | 今天的 ISO 星期（Asia/Shanghai, Mon=1..Sun=7）不在 `tasks.active_days` 内 → `POST /api/me/tasks/:id/complete` 返 400 `TASK_NOT_ACTIVE_TODAY`；该检查早于 §3.12 cutoff 检查 | Given: 任务 `active_days=[1,2,3,4,5]`<br>When: 周六打卡<br>Then: 400 `TASK_NOT_ACTIVE_TODAY`，不写任何行；小孩端按钮灰置并显示"生效日: 一·三·五" |
+| F19 | 清空当天打卡 / 恢复当天（v2.x） | `POST /api/admin/task-completions/reset-day` 需 `confirm:true`；默认模式**删除**当天全部 completion（含已撤销），仅对原本 `status='active'` 的行回退 -1 🪙，全量快照进 `deleted_records`，已发 +3 则反转 -3；`mode:'restore'` 把当天 revoked 行恢复成 active 并补 +1，若存在 -3 反转则补回 +3 | Given: 当天 3 条 completion（2 active + 1 revoked），已发 +3 bonus<br>When: PM 点"清空当天打卡"<br>Then: 3 行全删，写 2 条 -1（不是 3 条），1 条 -3 bonus 反转，`deleted_records` 3 条快照，audit 3 条 |
 | F3 | 撤销任务回收 -1 | PM 撤销任务，金币 -1，UI 立即更新 | Given: 金币 = 11<br>When: PM 撤销该任务<br>Then: 金币 = 10，audit_log 写 revoke:task#X |
 | F4 | 撤销任务回收 bonus -3 | 撤销触发过 bonus 的任务，bonus 也回收 -3 | Given: 当天已发过 +3 bonus<br>When: PM 撤销其中一个任务<br>Then: 金币 -1 (任务) -3 (bonus) = -4 |
 | F5 | 撤销后重做再发 bonus | 撤销 → 重新完成所有任务 → 再发一次 +3 bonus | Given: 撤销过 1 个任务<br>When: 重新完成所有任务<br>Then: 写入新 bonus +3 score_event，audit_log 标记 |
