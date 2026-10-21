@@ -456,3 +456,40 @@ describe('PUT /api/admin/tasks/:id — task-active-days update', () => {
     expect(body.active_days).toEqual([6, 7]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// GET /api/admin/tasks — active_days must come back PARSED (regression for
+// feihao 2026-10-21 bug found by CC doc audit E-9): the edit form prefill
+// checks Array.isArray; a raw JSON TEXT value made it fall back to "all 7
+// checked", so saving an edit would silently turn a weekend-only task into
+// an every-day task.
+// ---------------------------------------------------------------------------
+describe('GET /api/admin/tasks — active_days parsed for edit prefill', () => {
+  beforeEach(reset);
+
+  it('returns active_days as a number[] when stored as JSON text', async () => {
+    addPmUser();
+    // Simulate a D1 row exactly as stored: JSON TEXT.
+    addTask({ name: 'weekend-only', active_days: '[6,7]' as unknown as number[] | null });
+    const cookie = await pmCookie();
+    const r = await call('/api/admin/tasks', { headers: { cookie } });
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { tasks: Array<{ name: string; active_days: number[] | null }> };
+    const weekend = body.tasks.find((t) => t.name === 'weekend-only');
+    expect(weekend).toBeDefined();
+    expect(Array.isArray(weekend!.active_days)).toBe(true);
+    expect(weekend!.active_days).toEqual([6, 7]);
+  });
+
+  it('returns null for NULL rows (every day) and tolerates junk', async () => {
+    addPmUser();
+    addTask({ name: 'everyday', active_days: null });
+    addTask({ name: 'corrupt', active_days: 'not-json' as unknown as number[] | null });
+    const cookie = await pmCookie();
+    const r = await call('/api/admin/tasks', { headers: { cookie } });
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { tasks: Array<{ name: string; active_days: number[] | null }> };
+    expect(body.tasks.find((t) => t.name === 'everyday')!.active_days).toBeNull();
+    expect(body.tasks.find((t) => t.name === 'corrupt')!.active_days).toBeNull();
+  });
+});

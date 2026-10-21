@@ -9,6 +9,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { getPmUserId } from '../../middleware/requirePm.ts';
+import { parseActiveDays } from '../../utils/coin.ts';
 import type {
   AccountType,
   D1Database,
@@ -103,7 +104,16 @@ tasksRoute.get('/', async (c) => {
   const bound = includeInactive ? stmt.bind() : stmt.bind(1);
   const rows = await bound.all<Task>();
 
-  return c.json({ tasks: rows.results ?? [] });
+  // Bug fix (feihao 2026-10-21, found by CC doc audit E-9): active_days is
+  // stored as JSON TEXT — returning it raw made the admin edit form's
+  // Array.isArray prefill fail and silently fall back to "all 7 checked",
+  // so saving an edit would silently turn a weekend-only task into every-day.
+  // Parse to number[] | null here, same as me/ and public/ routes.
+  const tasks = (rows.results ?? []).map((t) => ({
+    ...t,
+    active_days: parseActiveDays(t.active_days as unknown as string | null),
+  }));
+  return c.json({ tasks });
 });
 
 // ---------------- POST / (create) ----------------
