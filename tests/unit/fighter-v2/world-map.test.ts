@@ -1,99 +1,133 @@
+// @vitest-environment happy-dom
+//
 // tests/unit/fighter-v2/world-map.test.ts
 //
-// Unit tests for Fighter V2 world-map.js - 5-node path map
-// Pure unit tests - testing isWorldUnlocked, getCurrentWorldIdx, allWorldsCleared functions
-// DOM rendering tests are in e2e/world-map.spec.ts
+// Unit tests for Fighter V2 world-map.js.
+//
+// HISTORY / API DRIFT (2026-07-20 Dragon's Keep UI overhaul):
+// This file used to test `isWorldUnlocked` / `getCurrentWorldIdx` / `allWorldsCleared`
+// imported from world-map.js. That module was rewritten into `renderMainMenu()`
+// (a Main Menu renderer), so all three helpers are gone and the 12 tests failed with
+// "X is not a function".
+//
+// - `isWorldUnlocked` still exists, but it lives in **stages.js:211** and is already
+//   covered by `stages.test.ts` ("isWorldUnlocked" describe block). Not duplicated here.
+// - `getCurrentWorldIdx` / `allWorldsCleared` are **dead code** — referenced nowhere in
+//   public/, src/, or tests/ (verified by grep 2026-10-22). P0-1 in
+//   docs/FIGHTER-V2-STATUS.md §J re-introduces world routing; if that work resurrects
+//   these helpers, they belong in stages.test.ts, not here.
+//
+// These tests now cover what world-map.js actually does: render the Main Menu.
+// DOM/routing assertions live in e2e/fighter-v2/battle.spec.ts.
 
-import { describe, it, expect } from 'vitest';
-import {
-  isWorldUnlocked,
-  getCurrentWorldIdx,
-  allWorldsCleared,
-} from '../../../public/fighter/v2/world-map.js';
-import { WORLDS } from '../../../public/fighter/v2/stages.js';
+import { describe, it, expect, vi } from 'vitest';
+import { renderMainMenu } from '../../../public/fighter/v2/world-map.js';
 
-describe('isWorldUnlocked', () => {
-  it('World 1 (idx 0) is always unlocked', () => {
-    expect(isWorldUnlocked(0, [])).toBe(true);
-    expect(isWorldUnlocked(0, [0])).toBe(true);
-    expect(isWorldUnlocked(0, [0, 1, 2])).toBe(true);
+/**
+ * Render the main menu into a fresh detached container.
+ * @param {object} [gameState]
+ * @param {object} [callbacks]
+ */
+function render(gameState = {}, callbacks = {}) {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  renderMainMenu(container, gameState, callbacks);
+  return container;
+}
+
+describe('renderMainMenu — structure', () => {
+  it('renders the menu wrapper and title', () => {
+    const container = render();
+    const wrapper = container.querySelector('.dk-menu-wrapper');
+    expect(wrapper).toBeTruthy();
+    expect(container.querySelector('.dk-menu-title')?.textContent).toBe(
+      "DRAGON'S KEEP QUEST"
+    );
   });
 
-  it('World 2 (idx 1) requires World 1 cleared', () => {
-    expect(isWorldUnlocked(1, [])).toBe(false);
-    expect(isWorldUnlocked(1, [0])).toBe(true);
-    expect(isWorldUnlocked(1, [0, 1])).toBe(true);
+  it('renders all 4 menu buttons in order', () => {
+    const container = render();
+    const buttons = [...container.querySelectorAll('.dk-menu-button')];
+    expect(buttons).toHaveLength(4);
+
+    const labels = buttons.map((b) => b.textContent);
+    expect(labels).toEqual(['START GAME', 'LEVELS', 'OPTIONS', 'QUIT']);
+
+    const variants = buttons.map((b) =>
+      [...b.classList].find((c) => c.startsWith('dk-menu-button--'))
+    );
+    expect(variants).toEqual([
+      'dk-menu-button--start',
+      'dk-menu-button--levels',
+      'dk-menu-button--options',
+      'dk-menu-button--quit',
+    ]);
   });
 
-  it('World 3 (idx 2) requires World 2 cleared', () => {
-    expect(isWorldUnlocked(2, [])).toBe(false);
-    expect(isWorldUnlocked(2, [0])).toBe(false);
-    expect(isWorldUnlocked(2, [0, 1])).toBe(true);
+  it('renders castle background + grass foreground sprites', () => {
+    const container = render();
+    const castle = container.querySelector('.dk-castle-bg');
+    const grass = container.querySelector('.dk-grass-bg');
+    expect(castle?.getAttribute('src')).toBe('/fighter/v2/castle.png');
+    expect(grass?.getAttribute('src')).toBe('/fighter/v2/grass.png');
   });
 
-  it('World 4 (idx 3) requires World 3 cleared', () => {
-    expect(isWorldUnlocked(3, [])).toBe(false);
-    expect(isWorldUnlocked(3, [0, 1])).toBe(false);
-    expect(isWorldUnlocked(3, [0, 1, 2])).toBe(true);
+  it('renders knight and dragon character sprites', () => {
+    const container = render();
+    const knight = container.querySelector('.dk-character--knight img');
+    const dragon = container.querySelector('.dk-character--dragon img');
+    expect(knight?.getAttribute('src')).toBe('/fighter/v2/knight.png');
+    expect(dragon?.getAttribute('src')).toBe('/fighter/v2/dragon.png');
   });
 
-  it('World 5 (idx 4) requires World 4 cleared', () => {
-    expect(isWorldUnlocked(4, [])).toBe(false);
-    expect(isWorldUnlocked(4, [0, 1, 2])).toBe(false);
-    expect(isWorldUnlocked(4, [0, 1, 2, 3])).toBe(true);
+  it('clears previous render instead of appending (idempotent re-render)', () => {
+    const container = render();
+    renderMainMenu(container, {}, {});
+    expect(container.querySelectorAll('.dk-menu-wrapper')).toHaveLength(1);
+    expect(container.querySelectorAll('.dk-menu-button')).toHaveLength(4);
   });
 });
 
-describe('getCurrentWorldIdx', () => {
-  // Note: This function is used for calculating "next" current world
-  // The actual "current" world is determined by session.worldIdx
-  // This function helps calculate what the next current world would be
-
-  it('returns 0 when no worlds cleared', () => {
-    expect(getCurrentWorldIdx([])).toBe(0);
+describe('renderMainMenu — callbacks', () => {
+  it('START GAME invokes onStartGame', () => {
+    const onStartGame = vi.fn();
+    const container = render({}, { onStartGame });
+    container.querySelector<HTMLButtonElement>('.dk-menu-button--start')!.click();
+    expect(onStartGame).toHaveBeenCalledTimes(1);
   });
 
-  it('returns 1 when World 1 cleared', () => {
-    expect(getCurrentWorldIdx([0])).toBe(1);
+  it('LEVELS invokes onLevels', () => {
+    const onLevels = vi.fn();
+    const container = render({}, { onLevels });
+    container.querySelector<HTMLButtonElement>('.dk-menu-button--levels')!.click();
+    expect(onLevels).toHaveBeenCalledTimes(1);
   });
 
-  it('returns 2 when Worlds 1-2 cleared', () => {
-    expect(getCurrentWorldIdx([0, 1])).toBe(2);
+  it('QUIT invokes onQuit', () => {
+    const onQuit = vi.fn();
+    const container = render({}, { onQuit });
+    container.querySelector<HTMLButtonElement>('.dk-menu-button--quit')!.click();
+    expect(onQuit).toHaveBeenCalledTimes(1);
   });
 
-  it('returns -1 when all worlds cleared', () => {
-    expect(getCurrentWorldIdx([0, 1, 2, 3, 4])).toBe(-1);
-  });
-});
+  it('OPTIONS invokes onOptions and shows the "coming soon" toast', () => {
+    const onOptions = vi.fn();
+    const container = render({}, { onOptions });
+    container.querySelector<HTMLButtonElement>('.dk-menu-button--options')!.click();
 
-describe('allWorldsCleared', () => {
-  it('returns false when no worlds cleared', () => {
-    expect(allWorldsCleared([])).toBe(false);
-  });
-
-  it('returns false when only some worlds cleared', () => {
-    expect(allWorldsCleared([0])).toBe(false);
-    expect(allWorldsCleared([0, 1])).toBe(false);
-    expect(allWorldsCleared([0, 1, 2])).toBe(false);
-    expect(allWorldsCleared([0, 1, 2, 3])).toBe(false);
+    expect(onOptions).toHaveBeenCalledTimes(1);
+    const toast = document.querySelector('.dk-toast');
+    expect(toast?.textContent).toBe('即将开放');
   });
 
-  it('returns true when all 5 worlds cleared', () => {
-    expect(allWorldsCleared([0, 1, 2, 3, 4])).toBe(true);
-  });
-});
+  it('does not throw when callbacks are omitted', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    expect(() => renderMainMenu(container, {}, {})).not.toThrow();
 
-describe('WORLDS consistency', () => {
-  it('WORLDS has exactly 5 entries', () => {
-    expect(WORLDS).toHaveLength(5);
-  });
-
-  it('each world has correct unlock dependency', () => {
-    // World 0: no unlock needed
-    expect(WORLDS[0].unlockedBy).toBeNull();
-    // World 1-4: each needs previous world cleared
-    for (let i = 1; i < 5; i++) {
-      expect(WORLDS[i].unlockedBy).toBe(i - 1);
-    }
+    renderMainMenu(container, {}, {});
+    container.querySelector<HTMLButtonElement>('.dk-menu-button--start')!.click();
+    container.querySelector<HTMLButtonElement>('.dk-menu-button--quit')!.click();
+    container.querySelector<HTMLButtonElement>('.dk-menu-button--levels')!.click();
   });
 });

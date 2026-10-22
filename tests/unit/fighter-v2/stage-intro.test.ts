@@ -1,8 +1,17 @@
+// @vitest-environment happy-dom
+//
 // tests/unit/fighter-v2/stage-intro.test.ts
 //
 // Unit tests for Fighter V2 stage-intro.js - stage roster + start button
-// Pure unit tests - testing helper functions
-// DOM rendering tests are in e2e/world-map.spec.ts
+//
+// HISTORY / IMPORT CRASH FIX (2026-10-22):
+// This file ran under the default `node` environment, but stage-intro.js reads
+// `window.location.hostname` at **import time** (IS_PRODUCTION, stage-intro.js:11),
+// so importing it threw "window is not defined" and the whole file collected
+// 0 tests. The fix is the environment, not the source: switching to happy-dom
+// gives it a window without touching production code.
+//
+// DOM rendering assertions live in e2e/fighter-v2/battle.spec.ts.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {

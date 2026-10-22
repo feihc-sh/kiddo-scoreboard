@@ -487,6 +487,11 @@ function updateMonsterStats(battleState) {
   } else {
     const hpFill = monsterSide.querySelector('.dk-stat-fill');
     if (hpFill) hpFill.style.width = `${(monster.hp / monster.maxHp) * 100}%`;
+    // PM fix (2026-10-22): the HP bar width was updated but the numeric readout was
+    // never refreshed, so the monster showed "30/30" for the whole fight while the
+    // bar visibly drained. Mirrors updateHeroStats(), which updates text + fill.
+    const hpValue = monsterSide.querySelector('.dk-monster-hp .dk-stat-value');
+    if (hpValue) hpValue.textContent = `${monster.hp}/${monster.maxHp}`;
   }
 }
 
