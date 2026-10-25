@@ -62,6 +62,12 @@
     > **踩坑记录**: ① **不可只信单次 e2e 输出** — HEAD baseline 首跑曾报 "16 passed" 但该文件只有 11 个 test (自相矛盾), 改用脚本化受控重跑才拿到可信的 `11 failed` (真实错因: `.world-node.current` 在 overhaul 后已不存在 → `null is not an object`)。before/after 对照必须两侧同命令同 rigor, 否则会得出反向结论; ② 长 inline 命令易撞 parser blocklist, 写成 `.sh` 再 `bash` 执行稳定; ③ 收尾 stage 明确只 `git add` 目标文件 — 工作区还有 20+ 个历史 untracked 噪声 (`scripts/*.mjs` / `*.png` / `docs/FIGHTER-V2-STATUS.md`), 不能顺手全扫进来。
     >
     > 📌 **Nightly 2026-10-21 (cron 补跑 deferred 测试)**: #013 早已 ✅ done 但 Stage 5 明写 "unit test + e2e deferred to future nightly" — 本次把这两块补齐: `dc29098` 单测 `tests/unit/coin-bag-modal-trigger.test.ts` (12 tests, 覆盖 showCoinBagModal + 串行队列 latch), `44fd592` e2e `tests/e2e/ui-coin-bag.spec.ts` (3 tests, SMOKE + HAPPY-1 双里程碑串行 + EDGE)。全套 vitest 773 pass / 15 pre-existing fail (未变)。**踩坑记录**: ① 本机 8787 被另一 worktree (`kiddo-scoreboard-task-days`) 的 workerd 占着, `reuseExistingServer: true` 会静默测错 app — 必须换端口验证 (CLAUDE.md 已记此 gotcha, 本次再次踩中); ② Playwright webkit 二进制未装, 首跑 3 个全挂在 `browserType.launch` 基础设施错误 (非断言失败), `npx playwright install webkit` 后 3/3 过, `--repeat-each=2` 6/6 稳。
+    > >
+    > 📌 **Nightly 2026-10-26 (cron 抢救孤儿工作 — 无 pending item, 回收 10-25 cron 被 cut 的 commit)**: 清单仍 0 ⏳ / 0 🔧 / 1 ⏸ (#007 hold), 按策略无 item 可跑。但 `git status` 发现 **4 个 tracked 文件有未提交改动 (mtime 2026-10-25 00:09–00:16)**, 而 HEAD 停在 2026-10-23 00:06 — 这是**上一轮 (10-25) cron 的 commit 步骤被 cut** 的产物。翻 `/tmp/ks-dispatch-src.sh` + `/tmp/ks-dispatch-e2e.sh` + `/tmp/cc-src.log` + `/tmp/cc-e2e.log` 还原出 10-25 那轮的真实内容: 10-25 cron 派了 **2 个并行 code-agent** (a) 修 `rawSubitems` block-scope 生产 bug + 补回归单测, (b) 重锚 stale e2e spec + (第三份) mecha equip 时长 drift guard — **两个 CC 都跑完了 (log 有 `type: result` + 完整 report), 只有最后 commit 那一步被 2h 预算砍掉**。
+    > **未丢弃, 而是独立验证后补 commit**: 先 stash 到 `/tmp/ks-orphan-1026/` + 逐文件 md5, 再用 `git show HEAD:<file>` 还原到 HEAD 跑真 baseline 做 before/after 对照 — **abandoned work ≠ verified work**。
+    > **before/after 实测 (同命令两侧对照)**: typecheck `src/` 错误 **2 → 0** (baseline 真实报 `TS2304: Cannot find name 'rawSubitems'` ×2); 聚焦 vitest **7 fail / 17 pass → 24/24 全过**; 全套 vitest **63 文件 / 811 tests 全绿** (10-23 收尾时是 800 pass / 3 fail, 本次 −3 红 + 11 新增, 0 新增失败); e2e summer-homework **4/4 过** (10-25 前 3 个红)。
+    > **三个 commit**: `c2e7f83` (生产 bug 修复: `rawSubitems` hoist 出 block scope → 暑假作业打卡从 HTTP 500 恢复 201 + 新增 `tests/unit/summer-homework-subitems.test.ts` 4 case) / `a1a524e` (stale spec 重锚到 Item #016 §2 语义 — submit 恒 enabled) / `cdc49e5` (mecha equip 时长 drift guard: 从 CSS/JS 源头派生, 不再硬编码 500ms)。
+    > **踩坑记录**: ① **这次是"CC 跑完了但 PM commit 被砍"** — 跟 10-23 那轮 (代码没写完) 不同, 所以第一件事是查 `/tmp/cc-*.log` 有没有 `type: result` 收尾段, 有就说明 CC 交付达标, 只差 commit, 直接验证+补 commit 即可 (别重派 CC); ② **孤儿工作不能只信 CC 的自述** — 必须 `git checkout HEAD -- <files>` 跑真 baseline, 让新写的回归测试在**未修复**的代码上真的红一次, 才算证明"这个测试确实抓得住这个 bug" (本次 7 fail → 24 pass 就是证据); ③ **`ui-task-mecha-frame.spec.ts` 有 1 个 pre-existing 失败** (corner brackets not visible), 在 HEAD 上同样 1 failed / 3 passed — 已确认与本次改动无关, 不背锅; ④ 长 inline 命令撞 parser blocklist (typecheck 那条被 hardline block), 写成 `.sh` 再 `bash` 执行稳定。
 
     ## Item #014 — Admin 暂停任务 (suspend / 恢复, 不删) ✅ done (2026-07-05, PR #45 merged)
 
@@ -986,6 +992,8 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
    > 当前 🔧 running = **0**
    >
    > 📌 **2026-10-23 cron**: 仍 0 条 pending (无 Item 可跑)。本轮改为抢救 10-22 cron 被 cut 掉的孤儿工作 (4 tracked 未提交改动) → `a4d07d8` + `cff48b4`, 全套 vitest 17 fail → 3 fail, fighter-v2 e2e 11 fail → 16 pass。**下次 cron 若仍 0 pending, 建议 PM 加新需求入池, 否则夜间空跑。**
+   >
+   > 📌 **2026-10-26 cron**: 仍 0 条 pending (无 Item 可跑)。本轮抢救 10-25 cron 被 cut 掉的孤儿工作 (4 tracked 未提交改动 + 1 新文件) → `c2e7f83` + `a1a524e` + `cdc49e5`。typecheck `src/` 错误 2 → 0 (修掉一个真实生产 bug: 暑假作业打卡 HTTP 500), 聚焦 vitest 7 fail → 24/24, 全套 vitest 63 文件 / 811 tests 全绿。**⚠️ 已连续 3 晚 (10-22 / 10-25 / 10-26) 出现"cron commit 步骤被 2h 预算砍掉" — 建议 PM 降低并行 CC 数量 (10-25 那轮一次派了 2-3 个 code-agent, 收尾 commit 挤不进预算)。**
 
 > #006 2026-06-20 PM-fix: status → ✅ done, NIGHTLY-TODO 归档 (从主清单移到此处, 跟 #001/#002/#005/#009 同档; 完整 commit 历史 `0389c85` / `569e10c` / `c5d8c57` / `5abe507` / `f2c82e6` / `a4eb27b` / `ade11a1` / `064622a`, e2e 12/12 + unit 313/313, Qual verified, Iron Rule #25 added)
 
