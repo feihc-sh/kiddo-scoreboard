@@ -1,9 +1,18 @@
 // tests/e2e/summer-homework-modal.spec.ts
 // Item #016 §1: 暑假作业 modal (临时, 开学后下线 ~2026-09)
-// 6 hardcoded items, all must be checked, submit reuses completeTask().
+// 6 hardcoded items; submit reuses completeTask().
 //
-// Happy 1: 点 task 弹 modal,6 items 渲染,全勾 enabled submit
-// Happy 2: 5/6 勾 submit 仍 disabled
+// SEMANTICS (Item #016 §2, 2026-07-12 feihao — commit 68ea916):
+//   The old "all 6 items must be checked" gate was REMOVED. The submit
+//   button is ALWAYS enabled — from the moment the modal opens, with 0
+//   boxes ticked, with 1, with 5, with 6, and after unchecking again.
+//   Rationale: the kid CONFIRMS what they did ("今天做了哪几项"), they
+//   do not certify 100% completion. The 6 checkbox states are still
+//   collected on submit and POSTed as { subitems: { <id>: 0|1 } } so the
+//   admin dot matrix can show which items were ticked vs. missed.
+//
+// Happy 1: 点 task 弹 modal,6 items 渲染,submit 立即 enabled (无 6 项 gate)
+// Happy 2: submit 恒 enabled — 0 勾 / 5 勾 / 6 勾 / 再取消 1 个,都 enabled
 // Happy 3: 全勾 → submit → task completed (task_completion row + balance update)
 // Edge:   cancel 按钮 关 modal,无 task_completion row
 //
@@ -29,7 +38,7 @@ test.beforeEach(() => {
   seedTask(HOMEWORK_TASK);
 });
 
-test('HAPPY 1: clicking the homework task opens modal with 6 items + submit disabled', async ({ page }) => {
+test('HAPPY 1: clicking the homework task opens modal with 6 items + submit enabled', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/');
   await page.waitForSelector('#task-shortcuts .task-btn', { state: 'visible' });
@@ -56,12 +65,14 @@ test('HAPPY 1: clicking the homework task opens modal with 6 items + submit disa
     await expect(item.locator('.summer-homework-item-hint')).toBeVisible();
   }
 
-  // Submit starts disabled
+  // Submit starts ENABLED — Item #016 §2 (2026-07-12) removed the
+  // "all 6 must be checked" gate, so the button is never gated on
+  // checkbox state.
   const submitBtn = page.locator('#summer-homework-submit');
-  await expect(submitBtn).toBeDisabled();
+  await expect(submitBtn).toBeEnabled();
 });
 
-test('HAPPY 2: submit stays disabled until ALL 6 items are checked', async ({ page }) => {
+test('HAPPY 2: submit stays enabled regardless of how many items are checked', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/');
   await page.waitForSelector('#task-shortcuts .task-btn', { state: 'visible' });
@@ -70,19 +81,23 @@ test('HAPPY 2: submit stays disabled until ALL 6 items are checked', async ({ pa
   const submitBtn = page.locator('#summer-homework-submit');
   const checkboxes = page.locator('#summer-homework-list input[type="checkbox"]');
 
-  // Check only 5 of 6 → still disabled
+  // 0 of 6 checked → still enabled (kid may confirm "did nothing today
+  // but still 打卡"; submit is never gated on checkbox state)
+  await expect(submitBtn).toBeEnabled();
+
+  // Check 5 of 6 → still enabled (the OLD behaviour disabled it here)
   for (let i = 0; i < 5; i++) {
     await checkboxes.nth(i).check();
   }
-  await expect(submitBtn).toBeDisabled();
+  await expect(submitBtn).toBeEnabled();
 
-  // Check the last → enabled
+  // Check the 6th → still enabled
   await checkboxes.nth(5).check();
   await expect(submitBtn).toBeEnabled();
 
-  // Uncheck one → disabled again
+  // Uncheck one → still enabled (OLD behaviour re-disabled it here)
   await checkboxes.nth(0).uncheck();
-  await expect(submitBtn).toBeDisabled();
+  await expect(submitBtn).toBeEnabled();
 });
 
 test('HAPPY 3: full check + submit completes the task (task_completion row + balance update)', async ({ page }) => {

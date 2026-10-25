@@ -1,6 +1,12 @@
 // tests/unit/summer-homework-modal.test.ts
 // Item #016 §1: 暑假作业 modal (临时, 开学后下线 ~2026-09).
-// 6 hardcoded items, all must be checked, submit reuses completeTask().
+// 6 hardcoded items; submit reuses completeTask().
+//
+// Item #016 §2 (2026-07-12 feihao) removed the "all 6 must be checked" gate:
+// the submit button is now always enabled. The 6 checkbox states are still
+// collected on submit and sent as { subitems: { id: 0|1 } } so the admin
+// dot matrix can show which items were actually done.
+//
 // @vitest-environment happy-dom
 
 import { describe, it, expect } from 'vitest';
@@ -122,7 +128,7 @@ describe('Item #016 §1: 暑假作业 modal scaffold', () => {
     expect(list.querySelectorAll('input[type="checkbox"]')).toHaveLength(SUMMER_HOMEWORK_ITEMS.length);
   });
 
-  it('submit button stays disabled until ALL 6 items are checked', () => {
+  it('submit button is enabled regardless of how many items are checked (Item #016 §2 removed the all-6 gate)', () => {
     document.body.innerHTML =
       '<div id="summer-homework-modal" class="modal-back" hidden>' +
         '<div class="modal">' +
@@ -140,25 +146,29 @@ describe('Item #016 §1: 暑假作业 modal scaffold', () => {
     const submitBtn = document.getElementById('summer-homework-submit') as HTMLButtonElement;
     const checkboxes = document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
 
-    // Initial: disabled
-    expect(submitBtn.disabled).toBe(true);
+    // Item #016 §2 (2026-07-12 feihao): the "all 6 must be checked" constraint
+    // was removed — the kid confirms what they did, not "100% completion".
+    // So the submit button is enabled from the start, and stays enabled no
+    // matter how many boxes are ticked. (Before §2 this button stayed
+    // disabled until the 6th checkbox was checked.)
+    expect(submitBtn.disabled).toBe(false);
 
-    // Check only 5 of 6 → still disabled
+    // Check 5 of 6 → still enabled
     for (let i = 0; i < 5; i++) {
       checkboxes[i].checked = true;
       checkboxes[i].dispatchEvent(new Event('change'));
     }
-    expect(submitBtn.disabled).toBe(true);
+    expect(submitBtn.disabled).toBe(false);
 
-    // Check the last one → enabled
+    // Check the last one → still enabled
     checkboxes[5].checked = true;
     checkboxes[5].dispatchEvent(new Event('change'));
     expect(submitBtn.disabled).toBe(false);
 
-    // Uncheck one → disabled again
+    // Uncheck one → still enabled (the gate is gone for good)
     checkboxes[0].checked = false;
     checkboxes[0].dispatchEvent(new Event('change'));
-    expect(submitBtn.disabled).toBe(true);
+    expect(submitBtn.disabled).toBe(false);
   });
 
   it('closeSummerHomeworkModal hides the modal and clears current task', () => {
