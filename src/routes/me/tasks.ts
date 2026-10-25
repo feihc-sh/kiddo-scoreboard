@@ -93,8 +93,10 @@ tasks.post('/:id/complete', async (c) => {
   //     BEFORE opening any batch so a malformed payload is rejected cleanly.
   //     Only persisted when task.name === SUMMER_HOMEWORK_TASK_NAME.
   let subitemsChecked: string[] = []; // subitem_id list with checked=1
+  // Hoisted to outer scope so the subitems batch below (L230) can reference
+  // it after this if-block exits.
+  let rawSubitems: Record<string, unknown> | null = null;
   if (task.name === SUMMER_HOMEWORK_TASK_NAME) {
-    let rawSubitems: Record<string, unknown> | null = null;
     try {
       const body = await c.req.json().catch(() => null);
       if (body && typeof body === 'object' && body.subitems && typeof body.subitems === 'object') {
