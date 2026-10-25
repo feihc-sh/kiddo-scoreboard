@@ -2,14 +2,50 @@
 // Item #008 §3: Equip activation — fullscreen HUD cockpit + task completion animation.
 // @vitest-environment happy-dom
 // Verifies triggerEquipActivation() adds .mecha-equip-active to the .mecha-frame
-// wrapping a task button, and removes it after 500ms.
+// wrapping a task button, and removes it once the animation finishes.
 // Uses happy-dom to load the actual app.js source and fake timers.
+//
+// DRIFT GUARD: the animation duration is NOT hardcoded here. It is derived
+// from public/app.css (`animation: mecha-equip-activate <N>s`) and the JS
+// removal delay is derived from public/app.js. Commit 7301cfd bumped the
+// animation 0.5s → 0.8s but this file kept asserting 500ms, leaving 2 tests
+// red from 2026-07-04 until 2026-10-25. Deriving both sides means a future
+// duration bump can never silently re-break this spec.
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 const JS_PATH  = path.join(__dirname, '..', '..', 'public', 'app.js');
+const CSS_PATH = path.join(__dirname, '..', '..', 'public', 'app.css');
+
+/** Read the CSS animation duration for .mecha-equip-active, in ms. */
+function readCssAnimationMs(): number {
+  const css = fs.readFileSync(CSS_PATH, 'utf8');
+  const m = css.match(/animation:\s*mecha-equip-activate\s+([\d.]+)s/);
+  if (!m) {
+    throw new Error(
+      'public/app.css: could not find `animation: mecha-equip-activate <N>s` — ' +
+      'the CSS contract this spec depends on has changed.',
+    );
+  }
+  return Math.round(parseFloat(m[1]) * 1000);
+}
+
+/** Read the setTimeout removal delay inside triggerEquipActivation(), in ms. */
+function readJsRemovalDelayMs(): number {
+  const js = fs.readFileSync(JS_PATH, 'utf8');
+  const fn = js.match(/function triggerEquipActivation\([\s\S]*?\n\}/);
+  if (!fn) throw new Error('public/app.js: triggerEquipActivation() not found');
+  const m = fn[0].match(/setTimeout\([\s\S]*?,\s*(\d+)\s*\)/);
+  if (!m) {
+    throw new Error(
+      'public/app.js: could not find the setTimeout delay inside triggerEquipActivation() — ' +
+      'the removal contract this spec depends on has changed.',
+    );
+  }
+  return Number(m[1]);
+}
 
 /** Map-backed localStorage shim (happy-dom's localStorage is undefined in Node). */
 function makeMemoryStorage(): Storage {
@@ -92,19 +128,25 @@ describe('Item #008 §3: triggerEquipActivation', () => {
     expect(frame?.classList.contains('mecha-equip-active')).toBe(true);
   });
 
-  it('removes .mecha-equip-active after 500ms (happy-dom fake timers)', () => {
+  it('removes .mecha-equip-active once the animation duration elapses (happy-dom fake timers)', () => {
+    const removalMs = readJsRemovalDelayMs();
+    const cssMs = readCssAnimationMs();
+    // The JS removal delay must not fire before the CSS animation finishes,
+    // otherwise the class is stripped mid-animation and the pulse is cut off.
+    expect(removalMs).toBeGreaterThanOrEqual(cssMs);
+
     const { triggerEquipActivation } = loadApp('triggerEquipActivation');
     buildTaskSection(7);
 
     triggerEquipActivation(7);
     expect(document.querySelector('.mecha-frame')?.classList.contains('mecha-equip-active')).toBe(true);
 
-    // Advance timers by 499ms — class should still be present
-    vi.advanceTimersByTime(499);
+    // Advance to 1ms before the removal fires — class must still be present
+    vi.advanceTimersByTime(removalMs - 1);
     expect(document.querySelector('.mecha-frame')?.classList.contains('mecha-equip-active')).toBe(true);
 
-    // Advance past 500ms — class must be removed
-    vi.advanceTimersByTime(2); // now at 501ms total
+    // Advance past the removal delay — class must be removed
+    vi.advanceTimersByTime(2);
     expect(document.querySelector('.mecha-frame')?.classList.contains('mecha-equip-active')).toBe(false);
   });
 
@@ -168,7 +210,8 @@ describe('Item #008 §3: triggerEquipActivation', () => {
     expect(frame?.classList.contains('frame-locked')).toBe(false);
   });
 
-  it('can re-fire after previous animation completes (500ms gap)', () => {
+  it('can re-fire after previous animation completes (gap = animation duration)', () => {
+    const removalMs = readJsRemovalDelayMs();
     const { triggerEquipActivation } = loadApp('triggerEquipActivation');
     buildTaskSection(6);
 
@@ -177,14 +220,14 @@ describe('Item #008 §3: triggerEquipActivation', () => {
     expect(document.querySelector('.mecha-frame')?.classList.contains('mecha-equip-active')).toBe(true);
 
     // Wait for first animation to finish
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(removalMs);
     expect(document.querySelector('.mecha-frame')?.classList.contains('mecha-equip-active')).toBe(false);
 
     // Second completion — should fire again
     triggerEquipActivation(6);
     expect(document.querySelector('.mecha-frame')?.classList.contains('mecha-equip-active')).toBe(true);
 
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(removalMs);
     expect(document.querySelector('.mecha-frame')?.classList.contains('mecha-equip-active')).toBe(false);
   });
 });
