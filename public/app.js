@@ -1196,11 +1196,16 @@ function renderTasks() {
     // §3.12 sleep task (Item #002): self-lockout state fires before revoked/done/normal.
     const isSleepLocked = !done && !revoked && isActiveToday
       && t.is_self_lockout === 1 && t.cutoff_time;
+    // cutoff-pre-window-ux (2026-10-27): a self-lockout task looks like a
+    // NORMAL task before its cutoff — clickable, not greyed out — with the
+    // orange countdown as the only hint of the deadline. Only AFTER the
+    // cutoff has passed does it really lock (grey + disabled).
+    const cutoffDiffSec = isSleepLocked ? computeCutoffDiffSec(t.cutoff_time) : null;
+    const isPastCutoff = cutoffDiffSec !== null && cutoffDiffSec <= 0;
     const btn = document.createElement('button');
     btn.className = 'task-btn'
       + (done && !revoked ? ' task-btn-done' : '')
       + (revoked ? ' task-btn-revoked' : '')
-      + (isSleepLocked ? ' task-btn-locked' : '')
       + (notActiveToday ? ' task-btn-locked-out' : '');
     btn.dataset.taskId = t.id;
     if (revoked) {
@@ -1228,8 +1233,7 @@ function renderTasks() {
       `;
     } else if (isSleepLocked) {
       // Initial render: compute diff once. setInterval(updateCountdowns) keeps it fresh.
-      const diff = computeCutoffDiffSec(t.cutoff_time);
-      if (diff <= 0) {
+      if (isPastCutoff) {
         btn.classList.add('task-btn-locked-out');
         btn.disabled = true;
         btn.innerHTML = `
@@ -1238,11 +1242,12 @@ function renderTasks() {
           <span class="task-done-badge">已过打卡时间 ${t.cutoff_time} (明天再来)</span>
         `;
       } else {
+        // Pre-cutoff: normal-looking, clickable button + orange countdown.
         btn.innerHTML = `
           <span class="task-icon">${t.icon || DEFAULT_TASK_ICON}</span>
           <span class="task-name">${escapeHtml(t.name)}</span>
           <span class="task-cutoff-label">· 距离时限还剩</span>
-          <span class="task-countdown-text" data-cutoff="${t.cutoff_time}">${formatHHMMSS(diff)}</span>
+          <span class="task-countdown-text" data-cutoff="${t.cutoff_time}">${formatHHMMSS(cutoffDiffSec)}</span>
         `;
       }
     } else {
@@ -1279,7 +1284,9 @@ function renderTasks() {
     const frame = document.createElement('div');
     frame.className = 'mecha-frame mecha-glow'
       + (done && !revoked ? ' frame-done' : '')
-      + (revoked || isSleepLocked || notActiveToday ? ' frame-locked' : '');
+      // cutoff-pre-window-ux: only a PAST cutoff greys the frame; before the
+      // cutoff the frame keeps its normal (non-locked) mecha look.
+      + (revoked || isPastCutoff || notActiveToday ? ' frame-locked' : '');
     frame.innerHTML = '<span class="mecha-corner tl"></span>'
       + '<span class="mecha-corner tr"></span>'
       + '<span class="mecha-corner bl"></span>'
@@ -1345,18 +1352,26 @@ function updateCountdowns() {
     if (diff <= 0) {
       // Crossed cutoff: lock this button. Replace the countdown span with the
       // "已过打卡时间" badge so the layout matches a newly-rendered locked-out button.
-      const btn = el.closest('.task-btn-locked');
+      // cutoff-pre-window-ux (2026-10-27): before the cutoff the button has NO
+      // .task-btn-locked class (it looks like a normal task), so look the
+      // button up via .task-btn — not .task-btn-locked, which would never match.
+      const btn = el.closest('.task-btn');
       if (!btn) return;
       btn.classList.add('task-btn-locked-out');
       btn.disabled = true;
+      // Capture the frame BEFORE replaceWith — replacing the button detaches
+      // the countdown span, so closest('.mecha-frame') would miss afterwards.
+      const frame = el.closest('.mecha-frame');
       // Also detach the click handler: easiest is to clone-replace the node.
       const fresh = btn.cloneNode(true);
       fresh.innerHTML = `
         <span class="task-icon">${btn.querySelector('.task-icon')?.textContent || DEFAULT_TASK_ICON}</span>
         <span class="task-name">${btn.querySelector('.task-name')?.textContent || ''}</span>
-          <span class="task-done-badge">超出时限 · 明日再来</span>
+        <span class="task-done-badge">已过打卡时间 ${escapeHtml(cutoff)} (明天再来)</span>
       `;
       btn.replaceWith(fresh);
+      // Grey out the mecha frame too (matches the freshly-rendered past-cutoff look).
+      frame?.classList.add('frame-locked');
     } else {
       el.textContent = formatHHMMSS(diff);
     }

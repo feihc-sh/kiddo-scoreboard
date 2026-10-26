@@ -947,8 +947,11 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 ### 3.14 Child Sleep Lockout (self-lockout task type — Item #002)
 
 **Spec file:** `tests/e2e/ui-child-sleep-lockout.spec.ts` (new)
-**Page:** `/` → `#task-shortcuts` → task button with `.task-btn-locked` class for sleep task
-**Element IDs:** `[data-task-id="<sleep-task-id>"]`, `.task-btn-locked`, `#task-cutoff-countdown` (if separate span; otherwise inline in button text)
+**Page:** `/` → `#task-shortcuts` → task button for sleep task
+**Element IDs:** `[data-task-id="<sleep-task-id>"]`, `.task-countdown-text[data-cutoff]` (pre-cutoff), `.task-btn-locked-out` (post-cutoff), `#task-cutoff-countdown` (if separate span; otherwise inline in button text)
+
+> **cutoff-pre-window-ux (2026-10-27) 注记**: 截止**前**的自锁任务 = **普通任务外观**（不加 `.task-btn-locked` / `.frame-locked`，按钮 enabled 可点），仅保留橙色倒计时；截止**后**才是真锁定（`.task-btn-locked-out` + `disabled` + `.frame-locked`，文案 "已过打卡时间 HH:MM (明天再来)"）。以下涉及 `.task-btn-locked` 的断言按此语义调整。
+
 **Backend hooks:** `POST /api/me/tasks/:id/complete` returns 400 `CUTOFF_PASSED` when cutoff violated; `GET /api/public/tasks?active=true` returns `cutoff_time` + `is_self_lockout` per task
 **Time control:** tests must use `page.clock` / `Date.now` mocking or seed `tasks.cutoff_time` directly; server time is `nowShanghaiHHMM()` (UTC+8)
 
@@ -969,7 +972,7 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 #### Edge cases — cutoff enforcement
 - **Scenario: Clock crosses cutoff — button auto-locks (disabled)**
   - Steps: Seed sleep task; freeze page clock at `21:29:59`; assert button enabled. Advance clock 1 second to `21:30:00`.
-  - Assert: Button receives `.task-btn-locked` class within ≤ 2s; `disabled` attribute set; click is no-op.
+  - Assert: Button receives `.task-btn-locked-out` class within ≤ 2s; `disabled` attribute set; enclosing `.mecha-frame` receives `.frame-locked`; badge text "已过打卡时间 21:30 (明天再来)"; click is no-op.
 
 - **Scenario: After cutoff — child clicks button — server rejects 400 CUTOFF_PASSED**
   - Steps: Bypass client lockout (e.g., remove `disabled` via DevTools or send direct API call); clock at `21:30:01`; click.
@@ -985,7 +988,7 @@ For date-dependent scenarios (e.g., "task completed today → 409 on second clic
 
 - **Scenario: Cross-day reset — at 00:00 button re-activates**
   - Steps: Sleep task has been locked for "today"; freeze clock at `23:59:58` (locked). Advance 2 seconds to `00:00:00` of next day.
-  - Assert: Button becomes enabled (`.task-btn-locked` removed); countdown text resets to "距离 21:30 还剩 21:30:0x"; child can complete again (creates new `task_completion` for the new day).
+  - Assert: Button becomes enabled (`.task-btn-locked-out` removed) after re-render; countdown text resets to "距离 21:30 还剩 21:30:0x"; child can complete again (creates new `task_completion` for the new day).
 
 #### Edge cases — admin configuration
 - **Scenario: Admin creates sleep task — child UI sees countdown + lockout**
