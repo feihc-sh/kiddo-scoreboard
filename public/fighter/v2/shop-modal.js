@@ -116,20 +116,72 @@ function buildEquipmentSections(state) {
   return html;
 }
 
+/**
+ * Equipment type -> real asset path for the shop section header icon.
+ *
+ * TWO defects are fixed here:
+ *
+ * 1) The previous code derived the path from the type id
+ *    (`/fighter/v2/equip-${type}-bronze.png`). That path NEVER EXISTED in any
+ *    branch — `git log --all -- "public/fighter/v2/equip-*"` returns nothing —
+ *    so every shop section icon 404'd and silently degraded to the emoji
+ *    fallback. The shop has therefore NEVER shown a real icon.
+ *
+ * 2) A naive "point at the V2 sheets" fix is ALSO wrong, because the V2
+ *    sprite filenames do not match their content (documented in
+ *    public/assets/fighter/v2/ASSET-CATALOG.md, verified by vision inspection
+ *    2026-10-28):
+ *      - equip-sword-bronze.png  actually depicts a RED POTION bottle
+ *      - equip-potion-small.png  actually depicts a CHIBI HERO, not a potion
+ *      - equip-shield-wood.png   is the only V2 equip sheet that matches its
+ *                                 name (a round wooden shield)
+ *    Mapping type -> same-named V2 file would therefore put a potion under
+ *    "剑" and a boy under "药水".
+ *
+ *    The V1 asset set (public/assets/fighter/equip-{sword,shield,potion}.png)
+ *    IS correctly named, is a single clean icon per file, and is already
+ *    tracked in git. So the shop uses the V1 equip icons: correct semantics,
+ *    correct file-per-icon, no sprite-sheet cropping needed.
+ *
+ * The shop modal is light themed (`.battle-modal { background: white }`), and
+ * the V1 icons are white-background art, so they render cleanly.
+ *
+ * @type {Record<string, string>}
+ */
+export const EQUIP_ICON_SRC = {
+  sword: '/assets/fighter/equip-sword.png',
+  shield: '/assets/fighter/equip-shield.png',
+  potion: '/assets/fighter/equip-potion.png',
+};
+
+/**
+ * Resolve the icon URL for an equipment type.
+ * @param {string} type - 'sword' | 'shield' | 'potion'
+ * @returns {string|null} asset URL, or null when unknown (caller falls back to emoji)
+ */
+export function getEquipIconSrc(type) {
+  return EQUIP_ICON_SRC[type] ?? null;
+}
+
 function buildEquipmentTypeSection(type, equip, state) {
   const icon = equip.icon;
   const name = equip.name;
   const currentTier = state.equipment?.[type] || 'none';
+  const iconSrc = getEquipIconSrc(type);
 
   let rows = '';
   for (const tierDef of equip.tiers) {
     rows += buildTierRow(type, tierDef, currentTier, state);
   }
 
+  const iconImg = iconSrc
+    ? `<img class="shop-section__icon-img" src="${iconSrc}" alt="${name}" onerror="this.outerHTML='<span class=&quot;shop-section__icon&quot;>${icon}</span>'" />`
+    : `<span class="shop-section__icon">${icon}</span>`;
+
   return `
     <div class="shop-section" data-type="${type}">
       <div class="shop-section__header">
-        <img class="shop-section__icon-img" src="/fighter/v2/equip-${type}-bronze.png" alt="${name}" onerror="this.outerHTML='<span class=&quot;shop-section__icon&quot;>${icon}</span>'" />
+        ${iconImg}
         <span class="shop-section__name">${name}</span>
       </div>
       <div class="shop-section__rows">
