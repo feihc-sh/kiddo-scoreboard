@@ -43,6 +43,7 @@
     "@cloudflare/workers-types": "^4.20260604.1",
     "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
+    "happy-dom": "^20.14.6",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8",
     "wrangler": "^4.98.0"
