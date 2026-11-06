@@ -63,6 +63,29 @@
     >
     > 📌 **Nightly 2026-10-21 (cron 补跑 deferred 测试)**: #013 早已 ✅ done 但 Stage 5 明写 "unit test + e2e deferred to future nightly" — 本次把这两块补齐: `dc29098` 单测 `tests/unit/coin-bag-modal-trigger.test.ts` (12 tests, 覆盖 showCoinBagModal + 串行队列 latch), `44fd592` e2e `tests/e2e/ui-coin-bag.spec.ts` (3 tests, SMOKE + HAPPY-1 双里程碑串行 + EDGE)。全套 vitest 773 pass / 15 pre-existing fail (未变)。**踩坑记录**: ① 本机 8787 被另一 worktree (`kiddo-scoreboard-task-days`) 的 workerd 占着, `reuseExistingServer: true` 会静默测错 app — 必须换端口验证 (CLAUDE.md 已记此 gotcha, 本次再次踩中); ② Playwright webkit 二进制未装, 首跑 3 个全挂在 `browserType.launch` 基础设施错误 (非断言失败), `npx playwright install webkit` 后 3/3 过, `--repeat-each=2` 6/6 稳。
     > >
+
+> ⚠️ **视角说明**: 下面这段 11-05 记录是 11-05 cron 在 **main lineage** (`kiddo-scoreboard-shop-tunnel` worktree) 写的, 原文从 main 的视角叙述 —— 里面的"另一条 lineage"指的就是本分支 `feat/fighter-v2-rpg`, "main lineage"指的是另一条。
+>
+> 📌 **Nightly 2026-11-05 (cron — 抢救孤儿工作 + 发现同一依赖漏洞在另一条分支也存在)**: 清单仍 0 ⏳ / 0 🔧 / 1 ⏸ (#007 hold), 按策略无 item 可跑 (Item #017 在 `feature/017-parent-notify` 已 ✅ code done, 但**未 merged** — 等 feihao 配 Bark token + 拍板 deploy, cron 不擅自动)。本轮**不盲信上一轮 (11-04) 的结论**, 全部独立重跑验证后再补 commit。
+> **孤儿工作定位**: 11-04 cron 在 `kiddo-scoreboard-shop-tunnel` worktree (`fix/main-red-baseline-happy-dom` 分支, HEAD `5d59962`) 干完了活但 commit 被 2h 预算砍掉 — 工作区留 3 个 tracked 改动 + 1 个 untracked 新测试 (mtime 2026-11-04 00:12–00:14)。
+> **独立重跑 11-04 的 3 个结论, 全部复现** (abandoned work ≠ verified work):
+> ① **依赖漏洞属实**: HEAD 的 `package.json` 无 happy-dom; `package-lock.json` 的 `packages` map 无 `node_modules/happy-dom` 条目, 只有 `node_modules/vitest` 里的 **optional peerDependency** 声明 (`"happy-dom": "*"` + `peerDependenciesMeta.optional: true`) → `npm ci` 不会装它。**7 个**单测文件声明 `// @vitest-environment happy-dom`。
+> ② **3 个 main 红灯属实**: 用临时 worktree checkout 裸 `main` @ `4d61739` 实测 → 精确复现 **3 fail** (`mecha-equip-activation` ×2 硬编码 500ms + `summer-homework-modal` ×1 断言"6 项全勾才 enabled", 但 #016 §2 已改成 submit 恒 enabled); 同两个文件在本分支 cherry-pick 后 → **18/18 全过**。
+> ③ **修法有效, 且新守卫有牙**: mutation test (手动从 package.json 删掉 happy-dom) → 守卫测试立刻红 (`is declared in package.json devDependencies` FAIL), 恢复后绿。
+> **fresh-install 对照 (决定性证据, 本轮自跑)**: `npm ci` 从 HEAD lockfile → `node_modules/happy-dom` **ABSENT** + **8** 个 collection error (`Cannot find package 'happy-dom'`); 从修后 lockfile → **PRESENT** + 0 错误 + **57 文件 / 658 测试全绿**。首次跑出现 26 个 `mecha-challenge-shared` 报错, **实测是 harness artifact** (临时目录没拷 `packages/` 且 shared 没 build), 补拷 `packages/` 后 → 57/658 全绿, 0 新增失败。
+> **🔴 本轮新发现 — 同一个漏洞在另一条分支也存在, 而且更严重**: 另一条 lineage (`feat/fighter-v2-rpg`, 28 commits, 与 main 分叉自 `b0603a3`) **同样没声明 happy-dom**, 但它的 `package.json` 依赖树完全不同 (只有 `hono` 1 个 dep + 6 个 devDep, lock 176 条 vs main lineage 1426 条 (修后实测; 修前分别是 169 / 1420 条)) — 所以**不能直接 cherry-pick lockfile 改动, 必须在该分支上独立 `npm install --save-dev` 重算**。该分支 **12 个**单测文件依赖 happy-dom (比 main lineage 的 7 个更多), fresh `npm ci` 实测 → happy-dom **ABSENT** + **12** 个 collection error; 本地之所以"全绿 64 文件 / 820 测试"完全靠 `node_modules/` 里手工装的残留 20.10.3 撑着。
+> **修法 (两条分支各一个 commit)**: `e02150e` (main lineage `fix/main-red-baseline-happy-dom`: happy-dom 声明 + lockfile + 漂移守卫测试, 3 files +157) / `b9e88c6` (`feat/fighter-v2-rpg`: 同样 3 件套, 3 files +167, lockfile 纯增量 95 插入 0 删除)。两条分支的守卫测试内容一致 (同一个 `tests/unit/happy-dom-dep-drift.test.ts`)。
+> **两条分支修完后实测**: main lineage fresh install **57 文件 / 658 测试全绿** (0 错误); `feat/fighter-v2-rpg` local **65 文件 / 823 测试全绿** + **fresh install 同样 65/823 全绿, 0 错误** (修前 fresh 是 12 collection error)。
+> **踩坑记录**: ① **同一 bug 跨分支要各修各的, 不能想当然 cherry-pick** — 两条分支的 `package.json` 依赖树差异巨大 (1+6 vs 1426 lock 条目), lockfile 必须在本分支上重算; ② **"本地全绿"是假象, fresh install 才是真相** — 手工 `--no-save` 装的残留能骗过所有本地测试, 只有 `npm ci` 能现原形; ③ **临时目录验证要拷全 `packages/`** — 否则 `mecha-challenge-shared` 解析失败会被误判成"修复无效", 实测是 harness 漏拷导致的 artifact (26 failed → 0 failed); ④ **husky pre-commit 是真会跑的** — main lineage 提交时 `pre-pr-check.sh` 自动跑完 4 步 (vitest 57/658 + shared 22 + typecheck) 全 PASS 才放行, 不必手动复跑; ⑤ **文档两条分支已分叉** — `docs/NIGHTLY-TODO.md` 在 `feat/fighter-v2-rpg` 上有 10-21/10-23/10-26/10-29 四条 nightly 记录, 在 main lineage 上没有 (main 的 nightly 记录停在 07-14)。**两边的 nightly 记录不能互相覆盖**, PM 需手工 reconcile。
+> **⚠️ 建议 PM (已连续 8 晚 commit 步骤被砍: 10-22 / 10-25 / 10-26 / 10-28 / 10-30 / 11-01 / 11-04 / 11-05)**: ① **并行 CC 数量降到 1**, 或**把 commit 提到 stage 内** (每个 CC stage 自己 commit, PM 只做归档) — 连续 8 晚都是"代码写完了但 commit 没挤进 2h 预算"; ② **两条 lineage 需要一次 reconcile merge** (`feat/fighter-v2-rpg` vs `main` 已分叉 28/42 commits, 且 `docs/NIGHTLY-TODO.md` 各自都有对方没有的记录) — 本轮不擅自动 (cron 红灯规则: 不 merge / 不 push / 不 deploy)。
+
+> 📌 **Nightly 2026-11-06 (cron — 第 6 次救孤儿 + 修掉会让下轮 cron 重跑已完成 Item 的状态漂移)**: 清单仍 0 ⏳ / 0 🔧 / 1 ⏸ (#007 hold), 按策略无 item 可跑。`git status` 发现 **2 个 worktree 都有未提交的 `docs/NIGHTLY-TODO.md`** (primary mtime 11-05 00:13 / shop-tunnel 11-05 00:11) —— 11-04 + 11-05 两晚的 nightly 记录**又一次**被 2h 预算砍在 commit 这一步 (连续第 8 晚: 10-22 / 10-25 / 10-26 / 10-28 / 10-30 / 11-01 / 11-04 / 11-05)。本轮照旧**不盲信上一轮结论**, 独立重跑验证后再补 commit。
+> **本轮独立复现 11-05 的结论 (全部实测)**: ① 两条 lineage 修前 lockfile **都**没有 `node_modules/happy-dom` 条目, 只有 vitest 的 `peerDependencies: {"happy-dom":"*"}` + `peerDependenciesMeta.happy-dom.optional=true` → `npm ci` 必不装 (main lineage 修前 1420 条 lock → 修后 1426; fighter-v2-rpg 修前 169 → 修后 176); ② 修后**两条** lockfile 都有真条目 (happy-dom 20.14.6), 两条 `npm ls happy-dom` 都报 20.14.6 (不再靠 node_modules 里的手工残留); ③ 全套 vitest 实测 **fighter-v2-rpg 65 文件 / 823 测试全绿** + **main lineage 57 文件 / 658 测试全绿**, 0 失败; ④ **mutation test 复现守卫有牙**: 从 package.json 删掉 happy-dom → `is declared in package.json devDependencies` 立刻红 (1 failed | 2 passed), 恢复后 3/3 绿, 且 package.json md5 前后一致 (无残留); ⑤ 两条守卫测试文件内容**逐字节相同** (md5 `11d285936b709bcb2b29976be29d46e3`); ⑥ **全文 hash 校验**: 主线 58 个 / shop-tunnel 62 个 hash-like token **全部**能在 git 里解析成 commit (0 个悬空引用); ⑦ `stash@{0}` (2026-06 的 sprint-modal 老 stash) **仍完好保留**, 11-04 记的"未丢失"属实; ⑧ 11-04 记的 3 个 main 红灯**属实** (`4d61739` 的 `public/app.js` 里 equip 时长确实是 800ms 而 spec 硬编码 500ms; `summer-homework-modal` spec 确实断言"6 项全勾才 enabled" 而 `68ea916` 已改成 submit 恒 enabled)。
+> **🔴 本轮新发现 (4 个真缺陷, 已修)**: ① **YAML frontmatter 垃圾被注入 markdown 正文** — 11-05 那轮把 `--- / name: nightly-2026-11-05-note / description: "..." / ---` 一整块 YAML 头塞进了 NIGHTLY-TODO.md 正文中间 (两条 lineage 都中招), 渲染成水平线 + 散文本, 已删除; ② **11-05 记录里 4 个数字错** — "27 commits" 实为 **28** (`b0603a3..feat/fighter-v2-rpg`), "lockfile 纯增量 96 插入" 实为 **95 插入 0 删除** (`git show --numstat b9e88c6`), "lock 169 条" 是**修前**值 (修后 176), "已连续 5 晚" 实际列了 **8** 晚 — 全部已改; ③ **#011 section header 还写着 `🔧 running`** (body Status 早就是 ✅ done, PR #42 merged 2026-06-21), 而 **#013 Stage 1-4 / #006 Stage 1-3 / #008 Stage 1-4 / #012 Stage 1-4 的 checkbox 全是未勾**, 但它们的 commit 全部真实存在 —— **按 cron 策略"没有 ⏳ pending 就取 🔧 running 且还有未做 stage 的 item", 下轮 cron 会把 #011 / #013 / #006 / #008 / #012 当成待办重跑一遍**。这比红灯更贵 (白烧一晚预算 + 可能写坏已完成代码), 本轮统一修: header 改 ✅ done + 已完成 stage 的 checkbox 勾上 (每个勾都对应 git 里能解析的 commit hash); ④ **11-05 那段记录在 fighter-v2-rpg 分支上是"视角写反"的** — 它是在 main lineage (shop-tunnel worktree) 写的, 原文里的"另一条 lineage"指的正是本分支 `feat/fighter-v2-rpg`, 同步过来没改视角, 容易读反, 已加注说明。
+> **顺带修**: shop-tunnel 底部统计还写 "当前 ⏳ pending = 2 (#013, #016)" + "#013 Stage 2 claim 实际未 commit" —— 实际 #013 Stage 2 = `df42182` 已 commit、#016 = `37e3f02` 已 done, 改回 0 pending。
+> **commit**: 本轮 2 个 commit (两条 lineage 各一, 只含 `docs/NIGHTLY-TODO.md`)。**未做**: ① fresh `npm ci` 复现 (11-05 记的 7 / 8 / 12 个 collection error 数本轮**未**重跑 — 只验证了"lockfile 缺条目"这个根因 + 修后全绿, 不替上一轮背书那些具体数字); ② 两条 lineage 的 reconcile merge (仍需 PM 拍板, cron 不 merge / 不 push / 不 deploy); ③ #017 的 Bark token 配置 + deploy (等 feihao)。
+> **踩坑记录**: ① **孤儿工作照旧不能只信上一轮结论** — 11-05 那轮记的 4 个数字全部对不上实测, 但**核心结论 (依赖漏洞属实 + 修法有效 + 守卫有牙) 全部属实** → "结论对" 和 "细节准" 是两回事, 都得自己复跑; ② **cron 写长记录别带 YAML frontmatter** — 用 heredoc 拼 `---` + `name:` + `---` 会被 markdown 当成水平分隔线插进正文 (本轮 11-05 那块就是这么混进来的), 以后写 nightly 记录直接用 markdown 引用块 (`> `); ③ **"section header 状态"比 body Status 更危险** — cron 策略是按 header 挑 item 的, header 留着 🔧 running 就是给下轮 cron 埋雷, body 写对了不顶用; ④ **`git | python3` 会被 parser blocklist 拦** (tirith pipe_to_interpreter), 验证 lockfile 要先 `git show > /tmp/x.json` 再跑脚本; ⑤ **`execute_code` 在 cron 里被禁** (arbitrary local Python), 一律用 `write_file` + `python3 /tmp/xxx.py` 替代; ⑥ **数依赖文件要用 `grep -c "^// @vitest-environment happy-dom"`** — 用 `grep -rl` 会把守卫测试自己也算进去 (它注释里提到这个 pragma), 上一轮因此把 12 写成 13.
+
     > 📌 **Nightly 2026-10-29 (cron 抢救孤儿工作 — 无 pending item, 回收 10-28 cron 被 cut 的 commit + 修 node 环境)**: 清单仍 0 ⏳ / 0 🔧 / 1 ⏸ (#007 hold), 按策略无 item 可跑。`git status` 发现 **1 个 tracked 文件有未提交改动 + 1 个 untracked 新测试** (mtime 2026-10-28 00:21), 而 HEAD 停在 2026-10-26 00:05 — 这是**上一轮 (10-28) cron 的 commit 步骤被 2h 预算砍掉**的产物。内容 = Fighter V2 商店 section 图标修复 (原本 `src="/fighter/v2/equip-${type}-bronze.png"` 这个路径**在任何分支都不存在**, 3 个图标全部 404 → 静默降级成 emoji fallback, 商店从来没显示过真图标)。
     > **未丢弃, 而是独立验证后补 commit**: 先 stash 到 `/tmp/ks-orphan-1029/` + 逐文件 md5, 再用 `git show HEAD:<file>` 还原到 HEAD 跑真 baseline 做 before/after 对照 — **abandoned work ≠ verified work**。另外**没有盲信 10-28 的结论**: 那轮先按 V2 sprite sheet 文件名映射 (`equip-sword-bronze.png` 等), 本轮用 **vision 逐张核对**后发现 V2 文件名与内容不符 (`equip-sword-bronze.png` 其实是**红药水瓶**, `equip-potion-small.png` 其实是**Q版小人**, 只有 `equip-shield-wood.png` 名副其实), 按名映射会把药水摆到"剑"下面、把小人摆到"药水"下面 → 改用**命名正确的 V1 图标** (`public/assets/fighter/equip-{sword,shield,potion}.png`, 已在 git 里, 跟 `public/fighter/fighter.js:534` 既有写法一致), 并用 vision 复核这 3 张 V1 图确实分别是剑/盾/药水。
     > **before/after 实测 (同命令两侧对照)**: 聚焦 vitest **8 failed / 1 passed → 9/9 全过** (baseline 真报 `rendered icon src "/fighter/v2/equip-sword-bronze.png" -> public/fighter/v2/equip-sword-bronze.png does not exist on disk`); 全套 vitest **64 文件 / 820 tests 全绿** (10-26 收尾时是 812 pass / 8 fail, 本次 −8 红 + 8 新增, **0 新增失败**)。
@@ -100,20 +123,20 @@
     - ✅ **Q4 = 现状已 OK** — 暂停后 kid UI 完全隐藏 (复用 `is_active=0` 现成逻辑, me/tasks.ts L63/L254), 无需改
 
     **Action Plan** (A1+B1+Q3=是 假设下的 4 段草案, 等拍板后细化)**:
-    - [ ] **Stage 1 (≤15 min)**: API toggle endpoint + 单测
+    - [x] **Stage 1 (≤15 min)**: API toggle endpoint + 单测
       - `src/routes/admin/tasks.ts`: `POST /api/admin/tasks/:id/toggle` (requirePm guard 已生效), 写 audit_log
       - `tests/unit/admin-task-toggle.test.ts` (toggle 1↔0, audit 写对, 权限校验)
       - `git commit -m "feat(tasks): admin toggle is_active endpoint + audit log (Item #014 §1)"`
-    - [ ] **Stage 2 (≤15 min)**: admin UI toggle 按钮 + 视觉
+    - [x] **Stage 2 (≤15 min)**: admin UI toggle 按钮 + 视觉
       - `public/admin/admin.js` renderTasks 加 toggle switch + click handler + optimistic UI + toast
       - `public/admin/admin.css` `.pm-toggle` switch style (cyan glow, 跟 #008/#010/#011 风格统一)
       - 单测: `tests/unit/admin-toggle-ui.test.ts` (DOM 渲染 + click flow)
       - `git commit -m "feat(tasks): admin inline toggle switch (Item #014 §2)"`
-    - [ ] **Stage 3 (≤10 min)**: e2e + 视觉对齐
+    - [x] **Stage 3 (≤10 min)**: e2e + 视觉对齐
       - `tests/e2e/admin-task-toggle.spec.ts` (toggle on → 看 badge + audit log entry)
       - 视觉对齐: toggle switch 跟 #008 mecha HUD 同色板
       - `git commit -m "feat(tasks): toggle e2e + visual alignment (Item #014 §3)"`
-    - [ ] **Stage 4 (≤10 min)**: 文档 + regression
+    - [x] **Stage 4 (≤10 min)**: 文档 + regression
       - `docs/PRD.md` §X 新增 "Task Lifecycle (active/suspended)" 段
       - `docs/TEST_PLAN.md` §X 加 toggle 测试章节
       - `docs/FEATURE_MATRIX.md` 标记 ✅
@@ -153,28 +176,28 @@
     - ✅ **Q5 = 默认 (是)** — kid 端加 "我的申请" 区, 显示 ⏳ pending / ✅ approved / ❌ rejected 三种状态, 复用 `/api/coins/redemptions` section 模式
 
     **Action Plan** (A1+B1+Q3-5 默认假设下 5 段草案, 等拍板后细化)**:
-    - [ ] **Stage 1 (≤20 min)**: D1 migration + coin_requests 表 + helpers
+    - [x] **Stage 1 (≤20 min)**: D1 migration + coin_requests 表 + helpers
       - `migrations/XXXX_coin_requests.sql`: 新表 (`id` / `user_id` / `amount` / `reason` / `status` ('pending'|'approved'|'rejected') / `requested_at` / `reviewed_at` / `reviewed_by` / `review_note`)
       - `src/utils/coin-request.ts`: 新 helpers `createCoinRequest` / `listCoinRequests` / `reviewCoinRequest`
       - 单测: `tests/unit/coin-request-helpers.test.ts`
       - `git commit -m "feat(coin-request): D1 schema + helpers (Item #015 §1)"`
-    - [ ] **Stage 2 (≤20 min)**: kid API + admin API endpoints
+    - [x] **Stage 2 (≤20 min)**: kid API + admin API endpoints
       - `src/routes/me/coin-request.ts`: `POST /api/coins/request` (kid 提交) + `GET /api/coins/requests` (kid 历史)
       - `src/routes/admin/coin-requests.ts`: `GET /api/admin/coin-requests?status=pending` (admin 待审) + `POST /api/admin/coin-requests/:id/approve|reject`
       - 复用 requirePm guard (admin) + CHILD_USER_ID hardcoded (kid)
       - 单测: 4 endpoint 各一文件 (submit / list-kid / list-admin / approve-reject)
       - `git commit -m "feat(coin-request): kid submit/list + admin review endpoints (Item #015 §2)"`
-    - [ ] **Stage 3 (≤20 min)**: kid UI 申请 modal + 提交反馈 + 历史显示
+    - [x] **Stage 3 (≤20 min)**: kid UI 申请 modal + 提交反馈 + 历史显示
       - `public/index.html` + `public/app.js`: 主页加 "🪙 申请金币" 按钮 → modal (理由 textarea + 数量 input) → 提交 → toast
       - kid 端历史: 跟 `/api/coins/redemptions` 复用 section, 加 "申请记录" 子区
       - 单测 + e2e
       - `git commit -m "feat(coin-request): kid UI submit modal + history (Item #015 §3)"`
-    - [ ] **Stage 4 (≤15 min)**: admin UI "金币申请" section
+    - [x] **Stage 4 (≤15 min)**: admin UI "金币申请" section
       - `public/admin/admin.js`: 加 renderCoinRequests + loadPendingCoinRequests (跟 shop-fulfill 待发同款 pattern)
       - approve/reject 按钮 + confirm modal + audit 写
       - 单测 + e2e
       - `git commit -m "feat(coin-request): admin UI 待审 section + approve/reject (Item #015 §4)"`
-    - [ ] **Stage 5 (≤10 min)**: 文档 + regression
+    - [x] **Stage 5 (≤10 min)**: 文档 + regression
       - docs 4 件套 (PRD + TEST_PLAN + FEATURE_MATRIX + PROGRESS) 按 #008/#013 pattern 写
       - 跑全套 vitest + playwright
       - `git commit -m "feat(coin-request): docs + regression (Item #015 §5)"`
@@ -209,18 +232,18 @@
 - **跟 #011 联动**: 月历 grid 跟 running map grid 视觉呼应 (科技风统一)
 
 **Action Plan** (4 段, 每段 ≤ 15 min, anti-CC-Timeout):
-- [ ] **Stage 1 (≤15 min)**: HTML/CSS scaffold + 折叠按钮
+- [x] **Stage 1 (≤15 min)**: HTML/CSS scaffold + 折叠按钮
  - `public/index.html` — 加 `#calendar-toggle-btn` (📅 月历) + `#calendar-panel` (默认隐藏, 跟 #005 进度条同位置)
  - `public/app.js` — `toggleCalendar()` + localStorage 记忆折叠状态
  - `public/app.css` — 折叠面板 + 月历 grid 7×6 样式 (cyan glow)
  - 单测: `tests/unit/calendar-toggle.test.ts` (show/hide + localStorage 持久化)
  - `git commit -m "feat(calendar): fold toggle button + panel scaffold (Item #006 §1)"`
-- [ ] **Stage 2 (≤15 min)**: 月历渲染 + 数据加载 + 月份切换
+- [x] **Stage 2 (≤15 min)**: 月历渲染 + 数据加载 + 月份切换
  - `public/app.js` — `loadMonthCheckins(childId, year, month)` + `renderCalendar(year, month)` + ◀/▶ 切月事件
  - 单测: `tests/unit/calendar-render.test.ts` (month calculation + grid + 边界日期上下月填充)
  - E2E: `tests/e2e/ui-calendar-month-nav.spec.ts` (折叠 → 看到当月 → 点 ▶ 切下月 → 点 ◀ 切回)
  - `git commit -m "feat(calendar): month grid render + prev/next nav (Item #006 §2)"`
-- [ ] **Stage 3 (≤15 min)**: 颜色档位 + 格子点击 → 当天明细 modal
+- [x] **Stage 3 (≤15 min)**: 颜色档位 + 格子点击 → 当天明细 modal
  - `public/app.js` — `getColorTier(count)` 4 档 + 格子 click → `showDayDetailModal(date)` 复用 #010 sprint modal 同套
  - `public/app.css` — 4 档颜色 (gray / light-cyan / cyan / neon-cyan) + hover 浅光
  - 单测: `tests/unit/calendar-color.test.ts` (档位逻辑)
@@ -286,23 +309,23 @@
 - **可关闭性**: 视觉风格本身没有 toggle 按钮 (PM 拍板: 全屏总是开, 关闭可加 "🔧 经典模式" toggle 留二期)
 
 **Action Plan** (4 段, 每段 ≤ 15 min, anti-CC-Timeout):
-- [ ] **Stage 1 (≤15 min)**: 机甲 HUD CSS 组件库
+- [x] **Stage 1 (≤15 min)**: 机甲 HUD CSS 组件库
  - `public/app.css` — 新增 `.mecha-frame` + `.mecha-corner` + `.mecha-scanline` + `.mecha-glow` 样式 (角括号/扫描线/霓虹青光)
  - 单元测试: `tests/unit/mecha-frame.test.ts` (DOM 节点 + 类名断言)
  - `git commit -m "feat(mecha): HUD frame CSS components (Item #008 §1)"`
-- [ ] **Stage 2 (≤15 min)**: 任务按钮升级
+- [x] **Stage 2 (≤15 min)**: 任务按钮升级
  - `public/index.html` — task button 加 `.mecha-frame` 类 (角括号)
  - `public/app.css` — task button 适配 padding/border/font-size + hover 霓虹光
  - 单测: `tests/unit/task-mecha-button.test.ts`
  - E2E: `tests/e2e/ui-task-mecha-frame.spec.ts` (看到任务按钮是机甲 HUD 风)
  - `git commit -m "feat(mecha): apply HUD frame to task buttons (Item #008 §2)"`
-- [ ] **Stage 3 (≤15 min)**: 全屏 HUD 装备舱模式 + 任务完成展开动画
+- [x] **Stage 3 (≤15 min)**: 全屏 HUD 装备舱模式 + 任务完成展开动画
  - `public/app.css` — child UI 任务区背景 (扫描线 + 网格底 + 数据流) + 任务完成时按钮展开/折回动画 (CSS keyframes 0.5s)
  - `public/app.js` — `triggerEquipActivation(taskId)` 触发完成时装备激活动画
  - E2E: `tests/e2e/ui-equip-activation.spec.ts` (打卡 → 看到装备展开动画)
  - 视觉对齐: 跟 #005 进度条 + #010 sprint modal + #011 running map 同色板
  - `git commit -m "feat(mecha): fullscreen HUD cockpit + equip activation (Item #008 §3)"`
-- [ ] **Stage 4 (≤10 min)**: 文档 + 视觉对齐 + 性能 + regression
+- [x] **Stage 4 (≤10 min)**: 文档 + 视觉对齐 + 性能 + regression
  - 文档: PRD §3.x 新增 mecha frame 段 + TEST_PLAN §3.x + FEATURE_MATRIX + PROGRESS v2.x
  - 性能: 全屏扫描线 60fps (CSS transform/opacity), 移动端降级 (关扫描线保留角括号, `@media (max-width: 768px)`)
  - Regression: 跑全套 vitest + e2e, 确保 #005/#006/#010/#011 视觉不破
@@ -479,14 +502,14 @@ export async function writeRevokeAuditLog(db, recordId, details): void
 
 **Action Plan** (6 段, 每段 ≤ 20 min, anti-CC-Timeout):
 
-- [ ] **Stage 1 (≤20 min)**: Re-derive 基础设施 (无 UI 变化)
+- [x] **Stage 1 (≤20 min)**: Re-derive 基础设施 (无 UI 变化)
  - `src/utils/running-rederive.ts` (新文件, ~80 LoC): `recomputeCumKm()`, `rederiveRecordRevoke()`, `writeRevokeAuditLog()`
  - `src/routes/running/records.ts` 改: 1 record 写 N score_events (per-milestone, source_ref="running:N:point:P")
  - 单元测试: `tests/unit/running-rederive.test.ts` (~60 LoC, **8 个 case**: Case 1-4 + 边界: 撤不存在的 record, milestone 在边界 cum_km 上, 老 record 走旧逻辑, audit_log 写入)
  - **依赖**: Stage 2 之前完成 (改 source_ref 格式, 改 type=coins)
  - `git commit -m "feat(running): re-derive cascade on revoke (Item #013 §1)"`
 
-- [ ] **Stage 2 (≤15 min)**: prize.ts 改 coins ✅ (2026-06-24)
+- [x] **Stage 2 (≤15 min)**: prize.ts 改 coins ✅ (2026-06-24)
  - `src/routes/running/prize.ts` 改: `rollPrize()` → `rollCoinPrize()` (60% [1-2] / 30% [2-4] / 10% [5-10])
  - `src/routes/running/records.ts` 改: score_event `type='game_time'` → `type='coins'`, `change_value` 改 coins
  - 新 migration `0012_rename_awarded_coins.sql`: `ALTER TABLE running_records RENAME COLUMN awarded_minutes TO awarded_coins;`
@@ -494,7 +517,7 @@ export async function writeRevokeAuditLog(db, recordId, details): void
  - **🚫 不做**: 历史 record 迁移 (共存, 老 record 仍 type='game_time')
  - `git commit -m "feat(running): rollCoinPrize + score_event type=coins + migration 0012 (Item #013 §2)"`
 
-- [ ] **Stage 3 (≤20 min)**: SVG 地图 milestone 视觉
+- [x] **Stage 3 (≤20 min)**: SVG 地图 milestone 视觉
  - `public/app.js` 改: `renderRunningMap()` 节点 r 7→10, 加 🎯 emoji hint, unreached 0.5 opacity
  - `public/app.js` 改: title 加 progress badge "🏁 X / 10 Milestones · X.X / 95 km"
  - `public/app.css` 加: `.running-node.current` r=12 + cyan glow, `.running-node.unreached` opacity 0.5, `.running-node-icon` 9px Share Tech Mono
@@ -502,7 +525,7 @@ export async function writeRevokeAuditLog(db, recordId, details): void
  - E2E: `tests/e2e/ui-running-map-milestones.spec.ts` (~50 LoC, 验证 iPad 视口 10 节点 visible, badge 文案)
  - `git commit -m "feat(running): SVG map milestone visual emphasis (Item #013 §3)"`
 
-- [ ] **Stage 4 (≤20 min)**: #coin-bag-modal HTML + CSS 🔧 running → ✅ done 2026-07-10 (commit `97de86e`)
+- [x] **Stage 4 (≤20 min)**: #coin-bag-modal HTML + CSS 🔧 running → ✅ done 2026-07-10 (commit `97de86e`)
   - `public/index.html` 加: `#coin-bag-modal` (跟 sprint modal 同级别, 80% 屏, 包含 bag graphic + 10 coin slots + 大数字 + 按钮) ✓
   - `public/app.css` 加: `.coin-bag-*` 全部样式 + 4 阶段 @keyframes (drop / shake-open / 10 coin scatter / number-fade) + reduced-motion fallback + mobile 降级 ✓
   - 单元测试: `tests/unit/coin-bag-modal.test.ts` (6 case 全过, happy-dom, 读真实 public/index.html 验证 DOM 结构) ✓
@@ -802,7 +825,7 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 
 ---
 
-## Item #011 — 跑步小地图 + 积分礼包 (上海→苏州 主题) 🔧 running (manually restarted 2026-06-22, branch: feat/running-map-stage3-4, 等 Stage 3-4)
+## Item #011 — 跑步小地图 + 积分礼包 (上海→苏州 主题) ✅ done (PR #42 merged 2026-06-21, 4 stages all merged)
 
 **用户原话** (feihao 2026-06-17 飞书 DM):
 > "在 Nightly Todo 里再增加一个功能：记录跑步的每次公里数，并绘制一个小地图。每一次跑了多远的距离，会在一个虚拟的小地图上，从一个点移动到另一个点。当到达一个新的点位时（比如跑到10公里），可以开一个小礼包，礼包里有一个随机的积分"
@@ -840,24 +863,24 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 - **可关闭性**: 孩子可 "🏃" 跳过 (不打卡), 地图仍可看, 不会强制跑步
 
 **Action Plan** (4 段, 每段 ≤ 15 min, anti-CC-Timeout):
-- [ ] **Stage 1 (≤15 min)**: D1 schema + seed
+- [x] **Stage 1 (≤15 min)**: D1 schema + seed
  - `migrations/0007_running_tables.sql` (3 张表: running_maps / running_points / running_records)
  - `migrations/0008_seed_shanghai_suzhou.sql` (第 1 张地图 + 10 个点 seed)
  - 单元测试: schema migration 验证 (`tests/unit/running-schema.test.ts`)
  - `git commit -m "feat(running): add running_maps/points/records schema + shanghai→suzhou seed (Item #011 §1)"`
-- [ ] **Stage 2 (≤15 min)**: 跑步打卡 modal
+- [x] **Stage 2 (≤15 min)**: 跑步打卡 modal
  - `public/index.html` — 加 `#running-checkin-modal` (输入 km + 提交按钮)
  - `public/app.js` — `showRunningCheckinModal()` + `submitRunning(km)` + POST `/api/running/records` + 累计 km
  - `public/app.css` — modal 样式 (跟 #010 sprint modal 同套)
  - E2E: `tests/e2e/ui-running-checkin.spec.ts` (输入 3.5 km → 累计 +3.5)
  - `git commit -m "feat(running): child check-in modal + km submission (Item #011 §2)"`
-- [ ] **Stage 3 (≤15 min)**: SVG 地图渲染 + 小人移动 + 礼物 modal + 通关解锁
+- [x] **Stage 3 (≤15 min)**: SVG 地图渲染 + 小人移动 + 礼物 modal + 通关解锁
  - `public/index.html` — 加 `#running-map-section` (SVG 容器, 路径 + 节点 + 小人 + 起点/终点标志) + `#running-completion-modal` (通关大图, 80% 屏, 撒花动画)
  - `public/app.js` — `renderRunningMap(mapId)` + `animateAvatarToPoint(pointId)` (CSS transition 1.5s) + `showGiftModal(point, minutes)` + roll 概率积分 (D3) + `showCompletionModal(mapId)` (通关时弹) + POST `/api/running/maps/:id/complete` 触发 `UPDATE running_maps SET is_active=1 WHERE display_order = current + 1`
  - `public/app.css` — 科技风手绘样式 (cyan glow, 网格底, 曲线路径, 节点 pulse 动画) + 通关 modal 大图样式 (80% 屏, 居中卡片, 全屏撒花)
  - E2E: `tests/e2e/ui-running-map.spec.ts` (跑 8 次 3.5 km 累计 28 km, 验证小人 position + 通关礼物) + 通关测试 (mock cum_km=total_km, 验证大图 modal + 翻 is_active + 没有下一张时显示等待页)
  - `git commit -m "feat(running): SVG map + avatar animation + milestone gift + completion modal (Item #011 §3)"`
-- [ ] **Stage 4 (≤10 min)**: Admin 撤销 (含 km 回退) + 文档
+- [x] **Stage 4 (≤10 min)**: Admin 撤销 (含 km 回退) + 文档
  - `src/routes/admin/running.ts` — `GET /api/admin/running/records` 列表 + `POST /api/admin/running/records/:id/revoke` 撤销 (同时减回积分 + 回退累计 km, 写 audit_log)
  - `public/admin.html` + `public/admin.js` — running_records 列表 + "↩ 撤销" 按钮 + 二次确认弹窗 (防误操作)
  - 单元测试: revoke endpoint (积分减回 + km 累计回退 + 小人自动回退到对应 point) + 审计 log + 防误点逻辑
@@ -921,27 +944,27 @@ cron 2026-06-10 清理孤儿 in_progress 标记。
 
 **Action Plan** (4 段, 每段 ≤ 15 min):
 
-- [ ] **Stage 1 (≤20 min)**: API 改动 (calendar/checkins + 新增 calendar/tasks)
+- [x] **Stage 1 (≤20 min)**: API 改动 (calendar/checkins + 新增 calendar/tasks)
  - `src/routes/public/calendar.ts`: SQL 改返 task 详情 (JOIN tasks) + 加 `task_ids` filter param
  - `src/routes/public/calendar-tasks.ts` (新文件): `/api/public/calendar/tasks` endpoint, 返 is_active=1 tasks
  - `src/worker.ts`: 注册新 route
  - 单测: `tests/unit/calendar-tasks.test.ts` (task list filtering + sort)
  - 单测: `tests/unit/calendar-checkins-filter.test.ts` (task_ids param behavior)
  - `git commit -m "feat(calendar): API returns task details + task_ids filter + /calendar/tasks endpoint (Item #012 §1)"`
-- [ ] **Stage 2 (≤20 min)**: UI cell 渲染 icons (A3+ 逻辑)
+- [x] **Stage 2 (≤20 min)**: UI cell 渲染 icons (A3+ 逻辑)
  - `public/app.js`: `calendarState.checkins` 改结构; `renderCalendar` 改 cell 渲染 (icons 横排, 5+ → ⭐)
  - `public/app.css`: `.calendar-cell-icons` flex + `.calendar-cell-icon` 24px + `.calendar-cell-icon-overflow` (⭐) 居中
  - 单测: `tests/unit/calendar-render-icons.test.ts` (icon count, overflow logic)
  - e2e: `tests/e2e/ui-calendar-icons.spec.ts` (1 task → 1 icon, 3 tasks → 3 icons, 5 → ⭐)
  - `git commit -m "feat(calendar): cell renders task icons (5+ → ⭐ overflow) (Item #012 §2)"`
-- [ ] **Stage 3 (≤20 min)**: Tab bar (B2 + C1 + D2 整合)
+- [x] **Stage 3 (≤20 min)**: Tab bar (B2 + C1 + D2 整合)
  - `public/index.html`: 加 `#calendar-tabs` 容器 (默认 "全部" tab + dynamic task tabs from API)
  - `public/app.js`: `initCalendarTabs()` (load tasks from /calendar/tasks, render tabs, bind multi-select toggle), `calendarState.selectedTaskIds` localStorage 读写, tab 切换 → 重新调 `loadMonthCheckins(task_ids=...)`
  - `public/app.css`: `.calendar-tabs` 横向滚动 + `.calendar-tab` pill + `.calendar-tab--active` cyan glow
  - 单测: `tests/unit/calendar-tabs.test.ts` (localStorage toggle + loadMonthCheckins call with correct task_ids)
  - e2e: `tests/e2e/ui-calendar-tabs.spec.ts` (默认 "全部" / 多选 toggle / 切换后 cell 更新 / 持久化跨刷新)
  - `git commit -m "feat(calendar): multi-select tab bar (B2 + C1) + localStorage (D2) (Item #012 §3)"`
-- [ ] **Stage 4 (≤15 min)**: 文档 + 视觉对齐 + regression
+- [x] **Stage 4 (≤15 min)**: 文档 + 视觉对齐 + regression
  - `docs/PRD.md` §3.13 加 tab filter 段
  - `docs/TEST_PLAN.md` §3.17 加新 e2e + 单测
  - `docs/FEATURE_MATRIX.md` 标记 ✅
