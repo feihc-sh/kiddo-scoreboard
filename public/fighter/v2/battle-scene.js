@@ -22,6 +22,30 @@ let onActionCallback = null;
 /** @type {number | null} */
 let _turnTimer = null;
 
+/**
+ * Identity of the monster currently rendered in the arena.
+ *
+ * BUG FIXED 2026-11-08: updateMonsterStats() used to MUTATE the monster panel
+ * in place. When a monster died, the renderer replaced the monster info block
+ * with the "DEFEATED" placeholder — which contains no `.dk-monster-hp` element
+ * at all. endHeroTurn() then advanced `currentMonsterIdx` to the next alive
+ * monster, but updateMonsterStats() had nowhere to write it (it only mutated
+ * `.dk-monster-hp .dk-stat-value`, a node that no longer existed).
+ *
+ * Effect: monster #2 was never rendered, the VICTORY modal never appeared, and
+ * a stage with more than one monster was literally unfinishable.
+ *
+ * The renderer now tracks WHICH monster is on screen and REBUILDS the monster
+ * side whenever that monster changes. Plain damage ticks on the same monster
+ * still take the cheap mutation path.
+ *
+ * @type {number | null} - the monster index currently rendered, or null
+ */
+let _renderedMonsterIdx = null;
+
+/** @type {string | null} - id of the monster currently rendered (guards re-order) */
+let _renderedMonsterId = null;
+
 // ==================== Sprite Assets ====================
 // Per ASSET-CATALOG.md: sprite sheet is 1788x1968, 7 cols × 6 rows, each frame 256x328
 // Hero: hero-attack.png first frame (col 0, row 0) at sprite sheet position (0,0)
@@ -85,6 +109,14 @@ export function renderBattleScene(container, battleState, equipment, onAction) {
 
   const scene = buildBattleScene(battleState, equipment);
   battleContainer.appendChild(scene);
+
+  // The scene was just rebuilt from scratch, so the monster tracker must be
+  // re-synced to whatever monster is on screen. Otherwise the first
+  // updateBattleScene() call would think "the monster changed" and rebuild
+  // the panel a second time (harmless but wasteful), or worse, think "same
+  // monster" while the DOM actually shows a different one.
+  _renderedMonsterIdx = battleState.currentMonsterIdx;
+  _renderedMonsterId = battleState.monsters[battleState.currentMonsterIdx]?.id ?? null;
 
   attachBattleListeners(battleState);
 }
@@ -474,6 +506,24 @@ function updateMonsterStats(battleState) {
   if (!monsterSide) return;
 
   const monster = battleState.monsters[battleState.currentMonsterIdx];
+  const monsterId = monster?.id ?? null;
+
+  // BUG FIXED 2026-11-08: the monster on screen CHANGED (a monster died and
+  // endHeroTurn() advanced currentMonsterIdx, or the stage was rebuilt).
+  // The old code only mutated .dk-monster-hp inside the existing panel, but
+  // after a death that panel had been REPLACED by the "DEFEATED" placeholder,
+  // which has no .dk-monster-hp element — so the new monster was never
+  // rendered and the battle appeared to hang forever.
+  //
+  // Fix: rebuild the monster side from scratch when the monster identity
+  // changes. Same monster => keep the cheap mutation path (no DOM churn on
+  // every damage tick).
+  if (_renderedMonsterIdx !== battleState.currentMonsterIdx || _renderedMonsterId !== monsterId) {
+    rebuildMonsterSide(battleState, monsterSide);
+    _renderedMonsterIdx = battleState.currentMonsterIdx;
+    _renderedMonsterId = monsterId;
+    return;
+  }
 
   if (!monster || monster.hp <= 0) {
     const spriteEl = monsterSide.querySelector('.dk-character-sprite');
@@ -493,6 +543,55 @@ function updateMonsterStats(battleState) {
     const hpValue = monsterSide.querySelector('.dk-monster-hp .dk-stat-value');
     if (hpValue) hpValue.textContent = `${monster.hp}/${monster.maxHp}`;
   }
+}
+
+/**
+ * Rebuild the monster side of the arena for a (possibly new) monster.
+ *
+ * BUG FIXED 2026-11-08 — see updateMonsterStats(). The monster panel is
+ * re-created from the same markup the initial render uses, so a new monster
+ * always gets a full panel (sprite + name + HP readout + stats).
+ *
+ * @param {object} battleState
+ * @param {HTMLElement} monsterSide - the .dk-character-side--monster element
+ */
+function rebuildMonsterSide(battleState, monsterSide) {
+  const monster = battleState.monsters[battleState.currentMonsterIdx];
+
+  if (!monster || monster.hp <= 0) {
+    monsterSide.innerHTML = `
+      <div class="dk-character-sprite">
+        <div class="dk-defeated-placeholder">✨</div>
+      </div>
+      <div class="dk-character-info">
+        <span class="dk-character-name">DEFEATED</span>
+      </div>
+    `;
+    return;
+  }
+
+  const hpPercent = (monster.hp / monster.maxHp) * 100;
+  // Pick monster sprite based on name: worm sprite for 多义虫, fungus for 懒词菌
+  const monsterSprite = (monster.name && monster.name.includes('worm'))
+    ? MONSTER_WORM_IMG
+    : MONSTER_FUNGUS_IMG;
+
+  monsterSide.innerHTML = `
+    <div class="dk-character-sprite">${monsterSprite}</div>
+    <div class="dk-monster-info">
+      <span class="dk-character-name">${monster.name}</span>
+      <div class="dk-monster-hp">
+        <div class="dk-stat-track dk-monster-hp__track">
+          <div class="dk-stat-fill dk-stat-fill--hp" style="width: ${hpPercent}%"></div>
+        </div>
+        <span class="dk-stat-value">${monster.hp}/${monster.maxHp}</span>
+      </div>
+      <div class="dk-character-stats">
+        <span>ATK ${monster.atk}</span>
+        <span>DEF ${monster.def}</span>
+      </div>
+    </div>
+  `;
 }
 
 function updateActionButtons(battleState) {
