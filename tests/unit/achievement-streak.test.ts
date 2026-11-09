@@ -566,4 +566,47 @@ describe('streak engine — misc', () => {
     });
     expect(r.status).toBe(401);
   });
+
+  it('a task created mid-day IS due on its creation day', async () => {
+    // Regression: comparing created_at against the START of the day would
+    // exclude a task created at 10:00 from its own creation day.
+    addSeason(state, { id: 1, starts_on: '2026-09-01', is_current: 1 });
+    addStreakAchievement({ id: 4 });
+
+    // Created at 10:00 Shanghai on 2026-11-09 (= 02:00 UTC).
+    const createdAt10am = Math.floor(Date.UTC(2026, 10, 9, 2, 0, 0) / 1000);
+    const task = addTask(state, { id: 1, created_at: createdAt10am });
+
+    completeAllTasksOn('2026-11-09', [task.id]);
+    completeAllTasksOn('2026-11-10', [task.id]);
+
+    const cookie = await pmCookie();
+    const result = await evalStreak(cookie, '2026-11-10');
+
+    // Both days count — the task was due on the day it was created.
+    expect(result.streak).toBe(2);
+    expect(result.granted.map((g) => g.tier)).toEqual(['iron']);
+  });
+
+  it('a task created AFTER a past day does not break that past day', async () => {
+    // The task did not exist on 2026-11-08, so it cannot have been due
+    // that day — the child's streak must survive the task being added.
+    addSeason(state, { id: 1, starts_on: '2026-09-01', is_current: 1 });
+    addStreakAchievement({ id: 4 });
+
+    // Created at 10:00 Shanghai on 2026-11-09.
+    const createdAt10am = Math.floor(Date.UTC(2026, 10, 9, 2, 0, 0) / 1000);
+    const task = addTask(state, { id: 1, created_at: createdAt10am });
+
+    // Only 2026-11-08 and 2026-11-09 could have the task completed.
+    completeAllTasksOn('2026-11-08', [task.id]);
+    completeAllTasksOn('2026-11-09', [task.id]);
+    completeAllTasksOn('2026-11-10', [task.id]);
+
+    const cookie = await pmCookie();
+    const result = await evalStreak(cookie, '2026-11-10');
+
+    // 2026-11-08 does not count (task didn't exist), so the streak is 2.
+    expect(result.streak).toBe(2);
+  });
 });

@@ -38,6 +38,7 @@ import { parseActiveDays } from './coin.ts';
 import { shanghaiDateToUnix, todayShanghai } from './week.ts';
 
 const MS_PER_DAY = 86_400_000;
+const SEC_PER_DAY = 86_400;
 
 /** ISO weekday (Mon=1 .. Sun=7) for a 'YYYY-MM-DD' calendar date. */
 function isoDayOf(dateStr: string): number {
@@ -104,17 +105,22 @@ export async function isAllTasksCompletedOn(
  * A task is due on `date` when is_active = 1 AND (active_days is NULL/empty
  * → every day, OR the date's ISO weekday is in active_days).
  *
- * A task created AFTER `date` is not due on that date — the child could not
- * have completed a task that did not exist yet. Without this filter, adding
- * a new task mid-season would retroactively break the child's accumulated
- * streak on every past day.
+ * A task created AFTER that calendar day is not due on it — the child could
+ * not have completed a task that did not exist yet. Without this filter,
+ * adding a new task mid-season would retroactively break the child's
+ * accumulated streak on every past day.
+ *
+ * The comparison is against the END of the calendar day (not its start):
+ * a task created at 10:00 on Nov 5 WAS due on Nov 5, because the child
+ * still had the rest of that day to complete it.
  */
 export function dueTasksForDate(allTasks: DueTask[], date: string): DueTask[] {
   const weekday = isoDayOf(date);
-  // The date's start instant in Asia/Shanghai, for the created_at comparison.
-  const dateStartUnix = shanghaiDateToUnix(date);
+  // The date's end instant in Asia/Shanghai (exclusive), for the
+  // created_at comparison.
+  const dateEndUnix = shanghaiDateToUnix(date) + SEC_PER_DAY;
   return allTasks.filter((t) => {
-    if (t.created_at !== undefined && t.created_at > dateStartUnix) return false;
+    if (t.created_at !== undefined && t.created_at >= dateEndUnix) return false;
     const days = parseActiveDays(t.active_days);
     return days === null || days.length === 0 || days.includes(weekday);
   });
