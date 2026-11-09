@@ -605,6 +605,36 @@ body {
   letter-spacing: 0.08em;
   opacity: 0.85;
 }
+/* Hero nav links — 成就神殿 / 商店 入口 (spec §9: 打卡页 header 加「🏅 成就」链接) */
+.hero-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  position: relative;
+  z-index: 2;
+}
+.hero-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--cyan-border);
+  background: rgba(0, 245, 255, 0.06);
+  color: var(--cyan);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.hero-nav-link:hover {
+  background: rgba(0, 245, 255, 0.14);
+  border-color: var(--cyan);
+  color: #fff;
+}
 /* HUD scan line animation */
 .hero .scan-line {
   position: absolute;
