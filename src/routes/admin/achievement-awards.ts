@@ -357,7 +357,17 @@ function parseSeasonBody(raw: unknown): { ok: true; value: SeasonBody } | { ok: 
   };
 }
 
-achievementsAdmin.post('/seasons', async (c) => {
+// =============================================================
+// POST /api/admin/seasons — create a new season
+// =============================================================
+//
+// Lives in its own router so it can be mounted at '/seasons' without
+// colliding with the award router's paths (a shared router would route
+// POST /seasons to the grant handler first).
+
+export const seasonsAdmin = new Hono<{ Bindings: Env }>();
+
+seasonsAdmin.post('/', async (c) => {
   const pmUserId = await getPmUserId(c);
   if (pmUserId == null) return unauthorized(c);
 
@@ -431,7 +441,7 @@ achievementsAdmin.post('/seasons', async (c) => {
 // GET /api/admin/seasons — list seasons (used by the wall's archive tab)
 // =============================================================
 
-achievementsAdmin.get('/seasons', async (c) => {
+seasonsAdmin.get('/', async (c) => {
   const pmUserId = await getPmUserId(c);
   if (pmUserId == null) return unauthorized(c);
 
@@ -459,8 +469,13 @@ achievementsAdmin.get('/seasons', async (c) => {
 //
 // Debug endpoint (spec §8a). Runs the same engine the /complete hook runs,
 // so a PM can force a re-check after fixing data.
+//
+// Lives in its own router so it can be mounted at '/achievements' without
+// colliding with the award router's own paths.
 
-achievementsAdmin.post('/achievements/eval-streak', async (c) => {
+export const achievementsEvalStreak = new Hono<{ Bindings: Env }>();
+
+achievementsEvalStreak.post('/eval-streak', async (c) => {
   const pmUserId = await getPmUserId(c);
   if (pmUserId == null) return unauthorized(c);
 
