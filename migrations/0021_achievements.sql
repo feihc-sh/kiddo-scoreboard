@@ -10,12 +10,19 @@
 --   5. seed: S1 赛季 + 8 个奖项 (spec §2 表格顺序)
 --
 -- 兼容性: 0007 已用同样的 "CREATE new + INSERT SELECT + DROP + RENAME" 模式
---   重建过 score_events。本次重建 **保留所有 id 和数据** (0007 曾把
---   task_completions.awarded_event_id 全清成 NULL, 那是数据损失, 本次不做):
---   INSERT SELECT 显式带上 id 列, DROP/RENAME 用 PRAGMA foreign_keys = OFF
---   包裹 (治本 2026-06-11 INCIDENTS — 见 docs/INCIDENTS.md, 当年 4 次 deploy
---   翻车根因: task_completions.awarded_event_id → score_events.id 的 FK 约束
---   在 DROP TABLE 时被触发)。
+--   重建过 score_events。本次重建 **保留所有 id 和数据**, 并且 **保留指向
+--   score_events(id) 的外键引用** (0007 曾把 task_completions.awarded_event_id
+--   全清成 NULL 且没有恢复 —— 那是数据损失, 本次不做)。
+--
+--   ⚠️ 关键 (实测于 Miniflare/D1, 治本 INCIDENTS 2026-06-11 — 见 docs/INCIDENTS.md):
+--   D1 里 `PRAGMA foreign_keys = OFF` **不生效** —— DROP TABLE score_events 仍会
+--   触发 FK 违例 (SQLITE_CONSTRAINT_FOREIGNKEY, Code 7500)。实测三种写法:
+--     A) PRAGMA foreign_keys=OFF + DROP + RENAME        → 失败 (FK 违例)
+--     B) rename 旧表走 → 建新表 → 拷贝 → DROP 旧表        → 失败 (FK 违例)
+--     C) PRAGMA defer_foreign_keys=ON + DROP              → 失败 (FK 违例)
+--     D) 备份 FK 值 → 置 NULL → 重建 → 回填              → ✅ 成功
+--   所以本次采用 D: 先把引用值备份到临时表并置 NULL (让 DROP 能过), 重建后
+--   再按主键回填。因为 score_events 的 id 原样复制, 回填必然指向真实存在的行。
 --
 -- 应用顺序: wrangler d1 migrations apply 按文件名前缀顺序应用 0001..0021。
 
@@ -45,24 +52,168 @@ CREATE TABLE score_events_v2 (
 );
 
 -- 复制全部现有数据 (含历史 game_time / pocket_money / coins events, 无丢失)。
--- 显式列出 id, 保证主键不变 → task_completions.awarded_event_id /
--- shop_redemptions.coin_event_id / shop_redemptions.reward_event_id
--- 这三个指向 score_events(id) 的外键在重建后依然有效。
+-- 显式列出 id, 保证主键不变 → 回填 FK 时必然指向真实存在的 score_events 行。
 INSERT INTO score_events_v2
   SELECT id, user_id, type, change_value, reason, status, submitted_by, source,
          source_ref, reviewed_by, reviewed_at, week_of, created_at
   FROM score_events;
 
--- 替换旧表。
--- 关键: DROP 前后临时关闭外键检查。
---   * SQLite/D1 的 PRAGMA foreign_keys 仅当前 connection 有效, 同一 migration
---     文件内语句顺序执行, OFF/ON 包裹安全 (0007 已验证此模式可用)。
---   * 不像 0007 那样先 UPDATE task_completions SET awarded_event_id = NULL
---     —— 那样会丢历史关联; 本次靠 "id 原样复制" 保 FK 有效。
-PRAGMA foreign_keys = OFF;
+-- 备份所有指向 score_events(id) 的外键引用, 然后置 NULL。
+-- 涉及两张引用表 (见 migrations/0007 + 0008):
+--   task_completions.awarded_event_id  → score_events(id)
+--   shop_redemptions.coin_event_id     → score_events(id)   (NOT NULL)
+--   shop_redemptions.reward_event_id   → score_events(id)   (nullable)
+CREATE TABLE IF NOT EXISTS _score_events_fk_backup (
+  table_name      TEXT NOT NULL,
+  row_id          INTEGER NOT NULL,
+  col_name        TEXT NOT NULL,
+  referenced_id   INTEGER,
+  PRIMARY KEY (table_name, row_id, col_name)
+);
+
+INSERT OR IGNORE INTO _score_events_fk_backup (table_name, row_id, col_name, referenced_id)
+  SELECT 'task_completions', id, 'awarded_event_id', awarded_event_id
+  FROM task_completions WHERE awarded_event_id IS NOT NULL;
+
+INSERT OR IGNORE INTO _score_events_fk_backup (table_name, row_id, col_name, referenced_id)
+  SELECT 'shop_redemptions', id, 'coin_event_id', coin_event_id
+  FROM shop_redemptions WHERE coin_event_id IS NOT NULL;
+
+INSERT OR IGNORE INTO _score_events_fk_backup (table_name, row_id, col_name, referenced_id)
+  SELECT 'shop_redemptions', id, 'reward_event_id', reward_event_id
+  FROM shop_redemptions WHERE reward_event_id IS NOT NULL;
+
+-- 置 NULL, 让 DROP TABLE score_events 不再触发 FK 违例。
+-- task_completions.awarded_event_id 可空 → 直接置 NULL。
+UPDATE task_completions SET awarded_event_id = NULL WHERE awarded_event_id IS NOT NULL;
+
+-- ⚠️ shop_redemptions.coin_event_id 是 NOT NULL —— 不能置 NULL。
+--   先把这张表重建为 "迁移期间可空版" (结构与 0008 之后一致, 只放宽
+--   coin_event_id), 重建 score_events 之后再回填并把约束改回 NOT NULL。
+CREATE TABLE shop_redemptions_v2 (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL,
+  item_id         INTEGER NOT NULL,
+  week_of         TEXT NOT NULL,
+  cost_coins      INTEGER NOT NULL,
+  reward_value    INTEGER NOT NULL,
+  reward_type     TEXT NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'consumed'
+                    CHECK(status IN ('pending', 'approved', 'consumed', 'revoked')),
+  redeemed_at     INTEGER NOT NULL DEFAULT (unixepoch()),
+  revoked_at      INTEGER,
+  revoked_by      INTEGER,
+  fulfilled_at    INTEGER,
+  fulfilled_by    INTEGER,
+  coin_event_id   INTEGER,                        -- 迁移期间暂时可空, 迁移后回填并改回 NOT NULL
+  reward_event_id INTEGER,
+  created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+  FOREIGN KEY (user_id)         REFERENCES users(id),
+  FOREIGN KEY (item_id)         REFERENCES shop_items(id),
+  FOREIGN KEY (revoked_by)      REFERENCES users(id)
+);
+
+INSERT INTO shop_redemptions_v2
+  SELECT id, user_id, item_id, week_of, cost_coins, reward_value, reward_type, status,
+         redeemed_at, revoked_at, revoked_by, fulfilled_at, fulfilled_by,
+         NULL, NULL, created_at
+  FROM shop_redemptions;
+
+DROP TABLE shop_redemptions;
+ALTER TABLE shop_redemptions_v2 RENAME TO shop_redemptions;
+
+CREATE INDEX IF NOT EXISTS idx_redemptions_user_week
+  ON shop_redemptions(user_id, week_of);
+CREATE INDEX IF NOT EXISTS idx_redemptions_user_redeemed
+  ON shop_redemptions(user_id, redeemed_at DESC);
+
+-- 重建表 (id 原样保留)。
 DROP TABLE score_events;
 ALTER TABLE score_events_v2 RENAME TO score_events;
-PRAGMA foreign_keys = ON;
+
+-- 回填外键 (按备份表的主键精确还原, 0007 没做这一步 —— 那次是数据丢失)。
+UPDATE task_completions
+  SET awarded_event_id = (
+    SELECT b.referenced_id FROM _score_events_fk_backup b
+    WHERE b.table_name = 'task_completions'
+      AND b.row_id = task_completions.id
+      AND b.col_name = 'awarded_event_id'
+  )
+  WHERE id IN (
+    SELECT row_id FROM _score_events_fk_backup
+    WHERE table_name = 'task_completions' AND col_name = 'awarded_event_id'
+  );
+
+UPDATE shop_redemptions
+  SET coin_event_id = (
+    SELECT b.referenced_id FROM _score_events_fk_backup b
+    WHERE b.table_name = 'shop_redemptions'
+      AND b.row_id = shop_redemptions.id
+      AND b.col_name = 'coin_event_id'
+  )
+  WHERE id IN (
+    SELECT row_id FROM _score_events_fk_backup
+    WHERE table_name = 'shop_redemptions' AND col_name = 'coin_event_id'
+  );
+
+UPDATE shop_redemptions
+  SET reward_event_id = (
+    SELECT b.referenced_id FROM _score_events_fk_backup b
+    WHERE b.table_name = 'shop_redemptions'
+      AND b.row_id = shop_redemptions.id
+      AND b.col_name = 'reward_event_id'
+  )
+  WHERE id IN (
+    SELECT row_id FROM _score_events_fk_backup
+    WHERE table_name = 'shop_redemptions' AND col_name = 'reward_event_id'
+  );
+
+-- 清理临时备份表。
+DROP TABLE _score_events_fk_backup;
+
+-- 把 shop_redemptions 恢复成原来的约束 (coin_event_id NOT NULL)。
+-- SQLite 不能 ALTER 约束 → 再重建一次表, 这次用原结构。
+--
+-- 注意: 用 shop_redemptions_v3 而不是复用 v2 的名字, 因为 ALTER RENAME
+-- 会把表重命名为目标名, 所以这里直接 DROP + RENAME。
+CREATE TABLE shop_redemptions_v3 (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL,
+  item_id         INTEGER NOT NULL,
+  week_of         TEXT NOT NULL,
+  cost_coins      INTEGER NOT NULL,
+  reward_value    INTEGER NOT NULL,
+  reward_type     TEXT NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'consumed'
+                    CHECK(status IN ('pending', 'approved', 'consumed', 'revoked')),
+  redeemed_at     INTEGER NOT NULL DEFAULT (unixepoch()),
+  revoked_at      INTEGER,
+  revoked_by      INTEGER,
+  fulfilled_at    INTEGER,
+  fulfilled_by    INTEGER,
+  coin_event_id   INTEGER NOT NULL,        -- 恢复 NOT NULL (与 0008 一致)
+  reward_event_id INTEGER,
+  created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+  FOREIGN KEY (user_id)         REFERENCES users(id),
+  FOREIGN KEY (item_id)         REFERENCES shop_items(id),
+  FOREIGN KEY (coin_event_id)   REFERENCES score_events(id),
+  FOREIGN KEY (reward_event_id) REFERENCES score_events(id),
+  FOREIGN KEY (revoked_by)      REFERENCES users(id)
+);
+
+INSERT INTO shop_redemptions_v3
+  SELECT id, user_id, item_id, week_of, cost_coins, reward_value, reward_type, status,
+         redeemed_at, revoked_at, revoked_by, fulfilled_at, fulfilled_by,
+         coin_event_id, reward_event_id, created_at
+  FROM shop_redemptions;
+
+DROP TABLE shop_redemptions;
+ALTER TABLE shop_redemptions_v3 RENAME TO shop_redemptions;
+
+CREATE INDEX IF NOT EXISTS idx_redemptions_user_week
+  ON shop_redemptions(user_id, week_of);
+CREATE INDEX IF NOT EXISTS idx_redemptions_user_redeemed
+  ON shop_redemptions(user_id, redeemed_at DESC);
 
 -- 重建所有索引 (与 0007 重建后保持一致)
 CREATE INDEX IF NOT EXISTS idx_score_events_user_status ON score_events(user_id, status);
