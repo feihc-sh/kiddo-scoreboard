@@ -116,6 +116,9 @@ CREATE INDEX IF NOT EXISTS idx_achievements_active ON achievements(is_active, so
 -- tier: 'iron' | 'bronze' | 'silver' | 'gold' | 'king' | 'flat'
 -- status: 'active' | 'revoked' (撤销 = 状态翻转, spec §3)
 -- granted_by / revoked_by → users(id)
+--   granted_by 可为 NULL: streak 引擎自动发放时没有 PM 在场, 用 NULL 表示
+--   "非人工发放"。**不能**用 0 占位 —— 该列是 FK-enforced 列, 0 不存在
+--   于 users(id), 会直接触发 FK 违例 (D1 Code 7500)。
 -- 幂等口径: 同季同 achievement 同 tier 是否"发过" **含 revoked**
 --   (streak 引擎不自动补发被撤销的牌, spec §8a)
 CREATE TABLE IF NOT EXISTS achievement_awards (
@@ -125,7 +128,7 @@ CREATE TABLE IF NOT EXISTS achievement_awards (
   tier           TEXT NOT NULL CHECK(tier IN ('iron', 'bronze', 'silver', 'gold', 'king', 'flat')),
   season_id      INTEGER NOT NULL,
   status         TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'revoked')),
-  granted_by     INTEGER NOT NULL,
+  granted_by     INTEGER,
   granted_at     INTEGER NOT NULL DEFAULT (unixepoch()),
   revoked_at     INTEGER,
   revoked_by     INTEGER,
@@ -146,14 +149,22 @@ CREATE INDEX IF NOT EXISTS idx_awards_granted_at ON achievement_awards(granted_a
 -- =============================================================
 -- 5) seed: S1 赛季 + 8 个奖项 (spec §2 表格, sort_order 按表格顺序)
 -- =============================================================
+-- 用 INSERT OR IGNORE + 显式 id, 保证 migration **可重复应用**:
+--   * 单元测试用 Miniflare 反复 apply 全部 migration (每个 beforeEach 都
+--     drop 掉业务表再重放一遍) — 显式 id + OR IGNORE 让重放成为 no-op,
+--     不会撞 PRIMARY KEY。
+--   * 生产环境 wrangler d1 migrations apply 只跑一次, 行为一致。
+--   * 用显式 id 而非自增, 是为了让 spec §7a 的示例 id (season id=1,
+--     首个 achievement id=1) 与实际数据一致。
+--
 -- S1 赛季: 四年级上学期 (2026-09-01 起, 未归档)
-INSERT INTO seasons (id, name, starts_on, ends_on, is_current)
+INSERT OR IGNORE INTO seasons (id, name, starts_on, ends_on, is_current)
   VALUES (1, 'S1 · 四年级上学期', '2026-09-01', NULL, 1);
 
 -- 次数档 / 本数档: 1铁/3铜/5银/8金/10王者 (spec §2 E1)
 -- 天数档 (自律生活): 2/4/8/15/30 (spec §2, §11 open item 默认值)
 -- 平发奖 (创新家务): grant_mode='admin_flat', ladder_json = NULL
-INSERT INTO achievements (id, grp, name, description, grant_mode, ladder_json, is_active, sort_order) VALUES
+INSERT OR IGNORE INTO achievements (id, grp, name, description, grant_mode, ladder_json, is_active, sort_order) VALUES
   (1, 'study', '语文默写全对',       '获得一次语文默写全对',       'admin_tier',  '{"iron":1,"bronze":3,"silver":5,"gold":8,"king":10}',   1, 1),
   (2, 'study', '英语默写全对',       '获得一次英语默写全对',       'admin_tier',  '{"iron":1,"bronze":3,"silver":5,"gold":8,"king":10}',   1, 2),
   (3, 'study', '测评得优',           '在测评中取得优等成绩',       'admin_tier',  '{"iron":1,"bronze":3,"silver":5,"gold":8,"king":10}',   1, 3),

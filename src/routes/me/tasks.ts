@@ -54,6 +54,9 @@ import {
   buildRevokeTaskCoinSQL,
   buildRevokeBonusSQLIfPresent,
 } from '../../utils/coin.ts';
+// Achievement system (spec §8): the 自律生活 streak engine runs right
+// after the §4.5 bonus check, best-effort (never rolls back the main flow).
+import { evaluateStreakForUser } from '../../utils/streak.ts';
 
 const tasks = new Hono<{ Bindings: Env }>();
 
@@ -322,6 +325,33 @@ tasks.post('/:id/complete', async (c) => {
     bonusEventId = Number(bonusResults[0]?.meta?.last_row_id ?? 0);
   }
 
+  // 4.6. Achievement streak evaluation (spec §8/§8a). Hooked at the same
+  //      position as the §4.5 bonus check: after the primary batch has
+  //      committed, so the streak engine can read the completion row it
+  //      needs.
+  //
+  //      BEST-EFFORT by contract (spec §8): any failure here is logged and
+  //      swallowed — a broken achievement engine must never roll back or
+  //      fail the child's task completion. The engine is idempotent, so the
+  //      next /complete (or the manual eval-streak endpoint) can pick up
+  //      whatever was missed.
+  let streakEvaluation: {
+    streak: number;
+    granted: Array<{ achievement_name: string; tier: string }>;
+  } | null = null;
+  try {
+    const evaluation = await evaluateStreakForUser(db, CHILD_USER_ID);
+    streakEvaluation = {
+      streak: evaluation.streak,
+      granted: evaluation.granted.map((g) => ({
+        achievement_name: g.achievement_name,
+        tier: g.tier,
+      })),
+    };
+  } catch (e) {
+    console.error('achievement streak evaluation failed:', e);
+  }
+
   // 5. Recompute the balance so the client can update UI optimistically.
   const newBalance = await computeBalance(db, CHILD_USER_ID);
 
@@ -338,6 +368,9 @@ tasks.post('/:id/complete', async (c) => {
       // and Qual can assert the SQL writes.
       coin_event_id: coinEventId,
       bonus_event_id: bonusEventId,
+      // Achievement system (spec §8): the streak the child is on, plus any
+      // medals that were just auto-granted (with their pet tokens minted).
+      streak: streakEvaluation,
     },
     201,
   );

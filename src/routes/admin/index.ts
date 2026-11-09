@@ -17,6 +17,8 @@ import adminHealth from './health.ts';
 import shopFulfill from './shop-fulfill.ts';
 // Item #011 §4: PM admin running records (list + revoke with km/points rollback)
 import adminRunning from './running-records.ts';
+// Achievement system (spec §7): grant / revoke / grant-log / seasons / eval-streak
+import adminAchievements from './achievement-awards.ts';
 import type { Env } from '../../worker.ts';
 
 const admin = new Hono<{ Bindings: Env }>();
@@ -42,5 +44,14 @@ admin.route('/shop/fulfill', shopFulfill);
 //   GET  /api/admin/running/records          (list)
 //   POST /api/admin/running/records/:id/revoke  (revoke)
 admin.route('/running/records', adminRunning);
+// Achievement system (spec §7):
+//   POST /api/admin/achievement-awards          — grant a medal
+//   POST /api/admin/achievement-awards/revoke   — revoke (confirm gate)
+//   GET  /api/admin/achievement-awards          — grant log (?status=all default)
+//   POST /api/admin/seasons                     — create a season
+//   POST /api/admin/achievements/eval-streak    — manual streak re-evaluation
+admin.route('/achievement-awards', adminAchievements);
+admin.route('/seasons', adminAchievements);
+admin.route('/achievements', adminAchievements);
 
 export default admin;
