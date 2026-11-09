@@ -1,0 +1,766 @@
+/* public/achievements.css — 成就神殿 (Zelda sanctuary) 视觉层
+ *
+ * 移植自 docs/design/zelda-achievement-wall-reference.html 的设计基因
+ * (spec docs/achievements-spec.md §0.1 G1-G12a), 去掉 Tailwind 依赖, 改成
+ * 原生 CSS 变量 + 类名, 与本仓库其它静态页 (public/fighter/) 惯例一致。
+ *
+ * 色板 (G2): 金色主调 (与 medal v3 金属色板同族), sheikah 蓝降级为低频点缀。
+ */
+
+:root {
+  /* 神殿底色 (G1) */
+  --sanctuary-void: #0b0e14;
+  --sanctuary-brick: #192130;
+  --sanctuary-panel: #0f131b;
+  --sanctuary-plate: #151a24;
+
+  /* 金色主题 (G2) */
+  --zelda-gold: #f3c959;
+  --zelda-light-gold: #fff2b8;
+  --zelda-dark-gold: #a8791c;
+  --zelda-bronze: #694715;
+
+  /* sheikah 蓝 — 低频点缀 */
+  --sheikah-blue: #00e5ff;
+  --sheikah-glow: #4ef0ff;
+
+  /* 灰石 (G5) */
+  --stone-border: #2d3748;
+  --stone-hover: #4a5568;
+  --stone-text: #a0aec0;
+
+  --text-primary: #f7f0d8;
+  --text-secondary: #c8b98d;
+  --text-muted: #6b7280;
+
+  --font-cinzel: 'Cinzel', 'PingFang SC', serif;
+  --font-medieval: 'MedievalSharp', 'PingFang SC', cursive;
+  --font-cn: 'Noto Sans SC', 'PingFang SC', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { min-height: 100%; }
+
+body {
+  font-family: var(--font-cn);
+  color: var(--text-primary);
+  background-color: var(--sanctuary-void);
+  /* G1 — 双 radial-gradient (金色顶部光晕 + 蓝色左下微光) + 32px 砖纹 SVG overlay */
+  background-image:
+    radial-gradient(circle at 50% 10%, rgba(243, 201, 89, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 15% 85%, rgba(0, 229, 255, 0.08) 0%, transparent 45%),
+    url("data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h32v32H0V0zm1 1h30v14H1V1zm0 16h14v14H1V17zm16 0h14v14H17V17z' fill='%23192130' fill-opacity='0.45' fill-rule='evenodd'/%3E%3C/svg%3E");
+  letter-spacing: 0.02em;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #090d14; }
+::-webkit-scrollbar-thumb { background: var(--zelda-dark-gold); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--zelda-gold); }
+
+/* ---------- G7 粒子背景层 ---------- */
+#particle-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ---------- G3a 标题栏 ---------- */
+.sanctuary-header {
+  position: relative;
+  border-bottom: 1px solid rgba(168, 121, 28, 0.6);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85);
+  padding: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.sanctuary-header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+.brand { display: flex; align-items: center; gap: 14px; flex: 1 1 320px; min-width: 0; }
+.brand-emblem {
+  padding: 8px;
+  background: rgba(41, 29, 8, 0.6);
+  border: 1px solid rgba(243, 201, 89, 0.6);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.7);
+  flex: 0 0 auto;
+}
+.brand-emblem svg { display: block; width: 34px; height: 34px; color: var(--zelda-gold); }
+.brand-title {
+  font-family: var(--font-cinzel);
+  font-size: clamp(20px, 3.4vw, 28px);
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  color: var(--zelda-light-gold);
+  text-shadow: 0 0 10px rgba(243, 201, 89, 0.8), 0 0 22px rgba(243, 201, 89, 0.45);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.brand-badge {
+  font-family: var(--font-cn);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(41, 29, 8, 0.75);
+  border: 1px solid rgba(243, 201, 89, 0.6);
+  color: #ffe9a8;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.brand-sub {
+  font-family: var(--font-medieval);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: rgba(255, 214, 120, 0.72);
+  margin-top: 4px;
+}
+.sanctuary-back {
+  display: inline-block;
+  font-family: var(--font-cn);
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  margin-bottom: 10px;
+}
+.sanctuary-back:hover { color: var(--zelda-gold); }
+
+/* ---------- G3a 总进度条卡 ---------- */
+.header-progress {
+  flex: 1 1 300px;
+  max-width: 440px;
+  width: 100%;
+  background: rgba(6, 9, 14, 0.92);
+  border: 1px solid rgba(168, 121, 28, 0.8);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.75);
+}
+.progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: rgba(255, 214, 120, 0.9);
+  letter-spacing: 0.06em;
+}
+.progress-text {
+  font-family: var(--font-cinzel);
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--zelda-gold);
+}
+/* G11 — 金色三段渐变进度条 + 内嵌 pulse-glow */
+.progress-track {
+  width: 100%;
+  background: #0b0f16;
+  border-radius: 999px;
+  height: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(41, 29, 8, 0.9);
+  padding: 2px;
+  position: relative;
+}
+.progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #b45309, #f3c959, #fff2b8);
+  transition: width 0.7s ease;
+  position: relative;
+  overflow: hidden;
+}
+.progress-fill .pulse-glow {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.3);
+}
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.35; transform: scale(0.98); }
+  50% { opacity: 0.85; transform: scale(1.04); }
+}
+.pulse-glow { animation: pulseGlow 3s ease-in-out infinite; }
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+.token-balance {
+  font-size: 12px;
+  color: var(--text-secondary);
+  border: 1px solid rgba(168, 121, 28, 0.6);
+  background: rgba(41, 29, 8, 0.5);
+  border-radius: 9px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.token-balance b { color: var(--zelda-gold); font-size: 14px; }
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: #0c1017;
+  border: 1px solid rgba(168, 121, 28, 0.8);
+  color: #f3c959;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+.icon-btn:hover { border-color: var(--zelda-gold); color: #fff; }
+.icon-btn.off { color: var(--text-muted); }
+.sheikah-border-bottom {
+  background: linear-gradient(90deg, transparent 0%, var(--zelda-gold) 50%, transparent 100%);
+  height: 2px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+}
+
+/* ---------- 主体 ---------- */
+.sanctuary-main {
+  position: relative;
+  z-index: 10;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px 16px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---------- G9 筛选 tab + 搜索 ---------- */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: rgba(9, 12, 18, 0.85);
+  border: 1px solid rgba(168, 121, 28, 0.55);
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+}
+.filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid #1f2937;
+}
+.filter-btn {
+  padding: 8px 14px;
+  border-radius: 9px;
+  font-family: var(--font-cn);
+  font-size: 13px;
+  font-weight: 700;
+  color: #9ca3af;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.filter-btn:hover { color: #fcd34d; }
+.filter-btn.active {
+  background: linear-gradient(90deg, #b45309, #f3c959);
+  color: #fff;
+  border-color: rgba(243, 201, 89, 0.5);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+}
+.filter-count { opacity: 0.75; font-weight: 400; }
+.search-wrap { position: relative; flex: 1 1 240px; max-width: 300px; width: 100%; }
+.search-wrap .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: rgba(245, 158, 11, 0.7);
+  pointer-events: none;
+}
+#search-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(168, 121, 28, 0.7);
+  border-radius: 12px;
+  padding: 9px 12px 9px 34px;
+  font-family: var(--font-cn);
+  font-size: 13px;
+  color: #fff7db;
+  outline: none;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+#search-input:focus { border-color: var(--zelda-gold); }
+#search-input::placeholder { color: #4b5563; }
+
+/* ---------- 赛季条 ---------- */
+.season-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 16px;
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-left: 3px solid rgba(0, 229, 255, 0.5);
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(0, 229, 255, 0.06), rgba(15, 19, 27, 0.6) 45%);
+}
+.season-label {
+  font-family: var(--font-medieval);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: rgba(78, 240, 255, 0.8);
+}
+.season-name { font-size: 14px; font-weight: 700; color: var(--zelda-light-gold); }
+.season-hint { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+
+/* ---------- 分组分区 (spec §9 按组分区) ---------- */
+.group-section { display: flex; flex-direction: column; gap: 14px; }
+.group-section[hidden] { display: none; }
+.group-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-cinzel);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--zelda-light-gold);
+}
+.group-heading::before {
+  content: '';
+  width: 4px;
+  height: 18px;
+  background: var(--zelda-gold);
+  box-shadow: 0 0 10px rgba(243, 201, 89, 0.7);
+}
+.group-heading .group-count { font-family: var(--font-cn); font-size: 11px; color: var(--text-muted); letter-spacing: 0; }
+
+/* ---------- G4/G5/G6 卡片 ---------- */
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+@media (min-width: 640px) { .card-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .card-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1440px) { .card-grid { grid-template-columns: repeat(4, 1fr); } }
+
+.card-container { perspective: 1000px; }
+.zelda-card {
+  transform-style: preserve-3d;
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  position: relative;
+  border-radius: 16px;
+  padding: 18px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  outline: none;
+}
+.zelda-card:focus-visible { box-shadow: 0 0 0 3px var(--sheikah-blue); }
+
+/* G4 — 已解锁: 3px 金边 + 三层发光 */
+.zelda-card.unlocked {
+  background: linear-gradient(145deg, #1f180e 0%, #0e1724 100%);
+  border: 3px solid var(--zelda-gold);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.9),
+              0 0 20px rgba(243, 201, 89, 0.35),
+              inset 0 0 18px rgba(243, 201, 89, 0.2);
+}
+.zelda-card.unlocked:hover {
+  box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.95),
+              0 0 35px rgba(243, 201, 89, 0.65),
+              inset 0 0 25px rgba(243, 201, 89, 0.35);
+  border-color: #fff4c2;
+}
+/* G5 — 锁定: 灰石边 + grayscale(85%) + 内阴影 */
+.zelda-card.locked {
+  background: linear-gradient(145deg, #14171f 0%, #080a0e 100%);
+  border: 3px solid var(--stone-border);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.85), inset 0 0 25px rgba(0, 0, 0, 0.95);
+  filter: grayscale(85%) opacity(0.8);
+}
+.zelda-card.locked:hover {
+  filter: grayscale(25%) opacity(0.95);
+  border-color: var(--stone-hover);
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.9), 0 0 18px rgba(100, 116, 139, 0.35), inset 0 0 15px rgba(0, 0, 0, 0.8);
+}
+
+/* G6 — 四角 L 形装饰 */
+.corner-tl, .corner-tr, .corner-bl, .corner-br {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  z-index: 20;
+}
+.unlocked .corner-tl, .unlocked .corner-tr, .unlocked .corner-bl, .unlocked .corner-br { border-color: var(--zelda-gold); }
+.locked .corner-tl, .locked .corner-tr, .locked .corner-bl, .locked .corner-br { border-color: var(--stone-hover); }
+.corner-tl { top: 3px; left: 3px; border-top: 3px solid; border-left: 3px solid; }
+.corner-tr { top: 3px; right: 3px; border-top: 3px solid; border-right: 3px solid; }
+.corner-bl { bottom: 3px; left: 3px; border-bottom: 3px solid; border-left: 3px solid; }
+.corner-br { bottom: 3px; right: 3px; border-bottom: 3px solid; border-right: 3px solid; }
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  position: relative;
+  z-index: 20;
+}
+.card-status {
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.card-status.unlocked { color: var(--zelda-gold); text-shadow: 0 0 10px rgba(243, 201, 89, 0.7); }
+.card-status.locked { color: #f87171; }
+
+/* 奖牌圆位 */
+.medal-slot {
+  width: 140px;
+  height: 140px;
+  margin: 4px auto;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s ease;
+}
+.card-container:hover .medal-slot { transform: scale(1.08); }
+.medal-slot svg { width: 100%; height: 100%; display: block; }
+.medal-slot.unlocked {
+  background: radial-gradient(circle, rgba(243, 201, 89, 0.35) 0%, rgba(243, 201, 89, 0) 75%);
+  border: 2px solid var(--zelda-gold);
+  box-shadow: inset 0 0 14px rgba(243, 201, 89, 0.35), 0 0 20px rgba(243, 201, 89, 0.3);
+  filter: drop-shadow(0 0 8px rgba(243, 201, 89, 0.6));
+}
+.medal-slot.locked {
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid #374151;
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.9), 0 0 15px rgba(0, 0, 0, 0.5);
+}
+
+.card-title {
+  font-family: var(--font-cinzel);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  position: relative;
+  z-index: 20;
+}
+.unlocked .card-title { color: var(--zelda-light-gold); text-shadow: 0 0 10px rgba(243, 201, 89, 0.8), 0 0 20px rgba(243, 201, 89, 0.5); }
+.locked .card-title { color: #9ca3af; }
+.card-container:hover .unlocked .card-title { color: #fff; }
+
+/* G12a — 档位徽章 */
+.tier-badge {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  padding: 3px 9px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid;
+}
+.tier-badge.iron     { color: #b8bec7; background: rgba(107, 114, 128, 0.18); border-color: #6f747b; }
+.tier-badge.bronze   { color: #e0a878; background: rgba(160, 106, 60, 0.18); border-color: #a06a3c; }
+.tier-badge.silver   { color: #e6e9ef; background: rgba(154, 160, 168, 0.16); border-color: #9aa0a8; }
+.tier-badge.gold     { color: var(--zelda-gold); background: rgba(179, 144, 85, 0.18); border-color: #b39055; text-shadow: 0 0 10px rgba(243, 201, 89, 0.6); }
+.tier-badge.king     { color: #c4b0ff; background: rgba(109, 90, 158, 0.22); border-color: #8f7bd0; text-shadow: 0 0 10px rgba(143, 123, 208, 0.6); }
+.tier-badge.flat     { color: #a5b4fc; background: rgba(99, 102, 241, 0.18); border-color: #6366f1; }
+.tier-badge.none     { color: #6b7280; background: rgba(107, 114, 128, 0.12); border-color: #374151; }
+
+/* 各级状态 (spec §9: 每奖项显示各级状态) */
+.tier-pips {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  position: relative;
+  z-index: 20;
+}
+.tier-pip {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+  background: #262d3a;
+  border: 1px solid #333c4c;
+}
+.tier-pip.reached.iron   { background: #9aa0a6; border-color: #c3c8ce; box-shadow: 0 0 6px rgba(154, 160, 166, 0.5); }
+.tier-pip.reached.bronze { background: #b07a48; border-color: #e0a878; box-shadow: 0 0 6px rgba(205, 154, 102, 0.5); }
+.tier-pip.reached.silver { background: #aeb3bb; border-color: #e9eaec; box-shadow: 0 0 6px rgba(215, 218, 222, 0.5); }
+.tier-pip.reached.gold   { background: #c8a870; border-color: var(--zelda-gold); box-shadow: 0 0 8px rgba(243, 201, 89, 0.7); }
+.tier-pip.reached.king   { background: #8f7bd0; border-color: #c4b0ff; box-shadow: 0 0 8px rgba(143, 123, 208, 0.8); }
+.tier-pip.reached.flat   { background: #6366f1; border-color: #a5b4fc; }
+
+.card-desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #9ca3af;
+  text-align: center;
+  position: relative;
+  z-index: 20;
+  min-height: 38px;
+}
+.card-foot {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid rgba(168, 121, 28, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  position: relative;
+  z-index: 20;
+}
+.card-count { color: var(--text-secondary); font-weight: 700; }
+
+/* ---------- 状态区 (加载 / 出错 / 空) ---------- */
+.state-panel {
+  text-align: center;
+  padding: 48px 20px;
+  border-radius: 20px;
+  border: 1px dashed rgba(168, 121, 28, 0.4);
+  background: rgba(15, 19, 27, 0.6);
+  backdrop-filter: blur(8px);
+}
+.state-panel[hidden] { display: none; }
+.state-icon { font-size: 40px; line-height: 1; margin-bottom: 12px; }
+.state-title {
+  font-family: var(--font-cinzel);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--zelda-light-gold);
+  margin-bottom: 6px;
+}
+.state-hint { font-size: 12px; color: var(--text-muted); }
+.state-error .state-title { color: #fca5a5; }
+.retry-btn {
+  margin-top: 16px;
+  padding: 9px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--zelda-gold);
+  background: rgba(41, 29, 8, 0.7);
+  color: var(--zelda-gold);
+  font-family: var(--font-cn);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.retry-btn:hover { background: rgba(243, 201, 89, 0.2); color: #fff; }
+
+/* ---------- G10 详情弹窗 ---------- */
+.modal-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.modal-back.open { opacity: 1; pointer-events: auto; }
+.modal-card {
+  max-width: 480px;
+  width: 100%;
+  border-radius: 22px;
+  padding: 24px;
+  border: 2px solid var(--zelda-gold);
+  background: linear-gradient(180deg, #0b0f16 0%, #11151d 55%, #05070b 100%);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9), 0 0 40px rgba(243, 201, 89, 0.18);
+  position: relative;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+  overflow: hidden;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+.modal-back.open .modal-card { transform: scale(1); }
+.modal-card .corner-tl, .modal-card .corner-tr, .modal-card .corner-bl, .modal-card .corner-br { border-color: var(--zelda-gold); }
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(12, 16, 23, 0.92);
+  border: 1px solid rgba(168, 121, 28, 0.6);
+  color: #9ca3af;
+  font-size: 16px;
+  cursor: pointer;
+  z-index: 30;
+}
+.modal-close:hover { color: #fff; border-color: var(--zelda-gold); }
+.modal-body { text-align: center; position: relative; z-index: 20; }
+
+/* 圆形发光奖牌位 (160px) */
+.modal-medal-slot {
+  width: 160px;
+  height: 160px;
+  margin: 0 auto 16px;
+  padding: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--zelda-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle, rgba(243, 201, 89, 0.35) 0%, rgba(243, 201, 89, 0) 75%);
+  box-shadow: 0 0 30px rgba(243, 201, 89, 0.25);
+}
+.modal-medal-slot.locked {
+  border-color: var(--stone-border);
+  background: rgba(0, 0, 0, 0.85);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.9);
+  filter: grayscale(70%) opacity(0.85);
+}
+.modal-medal-slot .avatar-light-bg {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(243, 201, 89, 0.35) 0%, rgba(243, 201, 89, 0) 75%);
+}
+.modal-medal-slot svg { width: 100%; height: 100%; display: block; position: relative; z-index: 10; }
+
+.modal-category {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  background: rgba(41, 29, 8, 0.85);
+  color: var(--zelda-gold);
+  border: 1px solid rgba(168, 121, 28, 0.8);
+  margin-bottom: 8px;
+}
+.modal-title {
+  font-family: var(--font-cinzel);
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--zelda-light-gold);
+  text-shadow: 0 0 10px rgba(243, 201, 89, 0.8), 0 0 20px rgba(243, 201, 89, 0.5);
+  margin-bottom: 4px;
+}
+.modal-subtitle { font-size: 13px; font-weight: 700; color: rgba(255, 214, 120, 0.9); margin-bottom: 4px; }
+.sheikah-divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--zelda-gold), transparent);
+  opacity: 0.6;
+  margin: 16px 0;
+}
+.modal-desc {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #d1d5db;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #1f2937;
+  margin-bottom: 18px;
+}
+.modal-desc .ladder-line { display: block; margin-top: 8px; color: var(--text-secondary); font-size: 12px; }
+.modal-status {
+  background: rgba(15, 19, 27, 0.92);
+  border: 1px solid rgba(168, 121, 28, 0.5);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+.modal-status-label { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+.modal-status-value { font-size: 14px; font-weight: 900; }
+.modal-status-value.unlocked { color: #4ade80; text-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
+.modal-status-value.locked { color: #9ca3af; }
+.modal-foot {
+  font-size: 11px;
+  color: #6b7280;
+  letter-spacing: 0.08em;
+  border-top: 1px solid rgba(31, 41, 55, 0.9);
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.modal-foot .foot-accent { color: rgba(243, 201, 89, 0.85); }
+
+/* ---------- 页脚 ---------- */
+.sanctuary-footer {
+  border-top: 1px solid rgba(168, 121, 28, 0.35);
+  background: rgba(0, 0, 0, 0.8);
+  padding: 22px 16px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  position: relative;
+  z-index: 10;
+  line-height: 1.9;
+}
+.sanctuary-footer .footer-title {
+  font-family: var(--font-cinzel);
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  color: rgba(243, 201, 89, 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-glow, .progress-fill .pulse-glow { animation: none; }
+  .zelda-card { transition: none; }
+}

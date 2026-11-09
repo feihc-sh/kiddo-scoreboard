@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0b0e14">
+  <!-- Dev mode: prevent stale HTML/JS across wrangler dev restarts. -->
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>🏅 成就神殿 — JAGER</title>
+
+  <!-- G3 — 字体三件套: Cinzel (标题) + MedievalSharp (副题) + Noto Sans SC (中文正文) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=MedievalSharp&family=Noto+Sans+SC:wght@400;600;700;900&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/achievements.css?v=1">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%23f3c959' stroke='%23a8791c' stroke-width='6'/><path d='M50 26l6.5 13.2 14.6 2.1-10.6 10.3 2.5 14.5L50 59.3 36.9 66.1l2.5-14.5L28.9 41.3l14.6-2.1z' fill='%236b5a3e'/></svg>">
+</head>
+<body>
+
+  <!-- G7 — 粒子背景层 (canvas, 40 粒子金/蓝上浮) -->
+  <canvas id="particle-canvas" aria-hidden="true"></canvas>
+
+  <!-- ====== G3a 标题栏 ====== -->
+  <header class="sanctuary-header">
+    <div class="sanctuary-header-inner">
+      <div class="brand">
+        <!-- 徽标 SVG — 奖杯/星币主题 (替代 Zelda 三角力量) -->
+        <div class="brand-emblem" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 3h12v2h-1v3a5 5 0 0 1-4 4.9V15h3a2 2 0 0 1 2 2v1H6v-1a2 2 0 0 1 2-2h3v-2.1A5 5 0 0 1 7 8V5H6V3zm-1 3h1v3a3 3 0 0 0 .6 1.8A4 4 0 0 1 5 6H5zm14 0a4 4 0 0 1-1.6 4.8A3 3 0 0 0 18 9V6h1zM9 20h6v1H9v-1z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">
+            成就神殿
+            <span class="brand-badge">Achievement Sanctuary</span>
+          </h1>
+          <p class="brand-sub">ACHIEVEMENT SANCTUARY · 专心致志，收藏每一枚荣誉</p>
+        </div>
+      </div>
+
+      <!-- G3a + G11 — 总进度条卡 -->
+      <div class="header-progress">
+        <div class="progress-head">
+          <span>🏆 成就解锁进度</span>
+          <span class="progress-text" id="progress-text">0 / 0 (0%)</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-bar">
+            <div class="pulse-glow"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <!-- spec §5 — 星币余额 -->
+        <span class="token-balance" title="宠物代币 (星币) 余额">🌟 星币 <b id="pet-tokens">0</b></span>
+        <!-- G8 — 音效开关 -->
+        <button id="sound-btn" class="icon-btn" type="button" title="切换音效 (SFX)" aria-label="切换音效">🔊</button>
+      </div>
+    </div>
+    <div class="sheikah-border-bottom"></div>
+  </header>
+
+  <main class="sanctuary-main">
+
+    <a href="/index.html" class="sanctuary-back">← 返回主面板</a>
+
+    <!-- 赛季条 -->
+    <div class="season-banner">
+      <span class="season-label">SEASON</span>
+      <span class="season-name" id="season-name">—</span>
+      <span class="season-hint" id="season-hint"></span>
+    </div>
+
+    <!-- G9 — 筛选 tab + 搜索框 -->
+    <div class="filter-bar">
+      <div class="filter-tabs" id="filter-tabs" role="tablist" aria-label="成就筛选">
+        <button class="filter-btn active" type="button" data-filter="all" role="tab" aria-selected="true">全部</button>
+        <button class="filter-btn" type="button" data-filter="study" role="tab" aria-selected="false">学习</button>
+        <button class="filter-btn" type="button" data-filter="life" role="tab" aria-selected="false">生活</button>
+        <button class="filter-btn" type="button" data-filter="skill" role="tab" aria-selected="false">技能</button>
+        <button class="filter-btn" type="button" data-filter="unlocked" role="tab" aria-selected="false">已解锁</button>
+        <button class="filter-btn" type="button" data-filter="locked" role="tab" aria-selected="false">未解锁</button>
+      </div>
+      <div class="search-wrap">
+        <span class="search-icon" aria-hidden="true">🔍</span>
+        <input type="text" id="search-input" placeholder="搜索成就名称..." aria-label="搜索成就名称">
+      </div>
+    </div>
+
+    <!-- 加载中 -->
+    <div class="state-panel" id="loading-state">
+      <div class="state-icon" aria-hidden="true">⛩️</div>
+      <div class="state-title">正在点亮神殿…</div>
+      <div class="state-hint">正在读取成就记录</div>
+    </div>
+
+    <!-- 出错 -->
+    <div class="state-panel state-error" id="error-state" hidden>
+      <div class="state-icon" aria-hidden="true">⚠️</div>
+      <div class="state-title">神殿大门紧闭</div>
+      <div class="state-hint" id="error-text">加载失败，请稍后再试</div>
+      <button class="retry-btn" id="retry-btn" type="button">重试</button>
+    </div>
+
+    <!-- 空数据 -->
+    <div class="state-panel" id="empty-state" hidden>
+      <div class="state-icon" aria-hidden="true">🧭</div>
+      <div class="state-title">神殿尚未发现符合条件的记录</div>
+      <div class="state-hint">请重新检查搜索关键字或切换上方筛选状态</div>
+    </div>
+
+    <!-- 成就卡片 (按组分区, spec §9) -->
+    <section class="group-section" id="group-study" hidden>
+      <h2 class="group-heading">学习组 <span class="group-count" id="count-study"></span></h2>
+      <div class="card-grid" id="grid-study"></div>
+    </section>
+    <section class="group-section" id="group-life" hidden>
+      <h2 class="group-heading">生活组 <span class="group-count" id="count-life"></span></h2>
+      <div class="card-grid" id="grid-life"></div>
+    </section>
+    <section class="group-section" id="group-skill" hidden>
+      <h2 class="group-heading">技能组 <span class="group-count" id="count-skill"></span></h2>
+      <div class="card-grid" id="grid-skill"></div>
+    </section>
+
+  </main>
+
+  <!-- ====== G10 详情弹窗 ====== -->
+  <div class="modal-back" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card" id="modal-card">
+      <div class="corner-tl" aria-hidden="true"></div>
+      <div class="corner-tr" aria-hidden="true"></div>
+      <div class="corner-bl" aria-hidden="true"></div>
+      <div class="corner-br" aria-hidden="true"></div>
+
+      <button class="modal-close" id="close-modal-btn" type="button" aria-label="关闭">✕</button>
+
+      <div class="modal-body">
+        <!-- 圆形发光奖牌位 (160px) -->
+        <div class="modal-medal-slot" id="modal-medal-slot">
+          <div class="avatar-light-bg pulse-glow" aria-hidden="true"></div>
+          <div id="modal-medal" role="img"></div>
+        </div>
+
+        <!-- 组徽章 -->
+        <div class="modal-category" id="modal-category">学习组</div>
+
+        <h3 class="modal-title" id="modal-title">成就名称</h3>
+        <p class="modal-subtitle" id="modal-subtitle"></p>
+
+        <!-- sheikah 分割线 -->
+        <div class="sheikah-divider" aria-hidden="true"></div>
+
+        <p class="modal-desc" id="modal-desc"></p>
+
+        <!-- 获得状态 -->
+        <div class="modal-status">
+          <div>
+            <div class="modal-status-label">当前神殿成就状态</div>
+            <div class="modal-status-value" id="modal-status-text">未解锁</div>
+          </div>
+          <span class="tier-badge none" id="modal-tier-badge">未解锁</span>
+        </div>
+
+        <!-- 脚注: GROUP / AWARD ID -->
+        <div class="modal-foot">
+          <span>GROUP: <span class="foot-accent" id="modal-group">—</span></span>
+          <span>AWARD ID: <span class="foot-accent" id="modal-award-id">—</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="sanctuary-footer">
+    <p class="footer-title">ACHIEVEMENT SANCTUARY · 成就神殿</p>
+    <p>专心致志，收藏每一枚荣誉 · 每一次坚持都会在墙上留下光</p>
+  </footer>
+
+  <script type="module" src="/achievements.js?v=1"></script>
+</body>
+</html>
