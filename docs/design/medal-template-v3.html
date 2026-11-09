@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>成就奖牌 · 参数化 SVG 模板 v3（金属雕刻版）</title>
+<!--
+  kiddo-scoreboard 成就奖牌参数化 SVG 模板 v3 (金属雕刻版)
+  质感基准: feihao 2026-10-28 demo (哑光古金 + 雕刻压印 + 偏移投影)
+  背景: v2 平面贴字风格被 feihao 驳回 (D1), 要求「金属质感 + 奖名刻在牌上」
+  用法: 改 TIERS 档位色 / medalSVG({tier, name}) 参数出图
+  渲染自检: skill scripts/medal-render-check.py <html> <out.png>
+-->
+<style>
+  :root { --paper: #f7f5ef; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'PingFang SC','Noto Sans SC',sans-serif; background: var(--paper); color: #4a4436; padding: 28px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { font-size: 12px; color: #8a8270; margin-bottom: 18px; }
+  .row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; margin-bottom: 26px; }
+  .cell { text-align: center; }
+  .cell .cap { font-size: 12px; color: #6f6852; margin-top: 2px; }
+  .paper  { background: var(--paper); padding: 18px; border-radius: 14px; }
+  .dark   { background: #171a21; padding: 18px; border-radius: 14px; }
+  .dark .cap { color: #9aa3b2; }
+  .medal { width: 168px; height: 168px; display: block; }
+  .rowtitle { font-size: 13px; font-weight: 600; margin: 0 0 10px 2px; color: #6f6852; }
+  .dark .rowtitle { color: #9aa3b2; }
+</style>
+</head>
+<body>
+<h1>kiddo-scoreboard 成就奖牌 · v3 金属雕刻版</h1>
+<div class="sub">参数化 SVG：奖名 / 档位 / 达成次数 填入即出图 · 质感基准 = feihao demo（哑光古金 + 雕刻压印 + 偏移投影）</div>
+
+<div class="paper">
+  <div class="rowtitle">A · 同一奖项五档对比（语文默写全对 1/3/5/8/10 次 → 铁/铜/银/金/王者）</div>
+  <div class="row" id="rowA"></div>
+</div>
+
+<div class="paper" style="margin-top:20px">
+  <div class="rowtitle">B · 三组各一枚（金档示例，奖名参数化）</div>
+  <div class="row" id="rowB"></div>
+</div>
+
+<div class="dark" style="margin-top:20px">
+  <div class="rowtitle">C · 成就墙暗底预览（最终展示环境）</div>
+  <div class="row" id="rowC"></div>
+</div>
+
+<script>
+/* ============ 参数化奖牌模板 ============ */
+const TIERS = {
+  iron:     { label: '铁',  edge: '#3f4246', rim: ['#9aa0a6', '#787e85', '#5a5f66'], face: ['#dcdad4', '#c9c7c0'], engrave: '#4b4f55', enamel: '#6f747b', sub: '1 次达成' },
+  bronze:   { label: '铜',  edge: '#7a4a28', rim: ['#cd9a66', '#b07a48', '#8a5a32'], face: ['#eadfd0', '#d9ccb6'], engrave: '#6e4526', enamel: '#a06a3c', sub: '3 次达成' },
+  silver:   { label: '银',  edge: '#6f747c', rim: ['#d7dade', '#aeb3bb', '#8b9099'], face: ['#e9eaec', '#d3d5da'], engrave: '#565b64', enamel: '#9aa0a8', sub: '5 次达成' },
+  gold:     { label: '金',  edge: '#8a6f42', rim: ['#dfc690', '#c8a870', '#9c8352'], face: ['#f0e9d6', '#e0d6bd'], engrave: '#6b5a3e', enamel: '#b39055', sub: '8 次达成' },
+  champion: { label: '王者', edge: '#8a6a2c', rim: ['#f0d695', '#d9b866', '#a8863f'], face: ['#f4ecd8', '#e6d9ba'], engrave: '#6e5424', enamel: '#6d5a9e', sub: '10 次达成' },
+};
+
+function medalSVG({ tier = 'gold', name = '奖牌名称', emblem = 'star' }) {
+  const t = TIERS[tier];
+  const uid = tier + '-' + Math.random().toString(36).slice(2, 7);
+  const [rl, rm, rd] = t.rim;
+  const [fl, fd] = t.face;
+  const fs = Math.min(60, Math.floor(268 / Math.max(name.length, 2))); // 奖名自适应字号
+  const isChamp = tier === 'champion';
+  const starR = isChamp ? 46 : 38;
+
+  return `
+<svg class="medal" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${t.label}牌 ${name}">
+  <defs>
+    <linearGradient id="rim-${uid}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${rl}"/><stop offset=".5" stop-color="${rm}"/><stop offset="1" stop-color="${rd}"/>
+    </linearGradient>
+    <radialGradient id="face-${uid}" cx=".38" cy=".34" r=".9">
+      <stop offset="0" stop-color="${fl}"/><stop offset="1" stop-color="${fd}"/>
+    </radialGradient>
+    <filter id="blur-${uid}"><feGaussianBlur stdDeviation="4"/></filter>
+    <filter id="soft-${uid}"><feGaussianBlur stdDeviation="1.2"/></filter>
+    <filter id="grain-${uid}">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.45  0 0 0 0 0.42  0 0 0 0 0.36  0 0 0 0.5 0"/>
+      <feComposite operator="in" in2="SourceGraphic"/>
+    </filter>
+    <clipPath id="clip-${uid}"><circle cx="400" cy="398" r="181"/></clipPath>
+    <clipPath id="clipface-${uid}"><circle cx="400" cy="398" r="153"/></clipPath>
+  </defs>
+
+  <!-- 偏移投影层（demo 的第二圆盘） -->
+  <circle cx="408" cy="486" r="170" fill="#c9c4b4" opacity="0.8" filter="url(#blur-${uid})"/>
+
+  <!-- 挂环 bail -->
+  <g>
+    <path d="M369 226 L376 190 Q400 180 424 190 L431 226 Z" fill="url(#rim-${uid})" stroke="${t.edge}" stroke-width="3"/>
+    <path d="M384 219 L388 199 Q400 194 412 199 L416 219 Z" fill="#efe9d9" stroke="${t.edge}" stroke-width="2"/>
+  </g>
+
+  <!-- 主体圆盘（金属环） -->
+  <circle cx="400" cy="398" r="181" fill="url(#rim-${uid})" stroke="${t.edge}" stroke-width="3"/>
+  <!-- 环上高光/阴影倒角 -->
+  <circle cx="400" cy="398" r="172" fill="none" stroke="rgba(255,252,240,.5)" stroke-width="6" filter="url(#soft-${uid})" stroke-dasharray="460 660" transform="rotate(-115 400 398)"/>
+  <circle cx="400" cy="398" r="171" fill="none" stroke="rgba(40,32,18,.28)" stroke-width="5" filter="url(#soft-${uid})" stroke-dasharray="400 672" transform="rotate(60 400 398)"/>
+
+  <!-- 内嵌牌面（哑光象牙面，凹进金属环） -->
+  <circle cx="400" cy="398" r="153" fill="url(#face-${uid})"/>
+  <circle cx="400" cy="398" r="150" fill="none" stroke="${t.edge}" stroke-width="2" opacity=".55"/>
+  <!-- 面内上缘阴影（凹陷感） -->
+  <path d="M262 330 A153 153 0 0 1 538 330" fill="none" stroke="rgba(80,68,44,.16)" stroke-width="12" filter="url(#soft-${uid})"/>
+
+  <!-- 档位珐琅圈（王者=紫） -->
+  <circle cx="400" cy="398" r="136" fill="none" stroke="${t.enamel}" stroke-width="9" opacity="${isChamp ? 0.95 : 0.4}"/>
+  <circle cx="400" cy="398" r="136" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="2" stroke-dasharray="430 424" transform="rotate(-115 400 398)" opacity=".8"/>
+
+  <!-- 哑光颗粒（限金属环 + 牌面） -->
+  <g clip-path="url(#clip-${uid})">
+    <circle cx="400" cy="398" r="181" fill="#736a54" filter="url(#grain-${uid})" opacity="0.06"/>
+  </g>
+
+  <!-- 顶部徽记：五角星（雕刻压印） -->
+  <g transform="translate(400 300)">
+    <path d="${starPath(starR)}" transform="translate(0 2.5)" fill="rgba(255,252,238,.85)"/>
+    <path d="${starPath(starR)}" fill="none" stroke="${t.engrave}" stroke-width="5" stroke-linejoin="round"/>
+  </g>
+  ${isChamp ? `<circle cx="400" cy="300" r="9" fill="#8f7bd0" stroke="#5a4a92" stroke-width="2"/>` : ''}
+
+  <!-- 奖名（雕刻压印：下亮缘 + 深槽字） -->
+  <text x="400" y="${418 + fs * 0.36}" text-anchor="middle" font-family="'PingFang SC','Noto Sans SC',sans-serif"
+        font-size="${fs}" font-weight="700" letter-spacing="2"
+        fill="rgba(255,252,238,.9)" transform="translate(0 2.5)">${name}</text>
+  <text x="400" y="${418 + fs * 0.36}" text-anchor="middle" font-family="'PingFang SC','Noto Sans SC',sans-serif"
+        font-size="${fs}" font-weight="700" letter-spacing="2"
+        fill="${t.engrave}" opacity=".92">${name}</text>
+
+  <!-- 档位副文（同样压印） -->
+  <g transform="translate(400 492)">
+    <text text-anchor="middle" font-size="30" font-weight="600" letter-spacing="6"
+          font-family="'PingFang SC','Noto Sans SC',sans-serif"
+          fill="rgba(255,252,238,.85)" transform="translate(0 1.8)">${t.label} 牌 · ${t.sub}</text>
+    <text text-anchor="middle" font-size="30" font-weight="600" letter-spacing="6"
+          font-family="'PingFang SC','Noto Sans SC',sans-serif"
+          fill="${t.engrave}" opacity=".85">${t.label} 牌 · ${t.sub}</text>
+  </g>
+
+  <!-- 底部菱形分隔刻纹 -->
+  <g transform="translate(400 548)">
+    <rect x="-7" y="-7" width="14" height="14" transform="rotate(45)" fill="rgba(255,252,238,.85)"/>
+    <rect x="-7" y="-7" width="14" height="14" transform="rotate(45)" fill="none" stroke="${t.engrave}" stroke-width="3"/>
+  </g>
+</svg>`;
+}
+
+function starPath(R) {
+  const r2 = R * 0.42;
+  let pts = [];
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? R : r2;
+    const a = -Math.PI / 2 + i * Math.PI / 5;
+    pts.push((r * Math.cos(a)).toFixed(1) + ',' + (r * Math.sin(a)).toFixed(1));
+  }
+  return 'M' + pts.join(' L') + ' Z';
+}
+
+/* ============ 渲染示例 ============ */
+const cell = (svg, cap) => `<div class="cell">${svg}<div class="cap">${cap}</div></div>`;
+
+document.getElementById('rowA').innerHTML =
+  ['iron', 'bronze', 'silver', 'gold', 'champion']
+    .map(tier => cell(medalSVG({ tier, name: '语文默写全对' }), TIERS[tier].label + '牌')).join('');
+
+document.getElementById('rowB').innerHTML =
+  cell(medalSVG({ tier: 'gold', name: '英语默写全对' }), '学习组 · 金') +
+  cell(medalSVG({ tier: 'gold', name: '自律生活' }), '生活组 · 金') +
+  cell(medalSVG({ tier: 'gold', name: '新曲演奏' }), '技能组 · 金') +
+  cell(medalSVG({ tier: 'champion', name: '通关新游戏' }), '技能组 · 王者');
+
+document.getElementById('rowC').innerHTML =
+  cell(medalSVG({ tier: 'bronze', name: '创新家务奖' }), '生活组 · 铜') +
+  cell(medalSVG({ tier: 'silver', name: '读完长篇小说' }), '技能组 · 银') +
+  cell(medalSVG({ tier: 'champion', name: '测评得优' }), '学习组 · 王者');
+</script>
+</body>
+</html>
