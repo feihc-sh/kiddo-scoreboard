@@ -2484,6 +2484,13 @@ body {
   color: var(--cyan);
   box-shadow: var(--glow-cyan);
 }
+/* 链接伪装成按钮 (achievements 面板的「查看成就墙」)。 */
+a.pm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
 
 /* Status badges (reuse semantic colors) */
 .pm-badge {
@@ -2517,6 +2524,31 @@ body {
   background: rgba(255, 107, 53, 0.08);
   color: var(--orange-dim);
   border-color: var(--orange-dim);
+}
+/* 成就系统徽章 (🏅 成就发放面板)。
+   刻意**不复用** .pm-badge.approved/.pending/.revoked —— 那 3 个 class 是
+   score_event 状态的专属语义 (待审/已通过/已撤销), 全局 CSS 选择器
+   (e.g. tests/e2e/ui-admin-all-events.spec.ts 数 '.pm-row .pm-badge.approved')
+   会把它们数进去。成就牌的状态是另一个维度, 必须有自己的 class。 */
+.pm-badge.ach-active {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: var(--green);
+}
+.pm-badge.ach-revoked {
+  background: rgba(255, 107, 53, 0.08);
+  color: var(--orange-dim);
+  border-color: var(--orange-dim);
+}
+.pm-badge.ach-current {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: var(--green);
+}
+.pm-badge.ach-archived {
+  background: var(--orange-soft);
+  color: var(--orange);
+  border-color: var(--orange-border);
 }
 
 /* Forms (E, F, new-task) */
