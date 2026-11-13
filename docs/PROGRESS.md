@@ -35,6 +35,7 @@
 | **Task+seg-btn+server hotfix** | ✅ Done | 2026-06-06 | 1 new + 100 e2e | 3 bugs (CSS .task-btn 缺, seg-btn class mismatch, server tasks.ts:100 bind 多 1 arg) + helpers/db.ts 换 sqlite3 CLI（workerd sync fix）（`1474487`）|
 | **F2 debounce fix** | ✅ Done | 2026-06-06 | 1 spec update | admin.js approve/reject/revoke 用 inFlight Set 防 5-click race（`9d2a1c3`）|
 | **§3.12 edge** | ✅ Done | 2026-06-06 | 9 pass + 1 skip | 10 edge scenarios（`9ca3732`）；E9 PM-approve-→-child-refresh 跳过（hang，需修 cookie race）|
+| **v2.2 成就系统** | ✅ Done (未 merge/deploy) | 2026-11-13 | 101 unit + 10 e2e | 🏅 三组 × 五档 × 赛季制 + 🌟 星币；3 卡全落地（后端 / 成就墙 / admin 发放面板）；branch `feature/achievements-v1` |
 
 **总测试数（截至 Phase 2 完成）**: 297 个（198 unit + 99 e2e = 98 pass + 1 pre-existing flaky）全绿
 
@@ -1100,3 +1101,39 @@ git log --oneline -5  # 看最新进度
 **测试状态**: unit 593/593 绿 (新增 `admin-task-completions-reset-day` 11 its、`admin-tasks-active-days` 17 its、`admin-task-completions-list` status=all、me-tasks-complete bonus×active-days describe)。e2e **未覆盖** reset-day / active_days UI (已记 FEATURE_MATRIX gap)。
 
 **风险**: 🟡 e2e 缺口待补; 清空模式历史多扣核查 (见 POSTMORTEMS) 未做
+
+## ✅ v2.2 — 成就系统 (Achievements, 🏅 三组 × 五档 × 赛季制 + 🌟 星币) — 2026-11-13
+
+**branch**: `feature/achievements-v1` (worktree `kiddo-scoreboard-achievements`, base origin/main 4d61739) — **未 merge, 未 deploy**
+**spec**: `docs/achievements-spec.md` v1.1 (Zelda 神殿风定稿) — 拆 3 张顺序卡, 本条记录覆盖全部 3 卡
+
+**Card 1 — 后端 (✅ 已交付)**
+- `migrations/0021_achievements.sql` — `score_events` 重建 (加 `pet_tokens` 账户类型 + `achievement` 来源) + 3 张新表 (`seasons` / `achievements` / `achievement_awards`) + seed (S1 赛季 + 8 个奖项)
+- `src/utils/achievements.ts` — 牌级常量 (`TIER_ORDER` / `ALL_TIERS` / `TIER_TOKENS`) + `parseLadder` (服务端 parse, R11) + 赛季 CRUD util + `getPetTokenBalance`
+- `src/utils/achievement-service.ts` — **铸币/烧币对称逻辑** (award + `score_events` 同一个 `db.batch`, 不许回填 FK) + `source_ref = 'achievement:award:<id>'` 幂等锚点 + **烧币双闸门** (只对 active 且未烧过的行写)
+- `src/utils/streak.ts` — streak 引擎 (连续全卡天数, 赛季边界, 幂等口径含 revoked → 撤销过的牌不自动补发)
+- `src/routes/admin/achievement-awards.ts` — `POST /api/admin/achievement-awards` (发放) / `POST .../revoke` (**confirm 门**, 缺 `confirm:true` → 400 `CONFIRM_REQUIRED`) / `GET .../achievement-awards?status=all|active|revoked` (**默认 all** —— 审计面不隐藏 revoked, R8 教训) / `GET+POST /api/admin/seasons` / `POST /api/admin/achievements/eval-streak`
+- `src/routes/public/achievements.ts` — `GET /api/public/achievements?user_id=N[&season_id=M]` → `{season, achievements:[{id,grp,name,description,grant_mode,ladder,award}], pet_tokens}`; `award` = 该赛季**已获最高档** (按金属层级) + 同档累计次数
+
+**Card 2 — 成就墙前端 (✅ 已交付)**
+- `public/achievements.html` / `.js` / `.css` — Zelda 神殿风成就墙 (G1-G12a: 暗色神殿底色 + 金色主题 + 3 组分区 + 5 档稀有度徽章 + 粒子背景 + 8-bit 音效 + 筛选 tab + 详情弹窗 + 进度条)
+- `public/medals.js` — medal v3 金属雕刻生成器 (512×512 SVG, 3-stop 渐变 + feTurbulence 颗粒 + 双层 text 刻槽 + 5 档色板), 纯 SVG 无图片请求
+
+**Card 3 — Admin 发放面板 + e2e + 文档 (本卡)**
+- `public/shared/achievement-tiers.js` — **牌级规则的单一事实源** (classic script + `window.ACHIEVEMENT_TIERS`): `admin_flat` → 只给「平发」; `admin_tier`/`auto_streak` → 只给 ladder 里存在的档位 + ladder 提示文案 (次数档「累计 N 次」/ 天数档「累计 N 天」)。**面板下拉与后端校验同构** —— PM 永远不会选出一个后端必 400 的组合
+- `public/admin/index.html` — 新增 `🏅 成就发放` section (`#sec-achievements`): 发放表单 (奖项/牌级/user_id) + 发放日志 + 状态筛选 + 赛季管理 (当前赛季 / 新建赛季 / 每赛季成就墙链接) + streak 重算按钮
+- `public/admin/admin.js` — 成就面板 state/loader/render/action: `loadAchievementAwards` (走 `?status=` query) + `loadSeasons` + `renderAchievementSelect` + `renderTierSelect` (**切换奖项重算牌级, 不留上一个奖项的残值**) + `renderAchievementAwards` (**撤销按钮只在 `status==='active'` 的行**) + `renderSeasons` + `submitAchievementGrant` + `revokeAchievementAward` (**`window.confirm` 二次确认, 文案明确说明「烧回」🌟**) + `evalAchievementStreak` + `submitAchievementSeason`
+- `public/app.css` — `a.pm-btn` (链接伪装成按钮) —— 只加了 6 行, 复用既有 `.pm-section` / `.pm-btn` / `.pm-badge` / `.pm-row` / `.pm-form` / `.pm-empty` / `.pm-mono` 体系, **0 新样式体系**
+- `tests/e2e/helpers/db.ts` — 新增 `clearAchievementData()` (清 award rows + 复位 seed 赛季; **不删** `achievements`/`seasons` 目录表)
+- `tests/e2e/admin-achievement-panel.spec.ts` — 10 e2e (2 smoke + 2 happy + 4 edge + 1 状态筛选 + 1 赛季)
+- `tests/unit/achievement-admin-panel.test.ts` — 24 its (牌级规则 10 + admin.js 接线契约 14)
+
+**测试状态**: 成就系统 unit **101 its / 8 spec 全绿** (含新增 `achievement-admin-panel` 24); e2e `admin-achievement-panel.spec.ts` **10/10 全绿** (本地 wrangler dev 8787, 未改 committed `playwright.config.ts`)。全套 vitest baseline 3 failed / 738 passed 保持不变 (3 个 pre-existing 与成就系统无关: `mecha-equip-activation` ×2 + `summer-homework-modal` ×1, 未修)。
+
+**文档**: PRD §14 (业务规则 + 数据模型 + API + 赛季制 + 铸币/撤销对称性) · TEST_PLAN §3.25 (unit/e2e 清单 + 面板用例矩阵) · FEATURE_MATRIX 表 A §14 行 + 表 B 3 条流程 + 表 C 2 个 UI 功能 ✅ · PROGRESS 本条
+
+**风险**: 🟢
+- 0 schema 改动 (migration 0021 定稿) · 0 新依赖 · 0 后端业务逻辑改动 (Card 3 只碰前端 + 文档 + 测试)
+- 面板牌级规则与后端校验**两处**实现 (`public/shared/achievement-tiers.js` vs `src/routes/admin/achievement-awards.ts`) —— 靠 `achievement-admin-panel.test.ts` 的契约断言兜住 (换后端规则必须同步改 shared 文件)
+- 成就面板的状态徽章用**独立 class** (`.pm-badge.ach-*`), 不复用 `.pm-badge.approved|pending|revoked` —— 后者是 `score_event` 状态的专属语义, 全局 CSS 选择器 (`ui-admin-all-events.spec.ts` 数 `.pm-row .pm-badge.approved` == 1) 会把它们数进去。已加 unit 断言防回归。
+- 成就墙 (Card 2) 的 e2e 未补 —— 已记 FEATURE_MATRIX gap (只覆盖了 admin 面板 + API 层)

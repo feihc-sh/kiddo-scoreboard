@@ -1848,3 +1848,66 @@ Unit tests for `tests/unit/admin-auth.test.ts` (and any other unit suites) are *
 **e2e**: ⚠️ 待补 — reset-day 按钮、7-checkbox 预设、小孩端灰置均无 Playwright spec (gap 已记 FEATURE_MATRIX)。
 
 **验收口径 (F18/F19)**: 见 `PRD.md` §F18/F19 行。
+
+---
+
+### 3.25 成就系统 (Achievements, v2.2 — 🏅 三组 × 五档 × 赛季制)
+
+> 详细用例矩阵见 `docs/achievements-spec.md` §10 (Assert the money) 与 §8b (streak T1-T7); 本节登记 suite 清单与验收口径。
+> 后端 (Card 1) + 成就墙 (Card 2) + admin 发放面板 (Card 3) 三卡全部落地。
+
+**Unit suites**:
+
+| spec file | 覆盖 | its |
+|---|---|---|
+| `tests/unit/achievement-awards-admin.test.ts` | grant/revoke 的 `score_events` 精确断言 (条数 + `change_value` + `source_ref` 分组) + 烧币双闸门 + confirm 门 + `status=all` 默认全量 + 同档重发 | 21 |
+| `tests/unit/achievement-seasons.test.ts` | 新建赛季 + 旧赛季归档 (`is_current` 唯一) + `is_current:false` 提前建 + 参数校验 + audit | 6 |
+| `tests/unit/achievement-streak.test.ts` | streak 引擎 T1-T7 (连续/中断/30天逐档/赛季边界/撤销不补发/非全卡不增长/dueToday 缺席) | 19 |
+| `tests/unit/achievement-public-api.test.ts` | `GET /api/public/achievements` 响应结构 (`award` = 已获最高档 + 同档 count) + `ladder` 服务端 parse (R11) | 13 |
+| `tests/unit/achievement-journey.test.ts` | 端到端旅程 (发放 → 铸币 → 上墙 → 撤销 → 烧币) | 1 |
+| `tests/unit/achievement-complete-hook.test.ts` | `/complete` 挂钩 streak 引擎 (best-effort, 不回滚主流程) | 4 |
+| `tests/unit/achievement-real-d1.test.ts` | 真实 D1 (Miniflare) 上的 SQL 语义验证 | 13 |
+| `tests/unit/achievement-admin-panel.test.ts` | **牌级规则单一事实源** (`public/shared/achievement-tiers.js`) 10 its + admin.js 接线契约 14 its | **24** |
+
+**成就系统 unit 合计: 101 its / 8 spec files**
+
+**e2e specs**:
+
+| spec file | 覆盖 |
+|---|---|
+| `tests/e2e/admin-achievement-panel.spec.ts` | SMOKE (section 可见 + 8 个 seed 奖项下拉) + HAPPY-1 (发放 → toast → 日志出现该行) + HAPPY-2 (撤销 → 二次确认 → 该行变「已撤销」) + EDGE-1 (flat 奖项只有「平发」/ tier 奖项不含「平发」) + EDGE-2 (切换奖项重算牌级, 不留残值) + EDGE-3 (撤销按钮在已撤销行不显示) + EDGE-4 (状态筛选 全部/已发放/已撤销) + 赛季创建 (10 tests) |
+
+**admin 发放面板用例矩阵 (Card 3)**:
+
+| Case | 输入 | 期望 |
+|------|------|------|
+| SMOKE-01 | 打开 admin 页 | `#sec-achievements` 可见, summary 含「🏅 成就发放」|
+| SMOKE-02 | 页面加载完 | `#achievement-select` 有 8 个 option (migration 0021 seed) |
+| EDGE-01 | 选 `admin_flat` 奖项 (id=5 创新家务奖) | 牌级下拉**只有 1 项**「平发」, value=`flat` |
+| EDGE-02 | 选 `admin_tier` 奖项 (id=1 语文默写全对) | 牌级下拉 **5 项** (iron/bronze/silver/gold/king), **不含**「平发」, 带 ladder 提示「铁牌 (累计 1 次)」|
+| EDGE-03 | flat → tier 切换 | 牌级下拉重算, `flat` 消失 (不留上一个奖项的残值) |
+| HAPPY-01 | 发 bronze | toast「已发放」+ 日志出现该行 (奖项名 + 牌级 + ✅ 已发放) + DB `achievement_awards` 新增 active row |
+| HAPPY-02 | 点撤销 | `window.confirm` 二次确认 (文案含「烧回」) → toast「已撤销」→ 该行变「↩️ 已撤销」+ DB `status='revoked'` |
+| EDGE-04 | 撤销后再看该行 | 该行**没有** `data-act="revoke-achievement"` 按钮 |
+| EDGE-05 | 状态筛选 | 全部 → 1 行 (active+revoked 都在, 审计面不隐藏历史); 已发放 → 0 行; 已撤销 → 1 行 |
+| SEASON-01 | 新建赛季 | 当前赛季切到 S2 + 赛季列表 2 条 |
+
+**牌级规则契约 (unit, 24 its)**:
+- `admin_flat` → 恰好 1 个选项 (`flat` / 「平发」)
+- `admin_tier` / `auto_streak` → 恰好 5 个选项, **永不含** `flat`
+- ladder 提示: tier 奖用「累计 N 次」, streak 奖用「累计 N 天」
+- ladder 只含部分档位 → 只给那几档
+- ladder 为空 → 退回全五档 (后端也放行), 且无提示后缀
+- 未知牌级 → 原样返回 (不猜)
+- admin.js 接线: section 元素齐全 / shared 脚本先于 admin.js 加载 / 发放与撤销 API 路径 / `confirm:true` / 撤销有 `window.confirm` 且文案含「烧回」/ 日志默认 `status=all` / 动态文本过 `escapeHtml` / 撤销按钮只在 active 行 / 赛季墙链接带 `?season_id=`
+- **徽章 class 隔离**: 面板徽章用 `.pm-badge.ach-*` (独立 class), **不复用** `.pm-badge.approved|pending|rejected|revoked` —— 那 4 个是 `score_event` 状态的专属语义, `ui-admin-all-events.spec.ts` 数 `.pm-row .pm-badge.approved` == 1, 复用会把计数顶成 2
+
+**验收口径**:
+- 铸币/烧币精确断言 (条数 + `change_value` + `source_ref` 分组) — `achievement-awards-admin.test.ts`
+- 烧币双闸门: revoked 行不再二次烧 — 同上
+- streak 引擎 T1-T7 + 跨赛季重置 — `achievement-streak.test.ts`
+- 撤销后重发 = 新 award 新铸币 (`source_ref` 随 award_id, 天然不撞) — 同上
+- admin auth + confirm 门 + `status=all` — 同上
+- 面板牌级下拉与后端校验同构 (前端永不给 PM 选一个后端必 400 的组合) — `achievement-admin-panel.test.ts`
+
+**引用**: PRD §14, `docs/achievements-spec.md` §8a / §10

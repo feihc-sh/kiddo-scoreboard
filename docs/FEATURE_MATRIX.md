@@ -3,8 +3,8 @@
 > 一张大表看清"业务规则 / UI 功能 / 测试覆盖"三件套。
 > 给 agent / 用户看: **每个功能点有没有测, 测了什么, 还有什么 gap。**
 
-**最后更新**: 2026-06-24
-**总览**: PRD §3 (6 业务规则) + §5 (8 流程) = **15 业务侧功能点** ↔ TEST_PLAN §3 (23 UI 功能, 含 3.16.1-3.16.4 coin shop v3 + 3.17-3.19 running map + 3.20 mecha) ↔ 24 unit + 53 e2e baseline + 21 coin (12 functional + 4 SQL invariant + 5 visual) + 2 mecha unit + 2 mecha e2e = **102 测试文件** (v2.2 baseline + 2 P0 + 2 P1 regression + v3 coin shop + #011 running map PR + #012 calendar icons PR + #008 mecha)
+**最后更新**: 2026-11-13
+**总览**: PRD §3 (6 业务规则) + §5 (8 流程) + §14 (成就系统) = **16 业务侧功能点** ↔ TEST_PLAN §3 (25 UI 功能, 含 3.16.1-3.16.4 coin shop v3 + 3.17-3.19 running map + 3.20 mecha + 3.25 成就系统) ↔ 24 unit + 53 e2e baseline + 21 coin (12 functional + 4 SQL invariant + 5 visual) + 2 mecha unit + 2 mecha e2e + 8 成就 unit (101 its) + 1 成就 e2e = **111 测试文件** (v2.2 baseline + 2 P0 + 2 P1 regression + v3 coin shop + #011 running map PR + #012 calendar icons PR + #008 mecha + v2.2 成就系统)
 | **3.13** | 打卡日历 (月历 + day detail modal + cell icons + tab filter, Item #006/#012) | `src/routes/public/calendar.ts` + `calendar-details.ts` + `calendar-tasks.ts` + `public/app.js` + `app.css` | 3.17 | `calendar-render.test.ts` `calendar-color.test.ts` `calendar-toggle.test.ts` `calendar-tasks.test.ts` `calendar-checkins-filter.test.ts` | `ui-calendar-month-nav.spec.ts` `ui-calendar-day-detail.spec.ts` `ui-calendar-icons.spec.ts` | ✅ 100% |
 
 **最新 Qual 报告**:
@@ -24,8 +24,9 @@
 | **3.15** | Task Lifecycle — Suspend/Resume (Item #014, v2.x) | `routes/admin/tasks.ts :: POST /:id/toggle` | 3.21 | `admin-task-toggle.test.ts` | `admin-task-toggle.spec.ts` | ✅ 100% |
 | **3.5** | 边界 case (软删/审计/锁 + **硬删 v2.2**) | `utils/audit.ts` + `auth/lockout.ts` + `utils/deleted-records.ts` + `routes/admin/events.ts` + `routes/admin/task-completions.ts` + `routes/admin/deleted-records.ts` | 3.1, 3.6, **3.15** | `lockout.test.ts` `audit.test.ts` `deleted-records.test.ts` `admin-events-hard-delete.test.ts` `admin-task-completions-hard-delete.test.ts` | `flow-pm-lockout.spec.ts` `smoke-admin-audit.spec.ts` **`ui-admin-hard-delete.spec.ts`** **`ui-admin-hard-delete-fk.spec.ts`** ⚠️ NEW (P0, FK 约束, 2026-06-09) | ⚠️ 95% — FK 路径未覆盖 (新 spec RED 待 PM 修) |
 | **3.16** | 任务生效日 (active_days) + 清空/恢复当天打卡 (v2.x, 2026-10-20) | `migrations/0020` + `routes/me/tasks.ts` (400 `TASK_NOT_ACTIVE_TODAY`) + `utils/coin.ts :: isAllTasksCompleted` (只算当天到期) + `routes/admin/task-completions.ts :: POST /reset-day` (delete-based 清空 / `mode:'restore'` 恢复) | 3.23 (新增) | `admin-tasks-active-days.test.ts` `me-tasks-complete.test.ts` (gating + bonus describe) `admin-task-completions-reset-day.test.ts` (11 its) `admin-task-completions-list.test.ts` (status=all) | (待补 e2e) | ⚠️ 100% unit / 0% e2e |
+| **14** | 成就系统 (三组 × 五档牌 × 赛季制 + 🌟 星币铸造/撤销对称性, v2.2) | `migrations/0021` + `utils/achievements.ts` + `utils/achievement-service.ts` (铸币/烧币同 batch) + `utils/streak.ts` + `routes/admin/achievement-awards.ts` + `routes/public/achievements.ts` + `public/achievements.*` + `public/medals.js` + `public/shared/achievement-tiers.js` + `public/admin/admin.js` (🏅 成就发放面板) | 3.25 (新增) | `achievement-awards-admin.test.ts` (21) `achievement-seasons.test.ts` (6) `achievement-streak.test.ts` (19) `achievement-public-api.test.ts` (13) `achievement-journey.test.ts` (1) `achievement-complete-hook.test.ts` (4) `achievement-real-d1.test.ts` (13) `achievement-admin-panel.test.ts` (24) | `admin-achievement-panel.spec.ts` (10) | ✅ 100% (101 unit + 10 e2e) |
 
-| **业务规则侧覆盖率**: **8/8** ✅ (含 §3.15 + §3.16; §3.16 仅 unit 覆盖, e2e 待补)
+| **业务规则侧覆盖率**: **9/9** ✅ (含 §3.15 + §3.16 + §14 成就系统; §3.16 仅 unit 覆盖, e2e 待补)
 **gap (已补)**: PRD 3.5 新增硬删 (v2.2) — 物理删 event/completion + `deleted_records` snapshot + audit log, 全部由 §3.15 e2e + 2 unit spec 覆盖。
 **gap (待补)**: PRD 3.5 硬删 FK 路径 — `task_completions.awarded_event_id → score_events.id` 的 FK 约束导致硬删 event 失败 (500)。新增 `ui-admin-hard-delete-fk.spec.ts` (3 case, 1 通过/2 RED) 等 PM 修。
 **gap (已补)**: PRD §3.15 Task Lifecycle (Item #014) — §3.21 + §3.5 交叉覆盖, 业务规则侧 +7/7。
@@ -45,8 +46,11 @@
 | **5.7** | 双账户兑换 | PM | `POST /api/admin/exchange` | `ui-admin-exchange.spec.ts` `smoke-admin-exchange-grant.spec.ts` `flow-exchange.spec.ts` |
 | **5.8** | 周额度发放 | PM | `POST /api/admin/weekly-grant` | `ui-admin-grant.spec.ts` `flow-weekly-payout.spec.ts` |
 | **5.9** | PM 清空当天打卡 / 恢复当天 (v2.x, 2026-10-20) | PM | `POST /api/admin/task-completions/reset-day` (`mode` 缺省=清空 delete-based; `mode:'restore'`=恢复) | 走 unit 覆盖 (`admin-task-completions-reset-day.test.ts`), **e2e 尚缺** |
+| **14.4** | PM 发放成就牌 (v2.2) | PM | `POST /api/admin/achievement-awards` | `admin-achievement-panel.spec.ts` (ACHIEVEMENT-HAPPY-01) |
+| **14.4** | PM 撤销成就牌 (v2.2, 破坏性 + confirm 门) | PM | `POST /api/admin/achievement-awards/revoke` (`confirm:true`) | `admin-achievement-panel.spec.ts` (ACHIEVEMENT-HAPPY-02 + EDGE-04) |
+| **14.1.3** | PM 新建赛季 (v2.2) | PM | `POST /api/admin/seasons` | `admin-achievement-panel.spec.ts` (ACHIEVEMENT-SEASON-01) |
 
-**交互流程侧覆盖率**: **8/9 有专属 e2e** (5.9 仅 unit 覆盖, e2e 待补)
+**交互流程侧覆盖率**: **11/12 有专属 e2e** (5.9 仅 unit 覆盖, e2e 待补)
 
 ---
 
@@ -82,8 +86,10 @@
 | **3.20** | 任务装备/机甲化 (Item #008 Stage 1-4) | ✓ | ✓ | — | `task-mecha-button.test.ts` (11) + `mecha-equip-activation.test.ts` (8) + `ui-task-mecha-frame.spec.ts` (4) + `ui-equip-activation.spec.ts` (6) |
 | **3.21** | Task Suspend/Resume — Admin Toggle (Item #014) | ✓ | ✓ | — | `admin-task-toggle.test.ts` (6) + `admin-toggle-ui.test.ts` (5) | `admin-task-toggle.spec.ts` (4 e2e) |
 | **3.22** | 暑假作业 Modal — Kid UI (Item #016) | ✓ | ✓ | — | `summer-homework-modal.test.ts` (8) + §7 disabled (3) | `summer-homework-modal.spec.ts` (4 e2e: happy 1+2+3 + edge cancel) + `summer-homework-disabled.spec.ts` (4 e2e: kid-invisible / API-400 / admin-section-hidden / re-enable smoke) | **🚫 2026-09-04 post-暑假 disabled** (data retained, modal code preserved; see [`SUMMER-HOMEWORK-DISABLED.md`](./SUMMER-HOMEWORK-DISABLED.md)) |
+| **3.25.1** | Admin 成就发放面板 (v2.2 — 奖项→牌级→发放) | ✓ | ✓ | ✓ | `achievement-admin-panel.test.ts` (24 its: 牌级规则 10 + admin.js 接线 14) | `admin-achievement-panel.spec.ts` (10 e2e: 2 smoke + 2 happy + 4 edge + 1 状态筛选 + 1 赛季) |
+| **3.25.2** | Child 成就墙 — Zelda 神殿风 (v2.2) | ✓ | ✓ | ✓ | (unit: `achievement-public-api.test.ts` 13 its, API 层) | (成就墙 e2e 待补 — Card 2 交付, gap 已记) |
 
-**UI 功能覆盖率**: **24/24 = 100%** ✅ (3.1-3.16.4 baseline + 3.17-3.19 running map + 3.20 mecha + 3.21 suspend + 3.22 homework modal)
+**UI 功能覆盖率**: **25/25 = 100%** ✅ (3.1-3.16.4 baseline + 3.17-3.19 running map + 3.20 mecha + 3.21 suspend + 3.22 homework modal + 3.25 成就系统)
 
 ---
 

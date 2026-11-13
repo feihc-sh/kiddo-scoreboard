@@ -1231,6 +1231,141 @@ PM 撤销跑步记录时, 原子执行:
 
 ---
 
+## 14. 成就系统（v2.2 新增 — 🏅 achievements / 🌟 pet_tokens）
+
+**背景：** 金币系统解决"即时激励"，但缺少**中期目标** —— 孩子想要的是"集齐一整排奖牌"的成就感。成就系统引入 **三组 × 五档牌 × 赛季制** 的收集玩法，并把每次获得成就铸造成 **🌟 星币（pet_tokens）** 落进 `score_events` 账本，为未来的宠物系统预留消费端。
+
+**完整 spec：** `docs/achievements-spec.md` v1.1（Zelda 神殿风定稿）— 本节为 PRD 摘要。
+
+### 14.1 业务规则
+
+#### 14.1.1 三组 × 五档牌
+
+| 维度 | 取值 | 说明 |
+|------|------|------|
+| 组 (`grp`) | `study` 学习组 / `life` 生活组 / `skill` 技能组 | 成就墙分区展示 |
+| 牌级 (`tier`) | `iron` 铁 / `bronze` 铜 / `silver` 银 / `gold` 金 / `king` 王者 | 金属质感递进，5 档色板（medal v3） |
+| 发放模式 (`grant_mode`) | `admin_tier` / `admin_flat` / `auto_streak` | 决定该奖项允许发哪些牌级 |
+
+**8 个 seed 奖项**（`migrations/0021_achievements.sql`）：
+
+| id | 组 | 奖项 | 发放模式 | 档位阶梯 |
+|----|----|------|----------|----------|
+| 1 | study | 语文默写全对 | `admin_tier` | 1铁/3铜/5银/8金/10王者（次数档）|
+| 2 | study | 英语默写全对 | `admin_tier` | 同上 |
+| 3 | study | 测评得优 | `admin_tier` | 同上 |
+| 4 | life | 自律生活 | `auto_streak` | 2铁/4铜/8银/15金/30王者（天数档）|
+| 5 | life | 创新家务奖 | `admin_flat` | 无阶梯，只能 `flat`（平发）|
+| 6 | skill | 读完一本长篇中文小说 | `admin_tier` | 次数档 |
+| 7 | skill | 完成一首新曲子演奏 | `admin_tier` | 次数档 |
+| 8 | skill | 通关一个新游戏 | `admin_tier` | 次数档 |
+
+#### 14.1.2 牌级合法性（后端强制，前端必须跟着走）
+
+| `grant_mode` | 允许的 `tier` | 说明 |
+|--------------|---------------|------|
+| `admin_flat` | **只有** `flat` | 平发奖无等级阶梯，发五档必 400 `INVALID_TIER` |
+| `admin_tier` | 五档之一，且**必须在该奖项的 `ladder` 里** | 阶梯外的档位必 400 `INVALID_TIER` |
+| `auto_streak` | 五档之一 | admin 可手动补发（streak 引擎不自动补发撤销过的牌）|
+
+`ladder` 的值是**累计次数提示**（次数档 1/3/5/8/10）或**天数提示**（天数档 2/4/8/15/30）——只作 admin 端提示文案，不强制。
+
+#### 14.1.3 赛季制
+
+- `seasons` 表有且仅有一条 `is_current = 1`（DB 部分唯一索引保证）。
+- **新建赛季**（`POST /api/admin/seasons`）自动把旧赛季 `is_current` 翻 0 → 归档。旧赛季的 awards 仍挂在旧 `season_id` 上，成就墙归档视图照常可查。
+- 新赛季计数从零开始 —— 成就墙「当前赛季」与「上赛季归档」两个 tab 用 `?season_id=` 区分。
+
+#### 14.1.4 🌟 星币铸造 / 撤销对称性
+
+**铸造**（每次发放成就 → 铸新代币）：
+
+| 牌级 | 铁 | 铜 | 银 | 金 | 王者 | 平发 |
+|------|----|----|----|----|------|------|
+| 🌟 星币 | +1 | +2 | +3 | +5 | +8 | +1 |
+
+- 落账在 `score_events`（`type='pet_tokens'`, `source='achievement'`），跟 coins 同构 —— 余额走现有 SUM 推导口径，**不改动** `/api/public/balance` 的响应形状（`pet_tokens` 单独读）。
+- 幂等锚点：`source_ref = 'achievement:award:<award_id>'`。
+- **铸造必须与 award INSERT 在同一个 `db.batch` 里** —— 不许先插 award 再回填 FK（见 `achievement-service.ts`）。
+
+**撤销对称性**：
+
+- 撤销 = 状态翻转（`active` → `revoked`）+ **对称烧回该次铸造的 🌟**（写 `-N` 的 `score_events`）。
+- **双闸门**：只对 `active` 且**未烧过**的 award 写烧回 —— 已撤销的行不再二次烧。
+- `source_ref = 'achievement:burn:award:<award_id>'`（与铸造 ref 不同，杜绝撞幂等键）。
+- 撤销**不可恢复**（restore 本批不做），但撤销后 admin 可以**重新发放**（新 award → 新铸币 → 新 `source_ref`，天然不撞）。
+
+### 14.2 数据模型（`migrations/0021_achievements.sql`）
+
+```sql
+seasons(id, name, starts_on, ends_on, is_current)
+achievements(id, grp, name, description, grant_mode, ladder_json, is_active, sort_order)
+achievement_awards(id, achievement_id, user_id, tier, season_id,
+  status('active'/'revoked'), granted_by, granted_at, revoked_at, revoked_by)
+```
+
+- `ladder_json` 是 JSON **TEXT** —— 服务端必须 parse 成对象再返回（R11 教训），绝不把 raw TEXT 丢给前端。
+- `granted_by` / `revoked_by` 可为 NULL（streak 引擎自动发放时没有 PM 在场）；**不能用 0 占位** —— 该列 FK-enforced，0 不存在于 `users(id)`，会直接触发 FK 违例（D1 Code 7500）。
+
+### 14.3 API 设计
+
+| Method | Path | 角色 | Body | 说明 |
+|--------|------|------|------|------|
+| POST | `/api/admin/achievement-awards` | PM | `{achievement_id, tier, user_id, season_id?}` | 发放一张牌 + 铸币 + audit。不传 `season_id` 用当前赛季 |
+| POST | `/api/admin/achievement-awards/revoke` | PM | `{award_id, confirm:true}` | 撤销 + 烧币 + audit。`confirm` 缺失 → 400 `CONFIRM_REQUIRED`（R9 破坏性门）|
+| GET | `/api/admin/achievement-awards?status=all\|active\|revoked` | PM | — | 发放日志。**默认 `all`** —— 审计面不默认隐藏 revoked（R8 教训）|
+| GET | `/api/admin/seasons` | PM | — | `{seasons:[...], achievements:[...]}` —— 赛季列表 + 成就目录（含 parse 后的 `ladder`）|
+| POST | `/api/admin/seasons` | PM | `{name, starts_on, ends_on?}` | 新建赛季 + 旧赛季归档 + audit |
+| POST | `/api/admin/achievements/eval-streak` | PM | `{user_id?}` | 手动重跑 streak 引擎（调试用）|
+| GET | `/api/public/achievements?user_id=N[&season_id=M]` | 公开 | — | 成就墙数据：`{season, achievements:[{id,grp,name,description,grant_mode,ladder,award}], pet_tokens}` |
+
+`award` 字段语义：该赛季该奖项**已获最高档**（按金属层级，不按发放时间）；`count` = 同档累计发放次数（同档可重发）。`award = null` = 该奖项本赛季未解锁。
+
+### 14.4 Admin 发放面板 UI（`public/admin/`）
+
+| 元素 | id | 行为 |
+|------|----|------|
+| 发放表单 | `#achievement-grant-form` | 奖项下拉 + 牌级下拉 + `user_id`（默认 2 = `CHILD_USER_ID`）+ 发放按钮 |
+| 奖项下拉 | `#achievement-select` | 数据来自 `GET /api/admin/seasons` 的 `achievements[]` |
+| 牌级下拉 | `#achievement-tier-select` | **按所选奖项的 `grant_mode` + `ladder` 动态生成** —— `admin_flat` 只给「平发」；其余只给 ladder 里存在的档位，并带累计次数提示（"铜牌 (累计 3 次)"）。**切换奖项必须重算**，不留上一个奖项的残值 |
+| 发放日志 | `#achievement-awards-list` | 每行：奖项名 + 牌级 + 状态（✅ 已发放 / ↩️ 已撤销）+ 授予时间 + award id。撤销按钮**只在 `status === 'active'` 的行显示** |
+| 状态筛选 | `#filter-achievement-status` | 全部 / 已发放 / 已撤销（走后端 `status` query 参数）|
+| 赛季管理 | `#achievement-season-form` | 显示当前赛季 + 新建赛季表单 + 每个赛季的「查看该赛季成就墙」链接（`/achievements.html?season_id=<id>`）|
+| streak 重算 | `#btn-eval-streak` | 手动重跑 streak 引擎（PM 修完数据后用）|
+
+**牌级规则的单一事实源** = `public/shared/achievement-tiers.js`（classic script + `window.ACHIEVEMENT_TIERS`）。面板下拉与后端校验同构 —— PM 永远不会选出一个后端必 400 的组合。
+
+**徽章 class 隔离**：面板的状态徽章用**自己的** class（`.pm-badge.ach-active` / `.ach-revoked` / `.ach-current` / `.ach-archived`），**不复用** `.pm-badge.approved|pending|rejected|revoked` —— 那 4 个 class 是 `score_event` 状态的专属语义，别处（`ui-admin-all-events.spec.ts` 等）会用全局选择器数它们，复用会把计数顶翻。
+
+**撤销二次确认**：撤销是破坏性操作（会烧回 🌟），确认文案必须明确说明"本次铸造的 🌟 星币会被烧回（余额相应减少）"，不能只说"确定撤销吗"。
+
+### 14.5 自动规则引擎（自律生活）
+
+- 挂钩 `me/tasks.ts /complete` 的 bonus 检查同构位置，best-effort 不回滚主流程。
+- 连续全卡天数从 `task_completions` 推导（复用 `isAllTasksCompleted` / `dueToday` 口径）。
+- **达档判定只看当前赛季 `starts_on` 之后的天数**。
+- **幂等**：同季同 achievement 同 tier 只发一次 —— 判定口径是"**是否发过（含 revoked）**"，所以 streak 引擎**不自动补发**被撤销的牌（admin 手动 grant 才补）。
+
+### 14.6 验收清单（成就系统专属）
+
+- [ ] grant/revoke 的 `score_events` 精确断言：条数 + `change_value` + `source_ref` 分组
+- [ ] 烧币双闸门：revoked 行不再二次烧
+- [ ] streak 引擎：连续 2 天 → 铁牌；中断后重连不重复发；30 天连续 → 五档逐级发放
+- [ ] 撤销后重发 = 新 award + 新铸币（`source_ref` 不撞）
+- [ ] admin auth + confirm 门 + `status=all` 默认全量
+- [ ] 牌级下拉：flat 奖项只有「平发」；tier 奖项不含「平发」；切换奖项重算
+- [ ] 撤销按钮只在 active 行出现
+- [ ] 赛季切换：S1 awards 归档展示，S2 从零开始
+
+### 14.7 Reference
+
+- **完整 spec**：`docs/achievements-spec.md` v1.1
+- **Migration**：`migrations/0021_achievements.sql`（score_events 重建 + 3 张新表 + 8 奖项 seed）
+- **后端**：`src/utils/achievements.ts`（牌级/ladder/赛季 util）· `src/utils/achievement-service.ts`（铸币/烧币对称逻辑）· `src/utils/streak.ts`（streak 引擎）
+- **前端**：`public/achievements.html` / `.js` / `.css`（Zelda 神殿风成就墙）· `public/medals.js`（medal v3 生成器）· `public/shared/achievement-tiers.js`（牌级规则）
+
+---
+
 
 ## 附录 A: 与 plan 的对应关系
 
