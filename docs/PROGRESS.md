@@ -1137,3 +1137,27 @@ git log --oneline -5  # 看最新进度
 - 面板牌级规则与后端校验**两处**实现 (`public/shared/achievement-tiers.js` vs `src/routes/admin/achievement-awards.ts`) —— 靠 `achievement-admin-panel.test.ts` 的契约断言兜住 (换后端规则必须同步改 shared 文件)
 - 成就面板的状态徽章用**独立 class** (`.pm-badge.ach-*`), 不复用 `.pm-badge.approved|pending|revoked` —— 后者是 `score_event` 状态的专属语义, 全局 CSS 选择器 (`ui-admin-all-events.spec.ts` 数 `.pm-row .pm-badge.approved` == 1) 会把它们数进去。已加 unit 断言防回归。
 - 成就墙 (Card 2) 的 e2e 未补 —— 已记 FEATURE_MATRIX gap (只覆盖了 admin 面板 + API 层)
+
+---
+
+## 2026-11-14 · 像素成就墙上线 + admin 登录修复 (PR #57 + #58)
+
+**交付**:
+- **像素成就墙** (feihao 拍板, 替换 Zelda 神殿页入口): `public/achievements-pixel.{html,css,js}`
+  — 8-bit 红砖墙/地牢石砖风, 真数据接线 `GET /api/public/achievements`, 8 奖项 × 5 档
+  (铁/铜/银/金/王者) 边框色 + pip 灯, 像素详情弹窗, SFX 音效, 中文字体 ZCOOL QingKe HuangYou。
+  旧神殿页 (achievements.html) 保留可回滚。
+- **admin PIN 登录三连修**: ① login.js 开机自查 /auth/me (已有活会话直接跳后台,
+  根治「输对了也报错但最后进去了」) ② e2e 测试库隔离 .wrangler/state-e2e (webServer +
+  clean-test-db.sh + helpers/db.ts 三处统一; 之前 e2e 清库洗掉 dev 库 PM 账户) ③ dev 库
+  PM 账户恢复 (PIN 1234, pbkdf2 同参重铸, wrangler d1 execute 官方通道)。
+
+**验证口径**: e2e PIXEL-SMOKE 5/5 绿 (state-e2e 隔离后 dev 库不动) · vitest 764/767
+(3 pre-existing: mecha-equip ×2 + summer-homework ×1) · tsc 231 pre-existing 基线 0 新增。
+
+**环境事实 (以后会话必读)**:
+- dev server 常驻: `cd kiddo-scoreboard-achievements && npx wrangler pages dev --port 8787 --ip 0.0.0.0`
+  (不带 --persist-to → 默认 dev 库 .wrangler/state, 内含 PM 账户 + S1 赛季; --ip 0.0.0.0 才能从 Tailscale 访问)
+- e2e 跑完 Playwright 会杀掉 8787 托管的 server — dev 打不开时先 `lsof -nP -iTCP:8787` 再重启
+- 8787 端口被别的 worktree 占用时 e2e 会静默测错 app (reuseExistingServer: true)
+- Card 2 e2e gap 已补: achievements-pixel.e2e.spec.ts SMOKE-1..5
