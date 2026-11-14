@@ -41,6 +41,34 @@ body {
   overflow-x: hidden;
 }
 
+/* ====== 返回主面板 ====== */
+.back-link {
+  align-self: flex-start;
+  margin: 0 0 10px 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--zh-font);
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: #e2e8f0;
+  text-decoration: none;
+  padding: 6px 12px;
+  background-color: #1c1f26;
+  box-shadow:
+    0 -3px 0 0 #0b0c0e, 0 3px 0 0 #0b0c0e, -3px 0 0 0 #0b0c0e, 3px 0 0 0 #0b0c0e,
+    inset 0 3px 0 0 #475569, inset 0 -3px 0 0 #1e293b;
+  text-shadow: 2px 2px 0 #0b0c0e;
+  transition: transform 0.08s steps(2);
+}
+.back-link:hover {
+  color: #fde047;
+  box-shadow:
+    0 -3px 0 0 #0b0c0e, 0 3px 0 0 #0b0c0e, -3px 0 0 0 #0b0c0e, 3px 0 0 0 #0b0c0e,
+    inset 0 3px 0 0 #facc15, inset 0 -3px 0 0 #a16207;
+}
+.back-link:active { transform: translateY(2px); }
+
 /* ====== 顶部控制行 (标题 + 星币 + SFX) ====== */
 .top-bar {
   width: 100%;
