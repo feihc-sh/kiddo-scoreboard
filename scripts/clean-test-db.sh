@@ -23,10 +23,13 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-D1_DIR="$PROJECT_ROOT/.wrangler/state/v3/d1/miniflare-D1DatabaseObject"
-CACHE_DIR="$PROJECT_ROOT/.wrangler/state/v3/cache/miniflare-CacheObject"
-STATE_DIR="$PROJECT_ROOT/.wrangler/state/v3"
-PERSIST_DIR="$PROJECT_ROOT/.wrangler/state"
+# 2026-11-14 修复: e2e 用独立测试库目录 state-e2e, 与 PM 的 dev 库 (.wrangler/state) 隔离.
+# 之前清库直接洗 .wrangler/state → feihao 的 PM 账户/PIN 被清掉 (NO_PM_USER 登录故障).
+E2E_STATE_NAME="state-e2e"
+D1_DIR="$PROJECT_ROOT/.wrangler/$E2E_STATE_NAME/v3/d1/miniflare-D1DatabaseObject"
+CACHE_DIR="$PROJECT_ROOT/.wrangler/$E2E_STATE_NAME/v3/cache/miniflare-CacheObject"
+STATE_DIR="$PROJECT_ROOT/.wrangler/$E2E_STATE_NAME/v3"
+PERSIST_DIR="$PROJECT_ROOT/.wrangler/$E2E_STATE_NAME"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
