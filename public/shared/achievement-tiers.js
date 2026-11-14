@@ -78,5 +78,6 @@
     GROUP_LABELS,
     tierOptionsFor,
     tierLabel,
+    ladderUnit,
   };
 })();
