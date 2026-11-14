@@ -75,6 +75,20 @@ const els = {
   seasonDates: $('#season-dates'),
   overallNum: $('#overall-num'),
   overallFill: $('#overall-fill'),
+  modal: $('#detail-modal'),
+  modalCard: $('#modal-card'),
+  modalIcon: $('#modal-icon'),
+  modalCategory: $('#modal-category'),
+  modalTitle: $('#modal-title'),
+  modalStatus: $('#modal-status-text'),
+  modalBadge: $('#modal-tier-badge'),
+  modalDesc: $('#modal-desc'),
+  modalPips: $('#modal-pips'),
+  modalLadder: $('#modal-ladder'),
+  modalGroup: $('#modal-group'),
+  modalAwardId: $('#modal-award-id'),
+  modalGrantedAt: $('#modal-granted-at'),
+  closeModalBtn: $('#close-modal-btn'),
 };
 
 /** 页面状态 —— 只读渲染用的单一数据源。 */
@@ -83,6 +97,7 @@ const state = {
   achievements: [],
   petTokens: 0,
   loadStatus: 'loading',   // 'loading' | 'ok' | 'error'
+  selectedId: null,
 };
 
 // =============================================================
@@ -557,14 +572,118 @@ async function loadWall() {
 }
 
 // =============================================================
+// 详情弹窗 (像素风)
+// =============================================================
+
+/** 打开某个奖项的详情弹窗。 */
+function openModal(id) {
+  const achievement = state.achievements.find((a) => String(a.id) === String(id));
+  if (!achievement) return;
+  state.selectedId = id;
+
+  const unlocked = isUnlocked(achievement);
+  const tier = tierOf(achievement);
+  const flat = isFlat(achievement);
+  const unit = unitFor(achievement);
+  const entries = ladderEntries(achievement);
+  const count = achievement.award?.count ?? 0;
+
+  if (els.modalCard) {
+    els.modalCard.classList.toggle('unlocked', unlocked);
+    els.modalCard.classList.toggle('locked', !unlocked);
+  }
+  if (els.modalIcon) {
+    els.modalIcon.innerHTML = PIXEL_ICONS[iconKeyFor(achievement)] ?? '';
+  }
+  if (els.modalCategory) {
+    els.modalCategory.textContent = `${groupLabel(achievement.grp)} · ${String(achievement.grp).toUpperCase()}`;
+  }
+  if (els.modalTitle) {
+    els.modalTitle.textContent = achievement.name ?? '';
+  }
+  if (els.modalStatus) {
+    els.modalStatus.textContent = unlocked ? '已获得' : '未解锁 — 继续努力，小骑士！';
+    els.modalStatus.className = `modal-status-value ${unlocked ? 'unlocked' : 'locked'}`;
+  }
+  if (els.modalBadge) {
+    els.modalBadge.textContent = unlocked ? tierLabel(tier) : '未解锁';
+    els.modalBadge.className = `tier-badge ${unlocked ? 'unlocked' : ''}`;
+  }
+  if (els.modalDesc) {
+    els.modalDesc.textContent = achievement.description ?? '暂无描述';
+  }
+  if (els.modalPips) {
+    els.modalPips.innerHTML = flat ? '' : pipsHtml(achievement);
+  }
+  if (els.modalLadder) {
+    if (flat) {
+      // 平发奖没有阶梯 —— 展示「每次平发」的规则说明
+      els.modalLadder.innerHTML =
+        `<li><span class="ladder-tier">${escapeHtml(tierLabel('flat'))}</span>` +
+        `<span class="ladder-need">每次平发 · 已获 ${count} ${unit}</span></li>`;
+    } else {
+      const reached = reachedIndex(achievement);
+      els.modalLadder.innerHTML = entries.map(({ tier: t, need }, i) => {
+        const isReached = reached >= 0 && i <= reached;
+        return `<li class="${isReached ? 'reached' : ''}">` +
+          `<span class="ladder-tier">${escapeHtml(tierLabel(t))} ${t.toUpperCase()}</span>` +
+          `<span class="ladder-need">累计 ${need} ${unit}</span></li>`;
+      }).join('');
+    }
+  }
+  if (els.modalGroup) {
+    els.modalGroup.textContent = groupLabel(achievement.grp).toUpperCase();
+  }
+  if (els.modalAwardId) {
+    els.modalAwardId.textContent = `#${String(achievement.id).padStart(3, '0')}`;
+  }
+  if (els.modalGrantedAt) {
+    els.modalGrantedAt.textContent = achievement.award?.granted_at
+      ? new Date(achievement.award.granted_at).toLocaleDateString('zh-CN')
+      : '—';
+  }
+
+  if (els.modal) {
+    els.modal.hidden = false;
+    els.modal.classList.add('open');
+    els.modal.setAttribute('aria-hidden', 'false');
+  }
+  if (els.closeModalBtn) els.closeModalBtn.focus();
+}
+
+/** 关闭详情弹窗。 */
+function closeModal() {
+  if (els.modal) {
+    els.modal.classList.remove('open');
+    els.modal.setAttribute('aria-hidden', 'true');
+    // 等淡出动画结束再隐藏, 避免闪现
+    window.setTimeout(() => {
+      if (els.modal && !els.modal.classList.contains('open')) els.modal.hidden = true;
+    }, 140);
+  }
+  state.selectedId = null;
+}
+
+// =============================================================
 // 事件绑定
 // =============================================================
 
-/** 卡片点击 → 像素音效。 */
+/** 卡片点击 → 音效 + 打开详情弹窗。 */
 function onWallClick(e) {
   const card = e.target.closest('.pixel-card');
   if (!card) return;
   playRetroSound('step');
+  openModal(card.dataset.award);
+}
+
+/** 卡片键盘可达 (Enter / Space)。 */
+function onWallKeydown(e) {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target.closest('.pixel-card');
+  if (!card) return;
+  e.preventDefault();
+  playRetroSound('step');
+  openModal(card.dataset.award);
 }
 
 function init() {
@@ -596,6 +715,7 @@ function init() {
   // 卡片点击 / 键盘
   if (els.wallRoot) {
     els.wallRoot.addEventListener('click', onWallClick);
+    els.wallRoot.addEventListener('keydown', onWallKeydown);
   }
 
   // 重试按钮
@@ -605,6 +725,18 @@ function init() {
       loadWall();
     });
   }
+
+  // 弹窗关闭: 关闭按钮 + 遮罩点击 + Esc
+  if (els.closeModalBtn) els.closeModalBtn.addEventListener('click', closeModal);
+  if (els.modal) {
+    els.modal.addEventListener('click', (e) => {
+      // 只有点在遮罩本身 (不是弹窗内容) 时才关闭
+      if (e.target === els.modal) closeModal();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && els.modal?.classList.contains('open')) closeModal();
+  });
 
   loadWall();
 }

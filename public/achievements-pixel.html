@@ -77,6 +77,45 @@
     <p class="foot-sub">每一次坚持，都会点亮一块像素 · 专心致志，收藏每一份荣誉</p>
   </footer>
 
+  <!-- ====== 详情弹窗 (像素风) ====== -->
+  <div class="modal-back" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-hidden="true" hidden>
+    <div class="modal-card" id="modal-card">
+      <button class="modal-close" id="close-modal-btn" type="button" aria-label="关闭">✕</button>
+
+      <div class="modal-body">
+        <!-- 放大版像素图标 -->
+        <div class="modal-icon-slot" id="modal-icon" role="img"></div>
+
+        <!-- 组名 -->
+        <div class="modal-category" id="modal-category">学习组 · STUDY</div>
+
+        <h3 class="modal-title" id="modal-title">成就名称</h3>
+
+        <!-- 获得状态 + 档位徽章 -->
+        <div class="modal-status">
+          <span class="modal-status-value locked" id="modal-status-text">未解锁 — 继续努力，小骑士！</span>
+          <span class="tier-badge" id="modal-tier-badge">未解锁</span>
+        </div>
+
+        <!-- 描述 -->
+        <p class="modal-desc" id="modal-desc"></p>
+
+        <!-- 5 档 pip 行 -->
+        <div class="modal-pips" id="modal-pips" aria-hidden="true"></div>
+
+        <!-- 各档所需次数/天数 -->
+        <ul class="modal-ladder" id="modal-ladder"></ul>
+
+        <!-- 脚注: GROUP / AWARD ID / 获得日期 -->
+        <div class="modal-foot">
+          <span>GROUP: <span class="foot-accent" id="modal-group">—</span></span>
+          <span>AWARD ID: <span class="foot-accent" id="modal-award-id">—</span></span>
+          <span>DATE: <span class="foot-accent" id="modal-granted-at">—</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 牌级规则的单一事实源 (classic script, 与 admin 面板共用) -->
   <script src="/shared/achievement-tiers.js?v=1"></script>
   <script src="/achievements-pixel.js?v=1"></script>
