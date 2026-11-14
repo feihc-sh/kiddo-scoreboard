@@ -198,10 +198,27 @@ function bind() {
 }
 
 // ---------- Boot ----------
+// Bugfix 2026-11-14 (feihao 报): 「PIN 输对了也报错, 但最后还是进去了」.
+// 根因: 无状态 JWT 会话 — 旧 cookie 仍有效时, 登录页照常要求输 PIN, 输对后
+// 偶发竞态 (双击/重复提交) 显示一次错误, 但 /admin/ 的 me 校验用旧 cookie
+// 照样放行. 修法: 进登录页先自查 /auth/me, 已有活会话直接跳后台, 不再出
+// 「输对了还报错」的矛盾体验.
+async function redirectIfSessionAlive() {
+  try {
+    const r = await fetch(API + '/api/admin/auth/me', { credentials: 'same-origin' });
+    if (r.ok) {
+      window.location.replace('/admin/');
+      return true;
+    }
+  } catch { /* offline / server down — 正常显示登录页 */ }
+  return false;
+}
+
 function boot() {
   bind();
   renderDots();
   els.submit.disabled = true;
+  redirectIfSessionAlive();
 }
 
 if (document.readyState === 'loading') {

@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'node:path';
 
 // NOTE: 3-shard parallel run was attempted but failed because wrangler 4.98's
 // `d1 execute --persist-to <abs-path>` resolves <abs-path> as relative to CWD
@@ -32,7 +33,14 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'node_modules/.bin/wrangler pages dev ./public --port 8787',
+    // 2026-11-14 修复: 显式 --persist-to 独立测试库目录.
+    // 之前不带此参数 → wrangler 落到项目默认 .wrangler/state (即 PM 的 dev 库),
+    // e2e 清库脚本把 feihao 的 PM 账户/PIN 一并清掉 (NO_PM_USER 登录故障).
+    // clean-test-db.sh 的 PERSIST_DIR 也已同步改为 .wrangler/state-e2e.
+    command: `node_modules/.bin/wrangler pages dev ./public --port 8787 --persist-to ${path.resolve(
+      new URL('.', import.meta.url).pathname,
+      '.wrangler/state-e2e',
+    )}`,
     url: 'http://127.0.0.1:8787',
     reuseExistingServer: true,
     timeout: 120_000,

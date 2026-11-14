@@ -14,10 +14,10 @@ import { readFileSync, existsSync } from 'node:fs';
 import { globSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-// Use process.cwd() so this works regardless of where the project is cloned
-// (was hardcoded to /Users/tidusmaomao/workspace/kiddo-scoreboard which broke
-// forks/branches/clones in other paths). Tests must be run from the project
-// root (`npm test` or `playwright test` from package.json cwd).
+// 2026-11-14 修复: e2e 用独立测试库目录 state-e2e (与 playwright.config.ts
+// webServer --persist-to 同一路径约定), 不再与 PM 的 dev 库 (.wrangler/state)
+// 共文件 — 之前 e2e 清库会洗掉 dev 库的 PM 账户/PIN.
+const E2E_STATE_NAME = 'state-e2e';
 const WRANGLER_CWD = process.cwd();
 
 // Locate the workerd D1 sqlite file (used by both wrangler d1 execute and
@@ -27,7 +27,7 @@ const WRANGLER_CWD = process.cwd();
 // in the hashed file (e.g. c2048...sqlite) — sort by file size desc so we pick
 // the largest (the actual D1 with tables) over the empty 0-byte placeholder.
 function d1SqlitePath(): string {
-  const dir = `${WRANGLER_CWD}/.wrangler/state/v3/d1/miniflare-D1DatabaseObject`;
+  const dir = `${WRANGLER_CWD}/.wrangler/${E2E_STATE_NAME}/v3/d1/miniflare-D1DatabaseObject`;
   const files = globSync(`${dir}/*.sqlite`)
     .filter(p => !p.includes('-shm') && !p.includes('-wal'))
     .map(p => ({ path: p, size: readFileSync(p).length }))
