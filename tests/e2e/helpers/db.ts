@@ -76,6 +76,21 @@ export function clearAllData(): void {
   );
 }
 
+/** Wipe achievement awards + reset seasons to the seed season (spec §6).
+ *  The achievements / seasons tables are seeded by migration 0021 and must
+ *  NOT be deleted (the admin panel reads the catalog from them), so this
+ *  helper only clears the *runtime* rows and restores the seed season.
+ *  Call this in beforeEach of achievement e2e specs so award counts and
+ *  "current season" assertions start from a known state. */
+export function clearAchievementData(): void {
+  d1Exec(
+    'DELETE FROM achievement_awards; ' +
+    "DELETE FROM seasons WHERE id != 1; " +
+    "UPDATE seasons SET is_current = 1, name = 'S1 · 四年级上学期', " +
+    "starts_on = '2026-09-01', ends_on = NULL WHERE id = 1;"
+  );
+}
+
 /** Re-seed the default running map + points (Shanghai→Suzhou 95 km, 10 nodes).
  *  Item #011 Stage 1 ships these via migrations/0010_seed_shanghai_suzhou.sql.
  *  Tests call clearAllData() which wipes them; this helper re-applies the seed

@@ -54,6 +54,11 @@ const state = {
   summerSubmatrix: null,
   summerSubmatrixTaskId: null,
   summerSubmatrixYear: 2026,
+  // 成就系统 (spec §7): 发放日志 + 赛季 + 成就目录
+  achievementAwards: [],   // Award[] (默认 status=all —— 审计面不隐藏历史)
+  achievementFilter: 'all',  // 'all' | 'active' | 'revoked'
+  achievementCatalog: [],    // Achievement[] (来自 GET /api/admin/seasons)
+  seasons: [],               // Season[]
 };
 
 // ---------- Toast ----------
@@ -216,6 +221,32 @@ function deletedMarker(recordType, originalId) {
   // Use the PM user's name when available; fall back to a generic label.
   const byName = state.user?.name || 'PM';
   return ` <span class="pm-row-deleted-marker">🗑 删于 ${fmtTime(d.deleted_at)} by ${escapeHtml(byName)}</span>`;
+}
+
+// ---------- 成就系统 (spec §7) ----------
+// 发放日志 (默认 status=all —— 审计面不默认隐藏 revoked, R8 教训)。
+// 筛选走后端 query 参数, 不在前端过滤, 这样 count 与日志一致。
+async function loadAchievementAwards() {
+  const status = state.achievementFilter || 'all';
+  try {
+    const r = await api('GET', `/api/admin/achievement-awards?status=${encodeURIComponent(status)}`);
+    state.achievementAwards = Array.isArray(r.awards) ? r.awards : [];
+  } catch (e) {
+    if (e.message === 'UNAUTHORIZED') throw e;
+    state.achievementAwards = [];
+  }
+}
+// 赛季 + 成就目录 (GET /api/admin/seasons 两个字段都有)。
+async function loadSeasons() {
+  try {
+    const r = await api('GET', '/api/admin/seasons');
+    state.seasons = Array.isArray(r.seasons) ? r.seasons : [];
+    state.achievementCatalog = Array.isArray(r.achievements) ? r.achievements : [];
+  } catch (e) {
+    if (e.message === 'UNAUTHORIZED') throw e;
+    state.seasons = [];
+    state.achievementCatalog = [];
+  }
 }
 
 // ---------- Item #016 §2 (2026-07-12 feihao): Summer Homework Calendar ----------
@@ -541,6 +572,9 @@ async function refreshAll() {
       // 如果 state.tasks 里没有 is_active=1 的 SUMMER_HOMEWORK_TASK_NAME,跳过这俩 network call。
       state.summerHomeworkActive ? loadSummerCalendar() : Promise.resolve(),
       state.summerHomeworkActive ? loadSummerSubitemsMatrix() : Promise.resolve(),
+      // 成就系统 (spec §7)
+      loadAchievementAwards(),
+      loadSeasons(),
     ]);
     renderAll();
   } catch (e) {
@@ -559,6 +593,11 @@ function renderAll() {
   renderCompletions();
   renderPendingRedemptions();
   renderRunningRecords();
+  // 成就系统 (spec §9)
+  renderAchievementSelect();
+  renderTierSelect();
+  renderAchievementAwards();
+  renderSeasons();
   renderSummerCalendar();
   // Item #016 §5 (2026-07-12 feihao): subitem dot matrix render.
   renderSummerSubitemsMatrix();
@@ -670,6 +709,152 @@ function renderRunningRecords() {
         (!isRevoked
           ? '<button class="pm-btn warn" data-act="revoke-running" data-id="' + r.id + '">↩ 撤销</button>'
           : '') +
+      '</div>'
+    ));
+  });
+}
+
+// ---------- 成就系统 (spec §9): 发放面板 ----------
+// 牌级规则来自 /shared/achievement-tiers.js (单一事实源, 与后端校验同构)。
+const TIER_RULES = (typeof window !== 'undefined' && window.ACHIEVEMENT_TIERS) || null;
+
+/** 成就显示名 (找不到时退回 #id —— 目录里没有的奖项不该让整行消失)。 */
+function achievementName(id) {
+  const a = state.achievementCatalog.find((x) => x.id === id);
+  return a ? a.name : `奖项#${id}`;
+}
+
+/** 牌级显示名 (铁牌/铜牌/…/平发)。 */
+function tierLabel(tier) {
+  return TIER_RULES ? TIER_RULES.tierLabel(tier) : String(tier || '');
+}
+
+/** 填奖项下拉。保留已选项 (刷新后不跳回第一项)。 */
+function renderAchievementSelect() {
+  const sel = $('#achievement-select');
+  if (!sel) return;
+  const prev = sel.value;
+  const list = state.achievementCatalog.filter((a) => a.is_active !== 0);
+  sel.innerHTML = '';
+  if (list.length === 0) {
+    sel.appendChild(new Option('（没有可用奖项）', ''));
+    return;
+  }
+  list.forEach((a) => {
+    const grp = (TIER_RULES?.GROUP_LABELS || {})[a.grp] || a.grp;
+    const opt = new Option(`${grp} · ${a.name}`, String(a.id));
+    sel.appendChild(opt);
+  });
+  if (prev && list.some((a) => String(a.id) === prev)) sel.value = prev;
+}
+
+/**
+ * 按当前所选奖项重算牌级下拉。
+ *
+ * 切换奖项时必须重算 —— 不能留上一个奖项的残值 (e.g. 平发奖 → 换成
+ * 语文默写全对, 'flat' 会留在下拉里, 后端必 400)。做法: 重建 option 列表,
+ * 只在**当前值仍属于新奖项的合法档位**时保留它 —— 否则回落到新奖项的
+ * 第一个合法档位。
+ *
+ * 普通 renderAll (例如别的面板刷新) 时保留仍然合法的当前选择 —— 避免
+ * PM 选好档位后被无关刷新重置。
+ */
+function renderTierSelect() {
+  const sel = $('#achievement-tier-select');
+  if (!sel) return;
+  const prev = sel.value;
+  const achId = Number($('#achievement-select')?.value);
+  const ach = state.achievementCatalog.find((a) => a.id === achId);
+  const options = TIER_RULES ? TIER_RULES.tierOptionsFor(ach) : [];
+  sel.innerHTML = '';
+  if (options.length === 0) {
+    sel.appendChild(new Option('先选奖项', ''));
+    return;
+  }
+  options.forEach((o) => sel.appendChild(new Option(o.label, o.value)));
+  if (prev && options.some((o) => o.value === prev)) sel.value = prev;
+}
+
+/** 发放日志表。撤销按钮只在 status==='active' 的行出现。 */
+function renderAchievementAwards() {
+  const root = $('#achievement-awards-list');
+  const empty = $('#achievement-awards-empty');
+  if (!root) return;
+  const countEl = $('#count-achievement-awards');
+  if (countEl) countEl.textContent = state.achievementAwards.length;
+  root.innerHTML = '';
+  if (state.achievementAwards.length === 0) {
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  state.achievementAwards.forEach(function (a) {
+    const isRevoked = a.status === 'revoked';
+    const tier = TIER_RULES ? TIER_RULES.tierLabel(a.tier) : String(a.tier || '');
+    root.appendChild(rowEl(
+      '<div class="pm-row-main">' +
+        '<div class="pm-row-title">' +
+          '🏅 ' + escapeHtml(achievementName(a.achievement_id)) +
+          ' · ' + escapeHtml(tier) +
+          '<span class="pm-badge ' + (isRevoked ? 'ach-revoked' : 'ach-active') + '">' +
+            (isRevoked ? '↩️ 已撤销' : '✅ 已发放') +
+          '</span>' +
+        '</div>' +
+        '<div class="pm-row-meta">' +
+          'user #' + escapeHtml(a.user_id) +
+          ' · ' + fmtTime(a.granted_at) +
+          (isRevoked && a.revoked_at ? ' · 撤销于 ' + fmtTime(a.revoked_at) : '') +
+          ' · <span class="pm-mono">#' + escapeHtml(a.id) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="pm-row-actions">' +
+        (!isRevoked
+          ? '<button class="pm-btn warn" data-act="revoke-achievement" data-id="' + escapeHtml(a.id) + '">↩ 撤销</button>'
+          : '') +
+      '</div>'
+    ));
+  });
+}
+
+/** 当前赛季 + 赛季列表 + 「查看上赛季成就墙」链接。 */
+function renderSeasons() {
+  const cur = $('#achievement-current-season');
+  const list = $('#achievement-seasons-list');
+  if (!cur && !list) return;
+  const current = state.seasons.find((s) => s.is_current === 1) || null;
+  if (cur) {
+    cur.textContent = current
+      ? `${current.name} (${current.starts_on}${current.ends_on ? ' → ' + current.ends_on : ' → 进行中'})`
+      : '未设置当前赛季';
+  }
+  // 顶部「查看成就墙」链接默认指向当前赛季 (public/achievements.js 支持
+  // ?season_id= — 上赛季归档视图)。
+  const wallLink = $('#link-achievement-wall');
+  if (wallLink) {
+    wallLink.href = current
+      ? `/achievements.html?season_id=${current.id}`
+      : '/achievements.html';
+  }
+  if (!list) return;
+  list.innerHTML = '';
+  state.seasons.forEach(function (s) {
+    const isCurrent = s.is_current === 1;
+    const wall = `/achievements.html?season_id=${s.id}`;
+    list.appendChild(rowEl(
+      '<div class="pm-row-main">' +
+        '<div class="pm-row-title">' +
+          escapeHtml(s.name) +
+          '<span class="pm-badge ' + (isCurrent ? 'ach-current' : 'ach-archived') + '">' +
+            (isCurrent ? '当前' : '已归档') +
+          '</span>' +
+        '</div>' +
+        '<div class="pm-row-meta">' +
+          escapeHtml(s.starts_on) + (s.ends_on ? ' → ' + escapeHtml(s.ends_on) : ' → 未归档') +
+          ' · <span class="pm-mono">#' + escapeHtml(s.id) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="pm-row-actions">' +
+        '<a class="pm-btn ghost" href="' + wall + '" target="_blank" rel="noopener">🏆 查看该赛季成就墙</a>' +
       '</div>'
     ));
   });
@@ -1277,6 +1462,134 @@ async function doLogout() {
   window.location.href = '/admin/login';
 }
 
+// ---------- 成就系统动作 (spec §3 / §5 / §7) ----------
+
+/**
+ * 发放一张成就牌。
+ *
+ * body: { achievement_id, tier, user_id } —— 不传 season_id, 后端默认当前赛季
+ * (spec §7)。铸币 (🌟 星币) 由后端在同一 batch 里落账, 前端只负责把
+ * 结果告诉 PM。
+ */
+async function submitAchievementGrant(form) {
+  if (inFlight.has('grant-achievement')) return;
+  const achievementId = Number(form.elements['achievement_id'].value);
+  const tier = form.elements['tier'].value;
+  const userId = Number(form.elements['user_id'].value);
+  if (!Number.isInteger(achievementId) || achievementId <= 0) {
+    toast('请选择奖项', 'error');
+    return;
+  }
+  if (!tier) {
+    toast('请选择牌级', 'error');
+    return;
+  }
+  if (!Number.isInteger(userId) || userId <= 0) {
+    toast('user_id 必须是正整数', 'error');
+    return;
+  }
+  inFlight.add('grant-achievement');
+  try {
+    const r = await api('POST', '/api/admin/achievement-awards', {
+      achievement_id: achievementId,
+      tier: tier,
+      user_id: userId,
+    });
+    const minted = r?.tokens_minted ?? 0;
+    toast(`已发放 ${tierLabel(tier)} · 铸 ${minted} 🌟`, 'success');
+    await Promise.all([loadAchievementAwards(), loadBalance()]);
+    renderAchievementAwards();
+  } catch (e) {
+    if (e.message === 'INVALID_TIER') toast('该牌级对这个奖项无效', 'error');
+    else if (e.message === 'NO_CURRENT_SEASON') toast('没有当前赛季, 请先新建赛季', 'error');
+    else if (e.message !== 'UNAUTHORIZED') toast('发放失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete('grant-achievement');
+  }
+}
+
+/**
+ * 撤销一张成就牌 (destructive —— spec §3 confirm 门)。
+ *
+ * 撤销 = 状态翻转 + 对称烧回该次铸造的 🌟 星币。确认文案必须说清楚
+ * 「烧回」这件事, 否则 PM 以为只是隐藏一行。
+ */
+async function revokeAchievementAward(id) {
+  if (!Number.isInteger(id) || id <= 0) return;
+  if (inFlight.has('aa-' + id)) return;
+  inFlight.add('aa-' + id);
+  const ok = window.confirm(
+    '确定要撤销这张成就牌吗?\n\n' +
+    '• 该次发放的状态会翻转为「已撤销」\n' +
+    '• 本次铸造的 🌟 星币会被烧回 (余额相应减少)\n' +
+    '• 成就墙上这枚牌会消失\n' +
+    '此操作不可撤销 (撤销后可重新发放)。'
+  );
+  if (!ok) { inFlight.delete('aa-' + id); return; }
+  try {
+    const r = await api('POST', '/api/admin/achievement-awards/revoke', {
+      award_id: id,
+      confirm: true,
+    });
+    const burned = r?.tokens_burned ?? 0;
+    toast(`已撤销 · 烧回 ${burned} 🌟`, 'success');
+    await Promise.all([loadAchievementAwards(), loadBalance()]);
+    renderAchievementAwards();
+  } catch (e) {
+    if (e.message === 'ALREADY_REVOKED') toast('这张牌已经被撤销了', 'error');
+    else if (e.message !== 'UNAUTHORIZED') toast('撤销失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete('aa-' + id);
+  }
+}
+
+/** 手动重跑 streak 引擎 (spec §8a 调试端点) —— 修完数据后用。 */
+async function evalAchievementStreak() {
+  if (inFlight.has('eval-streak')) return;
+  inFlight.add('eval-streak');
+  try {
+    const r = await api('POST', '/api/admin/achievements/eval-streak', {
+      user_id: CHILD_USER_ID,
+    });
+    const granted = Array.isArray(r?.granted) ? r.granted.length : 0;
+    toast(`streak ${r?.streak ?? 0} 天 · 新发 ${granted} 枚`, 'success');
+    await Promise.all([loadAchievementAwards(), loadBalance()]);
+    renderAchievementAwards();
+  } catch (e) {
+    if (e.message !== 'UNAUTHORIZED') toast('重算失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete('eval-streak');
+  }
+}
+
+/** 新建赛季 (spec §7) —— 新赛季自动成为当前赛季, 旧的归档。 */
+async function submitAchievementSeason(form) {
+  if (inFlight.has('create-season')) return;
+  const name = String(form.elements['name'].value || '').trim();
+  const startsOn = String(form.elements['starts_on'].value || '');
+  const endsOn = String(form.elements['ends_on'].value || '');
+  if (!name) { toast('请填写赛季名称', 'error'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startsOn)) { toast('开始日期格式不对', 'error'); return; }
+  inFlight.add('create-season');
+  try {
+    await api('POST', '/api/admin/seasons', {
+      name: name,
+      starts_on: startsOn,
+      ends_on: endsOn ? endsOn : null,
+    });
+    toast('新赛季已创建', 'success');
+    form.reset();
+    await loadSeasons();
+    renderAchievementSelect();
+    renderTierSelect();
+    renderSeasons();
+  } catch (e) {
+    if (e.message !== 'UNAUTHORIZED') toast('创建失败：' + e.message, 'error');
+  } finally {
+    inFlight.delete('create-season');
+  }
+}
+
 // ---------- Event delegation ----------
 function bindDelegatedActions() {
   document.addEventListener('click', (e) => {
@@ -1295,6 +1608,7 @@ function bindDelegatedActions() {
     if (act === 'fulfill-redemption') return fulfillRedemption(id);
     if (act === 'revoke-running') return revokeRunningRecordAction(id);
     if (act === 'toggle-task') return toggleTaskAction(id, btn.dataset.taskName, btn.dataset.active);
+    if (act === 'revoke-achievement') return revokeAchievementAward(id);
   });
 }
 
@@ -1368,6 +1682,17 @@ function bindFilters() {
     state.runningFilter = e.target.value;
     renderRunningRecords();
   });
+  // 成就发放日志筛选 (走后端 query 参数 —— 审计面默认全量, R8 教训)。
+  $('#filter-achievement-status').addEventListener('change', async (e) => {
+    state.achievementFilter = e.target.value;
+    try {
+      await loadAchievementAwards();
+      renderAchievementAwards();
+    } catch (err) {
+      if (err.message !== 'UNAUTHORIZED') toast('加载失败：' + err.message, 'error');
+    }
+  });
+  $('#btn-eval-streak').addEventListener('click', evalAchievementStreak);
   // Item #016 §7 (2026-09-04 feihao): skip network call when summer-homework
   // task is disabled (UI section hidden, no need to query).
   $('#filter-summer-task').addEventListener('change', async (e) => {
@@ -1424,6 +1749,19 @@ function bindForms() {
   $('#grant-form').addEventListener('submit', (e) => {
     e.preventDefault();
     submitGrant(e.target);
+  });
+  // ---------- 成就系统 (spec §9) ----------
+  $('#achievement-grant-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitAchievementGrant(e.target);
+  });
+  $('#achievement-season-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitAchievementSeason(e.target);
+  });
+  // 切换奖项 → 必须重算牌级下拉 (不能留上一个奖项的残值)。
+  $('#achievement-select').addEventListener('change', () => {
+    renderTierSelect();
   });
 }
 

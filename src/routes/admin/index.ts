@@ -17,6 +17,11 @@ import adminHealth from './health.ts';
 import shopFulfill from './shop-fulfill.ts';
 // Item #011 §4: PM admin running records (list + revoke with km/points rollback)
 import adminRunning from './running-records.ts';
+// Achievement system (spec §7): grant / revoke / grant-log / seasons / eval-streak
+import adminAchievements, {
+  achievementsEvalStreak,
+  seasonsAdmin,
+} from './achievement-awards.ts';
 import type { Env } from '../../worker.ts';
 
 const admin = new Hono<{ Bindings: Env }>();
@@ -42,5 +47,24 @@ admin.route('/shop/fulfill', shopFulfill);
 //   GET  /api/admin/running/records          (list)
 //   POST /api/admin/running/records/:id/revoke  (revoke)
 admin.route('/running/records', adminRunning);
+// Achievement system (spec §7):
+//   POST /api/admin/achievement-awards          — grant a medal
+//   POST /api/admin/achievement-awards/revoke   — revoke (confirm gate)
+//   GET  /api/admin/achievement-awards          — grant log (?status=all default)
+//   POST /api/admin/seasons                     — create a season
+//   POST /api/admin/achievements/eval-streak    — manual streak re-evaluation
+// Achievement system (spec §7):
+//   POST /api/admin/achievement-awards          — grant a medal
+//   POST /api/admin/achievement-awards/revoke   — revoke (confirm gate)
+//   GET  /api/admin/achievement-awards          — grant log (?status=all default)
+//   POST /api/admin/seasons                     — create a season
+//   GET  /api/admin/seasons                     — list seasons
+//   POST /api/admin/achievements/eval-streak    — manual streak re-evaluation
+//
+// Each path space gets its OWN router: sharing one router would make
+// POST /api/admin/seasons fall through to the award router's grant handler.
+admin.route('/achievement-awards', adminAchievements);
+admin.route('/seasons', seasonsAdmin);
+admin.route('/achievements', achievementsEvalStreak);
 
 export default admin;

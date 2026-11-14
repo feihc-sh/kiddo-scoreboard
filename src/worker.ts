@@ -8,6 +8,8 @@ import publicHealth from './routes/public/health.ts';
 import publicCalendar from './routes/public/calendar.ts';
 import publicCalendarDetails from './routes/public/calendar-details.ts';
 import publicCalendarTasks from './routes/public/calendar-tasks.ts';
+// Achievement system (spec §7a): read-only achievement wall data.
+import publicAchievements from './routes/public/achievements.ts';
 import me from './routes/me/index.ts';
 import meHealth from './routes/me/health.ts';
 // Module 7 (Coin System, M3 — RFC §4): child-facing coin balance + redemptions
@@ -54,6 +56,8 @@ app.route('/api/public/health', publicHealth);
 app.route('/api/public/calendar', publicCalendar);
 app.route('/api/public/calendar', publicCalendarDetails);
 app.route('/api/public/calendar', publicCalendarTasks);
+// Achievement system (spec §7a): GET /api/public/achievements?user_id=N
+app.route('/api/public/achievements', publicAchievements);
 app.route('/api/me', me);
 app.route('/api/me/health', meHealth);
 // Coin System M3 mounts (RFC §4):

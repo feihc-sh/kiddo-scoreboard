@@ -323,12 +323,89 @@
       </div>
     </details>
 
+  <!-- ====== J. Achievements (spec §9 — 🏅 成就发放) ======
+         PM 发放成就牌 + 发放日志 (撤销) + 赛季管理 + streak 手动重算。
+         牌级下拉选项由 /shared/achievement-tiers.js 按所选奖项的
+         grant_mode + ladder 动态生成 (admin_flat → 只有「平发」)。 -->
+    <details class="pm-section" id="sec-achievements">
+      <summary>🏅 成就发放 <span class="pm-count" id="count-achievement-awards">0</span></summary>
+      <div class="pm-section-body">
+
+        <!-- 发放表单 -->
+        <form id="achievement-grant-form" class="pm-form">
+          <div class="pm-form-row">
+            <div><label>奖项 *</label>
+              <!-- Populated by admin.js from GET /api/admin/seasons → achievements[] -->
+              <select name="achievement_id" id="achievement-select" required>
+                <option value="">加载中…</option>
+              </select>
+            </div>
+            <div><label>牌级 *</label>
+              <!-- Populated by admin.js from the selected achievement's ladder -->
+              <select name="tier" id="achievement-tier-select" required>
+                <option value="">先选奖项</option>
+              </select>
+            </div>
+          </div>
+          <div class="pm-form-row">
+            <div><label>孩子 user_id *</label><input name="user_id" type="number" min="1" step="1" value="2" required></div>
+            <div><label>&nbsp;</label>
+              <div class="pm-row" style="background:transparent;padding:0;">
+                <div class="pm-row-actions" style="margin-left:auto;">
+                  <button type="submit" class="pm-btn primary" id="btn-grant-achievement">发放</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- 发放日志 -->
+        <div class="pm-toolbar" style="margin-top:16px;">
+          <label style="font-size:13px;color:var(--text-soft);font-weight:600;">状态</label>
+          <select id="filter-achievement-status">
+            <option value="all">全部</option>
+            <option value="active">已发放</option>
+            <option value="revoked">已撤销</option>
+          </select>
+          <button class="pm-btn ghost" id="btn-eval-streak" title="手动重跑 streak 引擎 (修完数据后用)">🔁 重算 Streak</button>
+        </div>
+        <div id="achievement-awards-list" data-testid="achievement-awards-list"></div>
+        <div class="pm-empty" id="achievement-awards-empty" hidden>没有发放记录</div>
+
+        <!-- 赛季管理 -->
+        <div class="pm-toolbar" style="margin-top:16px;">
+          <label style="font-size:13px;color:var(--text-soft);font-weight:600;">当前赛季</label>
+          <span class="pm-mono" id="achievement-current-season">—</span>
+          <a class="pm-btn ghost" id="link-achievement-wall" href="/achievements.html" target="_blank" rel="noopener">🏆 查看成就墙</a>
+        </div>
+        <form id="achievement-season-form" class="pm-form">
+          <div class="pm-form-row">
+            <div><label>新赛季名称 *</label><input name="name" required maxlength="40" placeholder="比如：S2 · 五年级下学期"></div>
+            <div><label>开始日期 *</label><input name="starts_on" type="date" required></div>
+          </div>
+          <div class="pm-form-row">
+            <div><label>结束日期 (可选)</label><input name="ends_on" type="date"></div>
+            <div><label>&nbsp;</label>
+              <div class="pm-row" style="background:transparent;padding:0;">
+                <div class="pm-row-actions" style="margin-left:auto;">
+                  <button type="submit" class="pm-btn">新建赛季</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+        <div id="achievement-seasons-list" style="margin-top:8px;"></div>
+
+      </div>
+    </details>
+
   </main>
 
   <!-- Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="/shared/emoji-presets.js" defer></script>
-  <script src="/admin/admin.js?v=5" defer></script>
+  <script src="/shared/achievement-tiers.js" defer></script>
+  <script src="/admin/admin.js?v=6" defer></script>
 </body>
 </html>

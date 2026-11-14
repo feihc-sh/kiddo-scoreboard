@@ -10,9 +10,10 @@ export type UserRole = 'child' | 'pm';
 // Each user's coin balance is SUM(change_value) of approved score_events
 // with type='coins'. Coin events are written by task completion hooks
 // (grantCoinsForTaskCompletion / revokeCoinsForTask in src/utils/coin.ts).
-export type AccountType = 'game_time' | 'pocket_money' | 'coins';
+export type AccountType = 'game_time' | 'pocket_money' | 'coins' | 'pet_tokens';
 export type EventStatus = 'pending' | 'approved' | 'rejected' | 'revoked';
-export type EventSource = 'manual' | 'task' | 'exchange' | 'weekly_grant';
+export type EventSource =
+  | 'manual' | 'task' | 'exchange' | 'weekly_grant' | 'achievement';
 export type SubmittedBy = 'child' | 'pm' | 'system';
 export type Actor = 'child' | 'pm' | 'system';
 export type TaskCategory = 'habit' | 'study' | 'chore' | 'custom';
@@ -59,7 +60,11 @@ export type AuditAction =
   // but were never declared here — kept narrow on purpose so future audit-action
   // additions get caught by the compiler.
   | 'running_checkin' | 'running_map_complete'
-  | 'running_record_revoke' | 'running_record_compensation';
+  | 'running_record_revoke' | 'running_record_compensation'
+  // Achievement system (spec §3): grant / revoke of an achievement award.
+  // 'achievement_grant' — PM 直发或 streak 引擎自动发放一枚牌
+  // 'achievement_revoke' — PM 撤销一枚牌 (状态翻转 + 对称烧币)
+  | 'achievement_grant' | 'achievement_revoke';
 
 // =============================================================
 // Row types (mirror SQL columns exactly)
@@ -154,12 +159,73 @@ export interface HealthEvent {
 }
 
 // =============================================================
+// Achievement system (spec docs/achievements-spec.md §6)
+// =============================================================
+
+// 牌级 (tier): 铁 → 铜 → 银 → 金 → 王者, 外加平发奖的 'flat'。
+// 'flat' 只用于 grant_mode='admin_flat' 的奖项 (创新家务奖), 每次平发无等级。
+export type AchievementTier = 'iron' | 'bronze' | 'silver' | 'gold' | 'king' | 'flat';
+
+// 发放模式 (grant_mode):
+//   'admin_tier'  — admin 直发对应牌级 (次数档 / 本数档)
+//   'admin_flat'  — admin 平发, 无等级阶梯 (ladder_json = NULL)
+//   'auto_streak' — 自动规则引擎发放 (自律生活: 连续全卡 N 天)
+export type GrantMode = 'admin_tier' | 'admin_flat' | 'auto_streak';
+
+// 奖项分组 (spec §1): 学习组 / 生活组 / 技能组
+export type AchievementGroup = 'study' | 'life' | 'skill';
+
+// 发放状态: 'active' = 有效; 'revoked' = 已撤销 (状态翻转, 可重发)
+export type AwardStatus = 'active' | 'revoked';
+
+// 阶梯档位映射: tier → 达档阈值 (次数/天数)。
+// key 按牌级从低到高排列, 供 streak 引擎逐档比对。
+export type AchievementLadder = Partial<Record<AchievementTier, number>>;
+
+export interface Season {
+  id: number;
+  name: string;
+  starts_on: string;             // 'YYYY-MM-DD' (Asia/Shanghai)
+  ends_on: string | null;        // NULL = 未归档
+  is_current: 0 | 1;
+}
+
+export interface Achievement {
+  id: number;
+  grp: AchievementGroup;
+  name: string;
+  description: string | null;
+  grant_mode: GrantMode;
+  ladder_json: string | null;    // JSON TEXT — 服务端必须 parse (spec §7b, R11)
+  is_active: 0 | 1;
+  sort_order: number;
+}
+
+export interface AchievementAward {
+  id: number;
+  achievement_id: number;
+  user_id: number;
+  tier: AchievementTier;
+  season_id: number;
+  status: AwardStatus;
+  granted_by: number | null;     // NULL = 非人工发放 (streak 引擎自动发牌)
+  granted_at: number;            // Unix seconds
+  revoked_at: number | null;
+  revoked_by: number | null;
+}
+
+// =============================================================
 // Computed / API response types
 // =============================================================
 export interface Balance {
   game_time: number;             // 分钟
   pocket_money: number;          // 元
   coins: number;                 // 枚 (Module 7 Coin System, RFC §3.4)
+  // NOTE: 'pet_tokens' (🌟 星币, spec §5) 刻意 **不** 计入通用 Balance ——
+  //   消费端 (宠物系统) 本批不做, 余额通过 getAccountBalance(db, uid,
+  //   'pet_tokens') 单独读取 (见 src/utils/achievements.ts)。这样既复用
+  //   同一张 score_events 账本 + balance 推导口径, 又不改动既有
+  //   /api/public/balance 等端点的响应形状。
 }
 
 // Module 7 (Coin System, RFC §3.2): row interfaces for shop tables.

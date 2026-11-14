@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Breath of the Wild - Hyrule Sanctuary Achievement Wall</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts: Medieval & Fantasy vibes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=MedievalSharp&family=Noto+Sans+SC:wght@400;600;700;900&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            sheikah: {
+              blue: '#00e5ff',
+              glow: '#4ef0ff',
+              dark: '#08131e',
+              panel: '#0d1f2d'
+            },
+            zelda: {
+              gold: '#f3c959',
+              lightGold: '#fff2b8',
+              darkGold: '#a8791c',
+              bronze: '#694715',
+              wood: '#2c1d11',
+              woodDark: '#120b06',
+              parchment: '#f3e5ab'
+            }
+          },
+          fontFamily: {
+            cinzel: ['Cinzel', 'serif'],
+            medieval: ['MedievalSharp', 'cursive'],
+            cn: ['Noto Sans SC', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #a8791c;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #f3c959;
+    }
+
+    /* Pixel Art Specific Rendering & Font Styling */
+    .pixel-art {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    /* Fantasy Background & Pixel Brick Overlay */
+    body {
+      background-color: #0b0e14;
+      background-image: 
+        radial-gradient(circle at 50% 10%, rgba(243, 201, 89, 0.15) 0%, transparent 50%),
+        radial-gradient(circle at 15% 85%, rgba(0, 229, 255, 0.08) 0%, transparent 45%),
+        url("data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h32v32H0V0zm1 1h30v14H1V1zm0 16h14v14H1V17zm16 0h14v14H17V17z' fill='%23192130' fill-opacity='0.45' fill-rule='evenodd'/%3E%3C/svg%3E");
+    }
+
+    /* Ambient Floating Particles Background Layer */
+    #particle-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Card 3D Perspective & Metallic Lighting */
+    .card-container {
+      perspective: 1000px;
+    }
+
+    .zelda-card {
+      transform-style: preserve-3d;
+      transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+      position: relative;
+    }
+
+    /* UNLOCKED CARD STYLING WITH RICH GLOW & INNER SHADOW */
+    .zelda-card.unlocked {
+      background: linear-gradient(145deg, #1f180e 0%, #0e1724 100%);
+      border: 3px solid #f3c959;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.9), 
+                  0 0 20px rgba(243, 201, 89, 0.35), 
+                  inset 0 0 18px rgba(243, 201, 89, 0.2);
+    }
+
+    .zelda-card.unlocked:hover {
+      box-shadow: 0 15px 35px -5px rgba(0,0,0,0.95), 
+                  0 0 35px rgba(243, 201, 89, 0.65), 
+                  inset 0 0 25px rgba(243, 201, 89, 0.35);
+      border-color: #fff4c2;
+    }
+
+    /* LOCKED CARD STYLING WITH STONE TEXTURE & INNER SHADOW */
+    .zelda-card.locked {
+      background: linear-gradient(145deg, #14171f 0%, #080a0e 100%);
+      border: 3px solid #2d3748;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.85), inset 0 0 25px rgba(0,0,0,0.95);
+      filter: grayscale(85%) opacity(0.8);
+    }
+
+    .zelda-card.locked:hover {
+      filter: grayscale(25%) opacity(0.95);
+      border-color: #4a5568;
+      box-shadow: 0 12px 25px rgba(0,0,0,0.9), 0 0 18px rgba(100, 116, 139, 0.35), inset 0 0 15px rgba(0,0,0,0.8);
+    }
+
+    /* Pixel Art Container Inner Shadow & Rim Highlight */
+    .pixel-avatar-box {
+      box-shadow: inset 0 0 12px rgba(0,0,0,0.9), 0 0 15px rgba(0,0,0,0.5);
+    }
+
+    .unlocked .pixel-avatar-box {
+      box-shadow: inset 0 0 14px rgba(243, 201, 89, 0.35), 0 0 20px rgba(243, 201, 89, 0.3);
+      filter: drop-shadow(0 0 8px rgba(243, 201, 89, 0.6));
+    }
+
+    /* Glow Effects */
+    .gold-glow-text {
+      text-shadow: 0 0 10px rgba(243, 201, 89, 0.8), 0 0 20px rgba(243, 201, 89, 0.5);
+    }
+
+    /* Corner Decorators */
+    .corner-tl, .corner-tr, .corner-bl, .corner-br {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      pointer-events: none;
+      z-index: 20;
+    }
+    .unlocked .corner-tl, .unlocked .corner-tr, .unlocked .corner-bl, .unlocked .corner-br {
+      border-color: #f3c959;
+    }
+    .locked .corner-tl, .locked .corner-tr, .locked .corner-bl, .locked .corner-br {
+      border-color: #4a5568;
+    }
+    .corner-tl { top: 3px; left: 3px; border-top: 3px solid; border-left: 3px solid; }
+    .corner-tr { top: 3px; right: 3px; border-top: 3px solid; border-right: 3px solid; }
+    .corner-bl { bottom: 3px; left: 3px; border-bottom: 3px solid; border-left: 3px solid; }
+    .corner-br { bottom: 3px; right: 3px; border-bottom: 3px solid; border-right: 3px solid; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; transform: scale(0.98); }
+      50% { opacity: 0.85; transform: scale(1.04); }
+    }
+    .pulse-glow {
+      animation: pulseGlow 3s ease-in-out infinite;
+    }
+
+    .avatar-light-bg {
+      background: radial-gradient(circle, rgba(243,201,89,0.35) 0%, rgba(243,201,89,0) 75%);
+    }
+
+    .sheikah-border-bottom {
+      background: linear-gradient(90deg, transparent 0%, #f3c959 50%, transparent 100%);
+      height: 2px;
+    }
+  </style>
+</head>
+<body class="text-gray-100 min-h-screen flex flex-col font-cn antialiased selection:bg-amber-600 selection:text-white relative overflow-x-hidden">
+
+  <!-- BACKGROUND CANVAS FOR PARTICLES -->
+  <canvas id="particle-canvas"></canvas>
+
+  <!-- TOP HEADER / NAV BAR -->
+  <header class="relative border-b border-amber-900/60 bg-black/85 backdrop-blur-md sticky top-0 z-40 px-4 py-4 md:px-8 shadow-2xl">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      
+      <!-- Logo & Title -->
+      <div class="flex items-center gap-3.5">
+        <!-- Triforce Icon SVG -->
+        <div class="p-2 bg-amber-950/60 border border-zelda-gold/60 rounded-lg shadow-lg">
+          <svg class="w-8 h-8 text-zelda-gold animate-float" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L1 21h22L12 2zm0 4.5l6.5 11.5h-13L12 6.5zM6.5 17l5.5-9.5 5.5 9.5h-11z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="font-cinzel text-xl md:text-2xl font-black tracking-widest text-zelda-lightGold gold-glow-text flex items-center gap-2">
+            HYRULE SANCTUARY
+            <span class="text-[10px] px-2 py-0.5 rounded bg-amber-900/70 text-yellow-200 border border-zelda-gold/60 font-sans tracking-normal uppercase">
+              Tears of the Kingdom Edition
+            </span>
+          </h1>
+          <p class="text-xs text-amber-200/70 tracking-widest font-medieval">WILD CREATURES & FAUNA ACHIEVEMENTS • 海拉鲁小动物全成就神殿</p>
+        </div>
+      </div>
+
+      <!-- Overall Progress Bar -->
+      <div class="flex-1 max-w-md w-full bg-zinc-950/90 border border-amber-900/80 p-3 rounded-xl shadow-2xl relative">
+        <div class="flex justify-between items-center text-xs mb-1.5 font-bold">
+          <span class="text-amber-200/90 tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-trophy text-zelda-gold animate-pulse"></i>
+            探索成就解锁进度
+          </span>
+          <span id="progress-text" class="text-zelda-gold font-cinzel text-sm font-black">0 / 0 (0%)</span>
+        </div>
+        <div class="w-full bg-zinc-900 rounded-full h-3.5 overflow-hidden border border-amber-950 relative p-0.5">
+          <div id="progress-bar" class="bg-gradient-to-r from-amber-700 via-yellow-400 to-amber-200 h-full w-0 transition-all duration-700 rounded-full relative">
+            <div class="absolute inset-0 bg-white/30 pulse-glow"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls & Sound Toggle -->
+      <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+        <button id="sound-btn" title="Toggle SFX Audio" class="p-2.5 rounded-lg bg-zinc-900 border border-amber-800/80 hover:border-zelda-gold text-amber-300 hover:text-white transition-all shadow-md">
+          <i class="fa-solid fa-volume-high text-sm"></i>
+        </button>
+
+        <button id="reset-btn" title="Reset All Achievements" class="p-2.5 rounded-lg bg-zinc-900 border border-red-900/80 hover:border-red-500 text-red-400 hover:text-red-200 transition-all shadow-md">
+          <i class="fa-solid fa-rotate-right text-sm"></i>
+        </button>
+      </div>
+
+    </div>
+    <div class="sheikah-border-bottom absolute bottom-0 left-0 w-full"></div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-8 space-y-6 relative z-10">
+
+    <!-- SUB BAR: Filters & Search Input -->
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-zinc-950/80 border border-amber-900/60 p-3.5 md:p-4 rounded-2xl shadow-2xl backdrop-blur-md">
+      
+      <!-- Filter Tabs -->
+      <div class="flex items-center gap-2 bg-black/80 p-1.5 rounded-xl border border-zinc-800 w-full sm:w-auto justify-center">
+        <button data-filter="all" class="filter-btn px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all bg-gradient-to-r from-amber-700 to-yellow-600 text-white shadow-lg border border-amber-400/50">
+          <i class="fa-solid fa-shield-halved mr-1"></i> 全部 (All)
+        </button>
+        <button data-filter="unlocked" class="filter-btn px-4 py-2 rounded-lg text-xs md:text-sm font-bold text-zinc-400 hover:text-amber-200 transition-all">
+          <i class="fa-solid fa-circle-check mr-1 text-emerald-500"></i> 已解锁
+        </button>
+        <button data-filter="locked" class="filter-btn px-4 py-2 rounded-lg text-xs md:text-sm font-bold text-zinc-400 hover:text-amber-200 transition-all">
+          <i class="fa-solid fa-lock mr-1 text-zinc-500"></i> 未解锁
+        </button>
+      </div>
+
+      <!-- Search Input -->
+      <div class="relative w-full sm:w-72">
+        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-500/70 text-xs"></i>
+        <input type="text" id="search-input" placeholder="搜索成就名称、小动物或地域..." class="w-full bg-black/90 border border-amber-900/70 rounded-xl pl-9 pr-4 py-2 text-xs md:text-sm text-amber-100 placeholder-zinc-500 focus:outline-none focus:border-zelda-gold transition shadow-inner">
+      </div>
+    </div>
+
+    <!-- CARDS GRID -->
+    <div id="achievement-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <!-- Generated dynamically by JS -->
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div id="empty-state" class="hidden text-center py-20 bg-zinc-950/60 border border-dashed border-amber-900/40 rounded-3xl backdrop-blur-md">
+      <div class="w-16 h-16 mx-auto mb-3 rounded-full bg-amber-950/40 border border-amber-700/50 flex items-center justify-center text-amber-400 text-2xl">
+        <i class="fa-solid fa-compass"></i>
+      </div>
+      <p class="text-amber-200 font-cinzel text-xl font-bold">海拉鲁未发现符合条件的记录</p>
+      <p class="text-zinc-500 text-xs mt-1">请重新检查搜索关键字或切换上方筛选状态</p>
+    </div>
+
+  </main>
+
+  <!-- DETAIL MODAL -->
+  <div id="detail-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="zelda-card max-w-lg w-full rounded-3xl p-6 md:p-8 border-2 border-zelda-gold bg-gradient-to-b from-zinc-950 via-zinc-900 to-black shadow-2xl relative transform scale-90 transition-transform duration-300 overflow-hidden" id="modal-container">
+      
+      <!-- Ornamental corners -->
+      <div class="corner-tl"></div><div class="corner-tr"></div>
+      <div class="corner-bl"></div><div class="corner-br"></div>
+
+      <!-- Close Button -->
+      <button id="close-modal-btn" class="absolute top-4 right-4 text-zinc-400 hover:text-white w-9 h-9 rounded-full bg-zinc-900/90 flex items-center justify-center border border-amber-900/60 transition-all hover:scale-110 z-30">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+
+      <!-- Modal Body -->
+      <div class="text-center relative z-20">
+        
+        <!-- SVG Avatar Wrapper with Radial Glowing Beam -->
+        <div id="modal-icon-bg" class="w-36 h-36 mx-auto mb-4 p-3 rounded-full border-2 border-zelda-gold shadow-2xl flex items-center justify-center relative overflow-hidden bg-black/80">
+          <div class="absolute inset-0 avatar-light-bg pulse-glow"></div>
+          <div id="modal-icon" class="w-28 h-28 relative z-10">
+            <!-- Inject SVG -->
+          </div>
+        </div>
+
+        <div id="modal-category" class="inline-block px-3.5 py-1 rounded-full text-xs font-black tracking-widest bg-amber-950/80 text-amber-300 border border-amber-700/80 mb-2 shadow-md">
+          HYRULE FAUNA ARCHIVE
+        </div>
+
+        <h3 id="modal-title" class="text-2xl font-black font-cinzel text-zelda-lightGold gold-glow-text mb-1">
+          Ya-ha-ha! Found You!
+        </h3>
+        <p id="modal-cn-title" class="text-sm font-bold text-amber-200/90 mb-4">
+          哈哈哈！被你发现了！
+        </p>
+
+        <!-- Sheikah Divider -->
+        <div class="w-full h-px bg-gradient-to-r from-transparent via-zelda-gold to-transparent my-4 opacity-60"></div>
+
+        <p id="modal-desc" class="text-zinc-300 text-sm leading-relaxed mb-6 px-2 text-left bg-black/40 p-3.5 rounded-xl border border-zinc-800">
+          Achievement details and creature lore description will be rendered here.
+        </p>
+
+        <!-- Progress status inside modal -->
+        <div class="bg-zinc-900/90 p-4 rounded-2xl border border-amber-900/50 mb-6 flex items-center justify-between shadow-inner">
+          <div class="text-left">
+            <div class="text-[11px] text-zinc-400 font-bold">当前神殿成就状态</div>
+            <div id="modal-status-text" class="text-sm font-black text-emerald-400">已解锁 (Unlocked)</div>
+          </div>
+          <button id="modal-toggle-btn" class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xl flex items-center gap-2 border">
+            <i class="fa-solid fa-lock-open"></i> 切换状态
+          </button>
+        </div>
+
+        <div class="text-xs text-zinc-500 font-mono tracking-wider flex items-center justify-between border-t border-zinc-800/80 pt-3">
+          <span>REGION: <span id="modal-region" class="text-amber-400/80">HYRULE KINGDOM</span></span>
+          <span>CREATURE ID: <span id="modal-creature-id" class="text-amber-400/80">#001</span></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-amber-900/40 bg-black/80 py-6 text-center text-xs text-zinc-500 space-y-1 relative z-10 backdrop-blur-md">
+    <p class="font-cinzel tracking-widest text-amber-300/60 font-bold">THE LEGEND OF ZELDA: FAUNA & CREATURES ENCYCLOPEDIA</p>
+    <p class="text-zinc-500">点击卡片查看详细图鉴背景与奖励说明 • 点击右下角按键随时解锁成就 • 支持进度本地自动保存</p>
+  </footer>
+
+  <!-- SCRIPT & RICH ILLUSTRATION DATA -->
+  <script>
+    // Audio Context (Synthesizer SFX for Zelda Chimes)
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function playSound(type) {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new AudioCtx();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+
+        if (type === 'unlock') {
+          // Retro 8-Bit Pixel Unlock Arpeggio: E5 -> G#5 -> B5 -> E6
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(659.25, now);
+          osc.frequency.setValueAtTime(830.61, now + 0.08);
+          osc.frequency.setValueAtTime(987.77, now + 0.16);
+          osc.frequency.setValueAtTime(1318.51, now + 0.24);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+          osc.start(now);
+          osc.stop(now + 0.6);
+        } else if (type === 'lock') {
+          // Retro 8-bit Lock Noise
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(180, now);
+          osc.frequency.exponentialRampToValueAtTime(40, now + 0.18);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+          osc.start(now);
+          osc.stop(now + 0.18);
+        } else if (type === 'click') {
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(800, now);
+          gain.gain.setValueAtTime(0.05, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+          osc.start(now);
+          osc.stop(now + 0.05);
+        }
+      } catch(e) {
+        // Silent fallback
+      }
+    }
+
+    // Canvas Particles Background
+    function initCanvasParticles() {
+      const canvas = document.getElementById('particle-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let particles = [];
+
+      function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      for (let i = 0; i < 40; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          size: Math.random() * 2.5 + 1,
+          speedY: -(Math.random() * 0.4 + 0.1),
+          speedX: (Math.random() - 0.5) * 0.3,
+          opacity: Math.random() * 0.6 + 0.2,
+          color: Math.random() > 0.5 ? '#f3c959' : '#00e5ff'
+        });
+      }
+
+      function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+          p.y += p.speedY;
+          p.x += p.speedX;
+          if (p.y < -10) {
+            p.y = canvas.height + 10;
+            p.x = Math.random() * canvas.width;
+          }
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.opacity;
+          ctx.fillRect(p.x, p.y, p.size, p.size);
+        });
+        requestAnimationFrame(animate);
+      }
+      animate();
+    }
+
+    // High Quality Zelda Creature Pixel Art SVGs (Pixelated Grid Rendering)
+    const SVGS = {
+      korok: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-xl">
+          <!-- Korok Leaf Mask & Body Pixel Art -->
+          <path d="M14 4h4v2h-4zM12 6h8v2h-8zM10 8h12v2h-12z" fill="#388e3c"/>
+          <!-- Leaf Top Sprout -->
+          <path d="M15 1h2v3h-2z" fill="#81c784"/>
+          <!-- Leaf Face Outline & Highlights -->
+          <path d="M6 10h20v2H6zm-2 2h24v8H4zm2 8h20v2H6zm2 2h16v2H8zm2 2h12v2H10z" fill="#4caf50"/>
+          <path d="M7 11h3v2H7zm15 0h3v2h-3z" fill="#aed581"/>
+          <path d="M6 14h3v3H6zm14 0h3v3h-3z" fill="#aed581"/>
+          <!-- Eyes -->
+          <path d="M9 15h3v3H9zm11 0h3v3h-11z" fill="#1b5e20"/>
+          <path d="M10 16h1v1h-1zm12 0h1v1h-1z" fill="#ffffff"/>
+          <!-- Mouth & Stem Center Vein -->
+          <path d="M15 18h2v3h-2z" fill="#1b5e20"/>
+          <path d="M15 11h2v10h-2z" fill="#2e7d32"/>
+          <!-- Body & Arms -->
+          <path d="M11 26h10v3H11z" fill="#689f38"/>
+          <path d="M5 21h3v2H5zm19 0h3v2h-3z" fill="#4e342e"/>
+        </svg>
+      `,
+      blupee: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-2xl">
+          <!-- Blupee Pixel Art with Glowing Ears & Feathers -->
+          <path d="M6 3h3v8H6zm17 0h3v8h-3z" fill="#80deea"/>
+          <path d="M7 2h1v4H7zm17 0h1v4h-1z" fill="#ffffff"/>
+          <path d="M10 9h12v3H10z" fill="#b2ebf2"/>
+          <!-- Head & Body -->
+          <path d="M8 12h16v4H8zm-2 4h20v8H6zm2 8h16v3H8zm4 3h8v2h-8z" fill="#4dd0e1"/>
+          <!-- Glowing Eyes -->
+          <path d="M9 14h4v3H9zm10 0h4v3h-10z" fill="#ffffff"/>
+          <path d="M11 15h2v2h-2zm10 0h2v2h-2z" fill="#00e5ff"/>
+          <!-- Markings -->
+          <path d="M14 18h4v2h-4zm-3 3h3v2h-3zm7 0h3v2h-3z" fill="#006064"/>
+          <!-- Sparkling Rupee Pixel Particles -->
+          <path d="M3 24h2v3H3zm24 2h2v3h-2z" fill="#00e5ff"/>
+          <path d="M4 25h1v1H4zm24 1h1v1h-1z" fill="#ffffff"/>
+        </svg>
+      `,
+      satori: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-2xl">
+          <!-- Lord of the Mountain Satori Antlers & Ethereal Glow -->
+          <path d="M4 2h3v6H4zm21 0h3v6h-3zM8 6h3v5H8zm13 0h3v5h-3z" fill="#e0f7fa"/>
+          <path d="M5 1h1v3H5zm21 0h1v3h-1z" fill="#00e5ff"/>
+          <!-- Four Ethereal Glowing Eyes -->
+          <path d="M7 13h18v4H7zm-2 4h22v8H5zm2 8h18v3H7z" fill="#00bcd4"/>
+          <path d="M8 16h3v3H8zm5 14h3v3h-3zm5-14h3v3h-3zm-2-2h3v3h-3z" fill="#ffffff"/>
+          <path d="M9 17h1v1H9zm6 0h1v1h-1zm4 0h1v1h-1zm-2-2h1v1h-1z" fill="#00e5ff"/>
+          <!-- Sacred Aura Lines -->
+          <path d="M12 28h8v2h-8z" fill="#b2ebf2"/>
+          <path d="M2 12h2v2H2zm26 0h2v2h-2z" fill="#ffffff"/>
+        </svg>
+      `,
+      cucco: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-xl">
+          <!-- Pixel Cucco Cockatoo / Red Crest -->
+          <path d="M13 2h5v4h-5z M11 4h3v3h-3z" fill="#f44336"/>
+          <!-- White Feathered Body -->
+          <path d="M12 6h8v6h-8z M10 12h12v4H10z M6 16h18v8H6z M8 24h14v3H8z" fill="#ffffff"/>
+          <!-- Tail Feathers -->
+          <path d="M3 14h4v6H3zm-2 4h3v5H1z" fill="#e0e0e0"/>
+          <!-- Beak & Wattle -->
+          <path d="M22 10h5v3h-5z" fill="#ffc107"/>
+          <path d="M21 13h3v3h-3z" fill="#d32f2f"/>
+          <!-- Angry Alert Eye -->
+          <path d="M17 9h3v3h-3z" fill="#212121"/>
+          <path d="M18 9h1v1h-1z" fill="#ffffff"/>
+          <!-- Orange Legs -->
+          <path d="M10 27h3v4h-3zm7 0h3v4h-3z" fill="#ff9800"/>
+        </svg>
+      `,
+      fairy: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-2xl">
+          <!-- Fairy Wings Pixel Art -->
+          <path d="M2 8h8v6H2zm20 0h8v6h-8z M4 14h7v4H4zm17 0h7v4h-7z" fill="#ff4081" opacity="0.8"/>
+          <!-- Glowing Core Sphere -->
+          <path d="M11 11h10v10H11z" fill="#ff80ab"/>
+          <path d="M13 13h6v6h-6z" fill="#ffffff"/>
+          <!-- Antennae & Magic Sparkles -->
+          <path d="M10 5h2v6h-2zm10 0h2v6h-2z" fill="#ffee55"/>
+          <path d="M9 3h3v2H9zm11 0h3v2h-3z" fill="#ffffff"/>
+          <path d="M15 23h2v4h-2z" fill="#ff80ab"/>
+        </svg>
+      `,
+      horse: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-xl">
+          <!-- Golden Horse Head Pixel Art -->
+          <path d="M9 4h3v5H9zm4-2h3v5h-3z" fill="#ffe082"/>
+          <path d="M11 7h10v5H11zm-2 5h14v4H9zm6 4h10v6H15zm-4 6h12v6H11z" fill="#ffb300"/>
+          <!-- Muzzle & Snout -->
+          <path d="M23 12h6v5h-6z" fill="#ffe082"/>
+          <path d="M26 14h2v2h-2z" fill="#3e2723"/>
+          <!-- Golden Mane -->
+          <path d="M5 8h6v12H5zm3 10h5v8H8z" fill="#fff59d"/>
+          <!-- Eye & Bridle -->
+          <path d="M17 10h3v3h-3z" fill="#3e2723"/>
+          <path d="M20 12h2v7h-2z" fill="#d32f2f"/>
+        </svg>
+      `,
+      sandseal: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-xl">
+          <!-- Sand Seal Gray Chubby Body -->
+          <path d="M8 10h16v4H8zm-3 4h22v10H5zm3 10h16v3H8z" fill="#9e9e9e"/>
+          <!-- Red Gerudo Ribbon -->
+          <path d="M12 5h8v5h-8zm-3 2h14v2H9z" fill="#e53935"/>
+          <path d="M14 4h4v3h-4z" fill="#ffc107"/>
+          <!-- White Tusks -->
+          <path d="M9 19h3v5H9zm11 0h3v5h-3z" fill="#ffffff"/>
+          <!-- Nose & Flippers -->
+          <path d="M14 15h4v3h-4z" fill="#424242"/>
+          <path d="M2 18h4v6H2zm24 0h4v6h-24z" fill="#757575"/>
+        </svg>
+      `,
+      dog: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-xl">
+          <!-- Hylian Retriever Pixel Dog -->
+          <path d="M8 6h5v12H8zm11 0h5v12h-5z" fill="#e65100"/>
+          <path d="M11 9h10v8H11zm-2 8h14v7H9zm2 7h10v3H11z" fill="#ffcc80"/>
+          <!-- White Snout & Nose -->
+          <path d="M13 18h6v5h-6z" fill="#ffffff"/>
+          <path d="M15 17h2v2h-2z" fill="#3e2723"/>
+          <!-- Tongue -->
+          <path d="M15 22h2v3h-2z" fill="#ff4081"/>
+        </svg>
+      `,
+      rhino: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-xl">
+          <!-- Great Horned Rhino Head & Armored Shell -->
+          <path d="M10 8h16v6H10zm-4 6h22v10H6zm3 10h16v3H9z" fill="#6d4c41"/>
+          <!-- Giant Double Horns -->
+          <path d="M2 6h4v10H2zm5 4h3v5H7z" fill="#d7ccc8"/>
+          <path d="M1 4h3v3H1z" fill="#ffffff"/>
+          <!-- Glowing Eye -->
+          <path d="M13 12h3v2h-3z" fill="#76ff03"/>
+        </svg>
+      `,
+      frog: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-xl">
+          <!-- Hot-Footed Frog Green Body -->
+          <path d="M7 6h6v6H7zm12 0h6v6h-12z" fill="#00e676"/>
+          <path d="M5 12h22v12H5zm3 12h16v3H8z" fill="#00c853"/>
+          <!-- Big Yellow Eyes -->
+          <path d="M8 7h4v4H8zm12 0h4v4h-12z" fill="#ffeb3b"/>
+          <path d="M9 8h2v2H9zm12 0h2v2h-2z" fill="#000000"/>
+          <!-- Speed Aura Lines -->
+          <path d="M15 2h2v4h-2z M11 3h2v2h-2zm8 0h2v2h-2z" fill="#00e5ff"/>
+        </svg>
+      `,
+      sunshroom: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-xl">
+          <!-- Sunshroom Fiery Red Mushroom Cap -->
+          <path d="M8 5h16v4H8zm-4 4h24v8H4zm2 8h20v3H6z" fill="#ff3d00"/>
+          <!-- Flame Yellow Spots -->
+          <path d="M8 8h4v4H8zm12 2h4v4h-4zm-5-4h3v3h-3z" fill="#ffea00"/>
+          <!-- Stem -->
+          <path d="M13 19h6v9h-6z" fill="#fff8e1"/>
+          <path d="M12 27h8v2h-8z" fill="#ffe082"/>
+        </svg>
+      `,
+      pigeon: `
+        <svg viewBox="0 0 32 32" class="w-full h-full pixel-art drop-shadow-xl">
+          <!-- Rainbow Pigeon Body & Feathers -->
+          <path d="M14 6h8v6h-8z M10 12h14v6H10z M6 17h16v7H6z" fill="#78909c"/>
+          <!-- Beak -->
+          <path d="M22 8h5v3h-5z" fill="#ffa726"/>
+          <!-- Rainbow Wing Layer -->
+          <path d="M7 14h8v7H7zm2-6h6v4H9z" fill="#ea80fc"/>
+          <path d="M9 16h6v3H9z" fill="#80d8ff"/>
+        </svg>
+      `
+    };
+
+    // Raw Achievements Data Source
+    const RAW_ACHIEVEMENTS = [
+      { id: 'korok', title: 'Yaha! Found You!', cnTitle: '哈哈哈！找到你了！', creature: '克洛格 (Korok)', category: 'Forest Spirits', rarity: 'Common', region: 'Korok Forest', svg: SVGS.korok, desc: '藏身于海拉鲁各处奇特树叶与落叶堆下的森林小精灵。成功解开谜题便会赠送克洛格果实。', reward: '克洛格果实 +1 (可扩充背包)', unlocked: true },
+      { id: 'blupee', title: 'Glowing Fortune', cnTitle: '发光灵兔与卢比', creature: '卢比兔 (Blupee)', category: 'Sacred Beasts', rarity: 'Rare', region: 'Satori Mountain', svg: SVGS.blupee, desc: '全身散发宝石般幽蓝萤光的神秘小兔，惊动它后射击会掉落大量闪耀的卢比。', reward: '银色卢比 x3 (+300 Rupee)', unlocked: true },
+      { id: 'satori', title: 'Lord of the Forest', cnTitle: '山神·萨托利', creature: '山神 (Satori)', category: 'Mythical', rarity: 'Legendary', region: 'Satori Peak', svg: SVGS.satori, desc: '当山顶升起蓝白圣光时现身的神圣生灵。拥有众多眼睛与超凡的精力，是海拉鲁至高守护神。', reward: '无限精力药水配方', unlocked: false },
+      { id: 'cucco', title: 'Chicken Fury', cnTitle: '不可招惹的咕咕鸡', creature: '咕咕鸡 (Cucco)', category: 'Domestic Animals', rarity: 'Uncommon', region: 'Kakariko Village', svg: SVGS.cucco, desc: '海拉鲁村庄常见的家禽。极具领地意识，若遭受多次攻击会召唤全村鸡群进行反击。', reward: '咕咕鸡羽毛防具 (+防御)', unlocked: true },
+      { id: 'fairy', title: 'Blessing of Life', cnTitle: '大自然的精灵祝福', creature: '大妖精 / 小精灵 (Fairy)', category: 'Magic Beings', rarity: 'Rare', region: 'Great Fairy Fountains', svg: SVGS.fairy, desc: '在泉水周围翩翩起舞的粉色光辉精灵，能为林克在濒死时恢复生命力。', reward: '免死复活机制次次数 +1', unlocked: true },
+      { id: 'horse', title: 'Royal Stallion', cnTitle: '黄金皇家战马', creature: '黄金马 (Golden Horse)', category: 'Mounts', rarity: 'Legendary', region: 'Snowfield Stable', svg: SVGS.horse, desc: '拥有纯金鬃毛与高贵血统的传说战马，具备极高速度与持久体力。', reward: '王室马鞍与缰绳套装', unlocked: false },
+      { id: 'sandseal', title: 'Desert Drifting', cnTitle: '格鲁德海豹冲浪', creature: '沙海豹 (Sand Seal)', category: 'Desert Animals', rarity: 'Uncommon', region: 'Gerudo Desert', svg: SVGS.sandseal, desc: '生活在格鲁德沙漠沙丘中的圆滚滚生灵。借助盾牌可以进行快速沙漠滑行。', reward: '海豹拉力赛冠军勋章', unlocked: false },
+      { id: 'dog', title: 'Treasure Hunter', cnTitle: '海拉鲁寻宝犬', creature: '海拉鲁犬 (Hylian Retriever)', category: 'Domestic Animals', rarity: 'Common', region: 'Stables across Hyrule', svg: SVGS.dog, desc: '驻扎在各个驿站的忠诚伙伴。喂食三次优质肉类后会带领寻找埋藏宝箱。', reward: '埋藏宝箱坐标地图', unlocked: true },
+      { id: 'rhino', title: 'Hebra Guardian', cnTitle: '雪山大角犀牛', creature: '大角犀牛 (Great Horned Rhino)', category: 'Wild Fauna', rarity: 'Rare', region: 'Hebra Mountains', svg: SVGS.rhino, desc: '栖息于严寒海布拉雪原的巨型厚皮野兽，冲撞力惊人，提供极为珍贵的顶级顶级兽肉。', reward: '顶级兽肉串 x5', unlocked: false },
+      { id: 'frog', title: 'Speed of Lightning', cnTitle: '疾速速速蛙', creature: '速速蛙 (Hot-Footed Frog)', category: 'Critters', rarity: 'Common', region: 'Hyrule Ponds', svg: SVGS.frog, desc: '能在水面快速跳跃的明亮青蛙。烹饪后可制作显著提升移动速度的药剂。', reward: '速速药水 (Lv3 移动速度加成)', unlocked: false },
+      { id: 'sunshroom', title: 'Warmth of Eldin', cnTitle: '暖暖草莓蘑菇', creature: '暖暖香菇 (Sunshroom)', category: 'Flora Fauna', rarity: 'Common', region: 'Eldin Canyon', svg: SVGS.sunshroom, desc: '蕴含地热火元素的鲜艳蘑菇，烹饪后为身体提供御寒耐寒效果。', reward: '耐寒料理 x3', unlocked: true },
+      { id: 'pigeon', title: 'Plumes of Rainbow', cnTitle: '七彩虹羽鸽', creature: '彩虹鸽 (Rainbow Pigeon)', category: 'Wild Birds', rarity: 'Uncommon', region: 'Faron Woods', svg: SVGS.pigeon, desc: '常在阳光折射的雨林中飞翔的稀有鸟类，羽毛在不同角度下呈现七彩光芒。', reward: '彩虹羽毛饰品', unlocked: false }
+    ];
+
+    // State Management
+    let state = {
+      achievements: [],
+      filter: 'all',
+      search: '',
+      selectedId: null
+    };
+
+    // DOM Elements
+    let gridEl, emptyEl, progressBarEl, progressTextEl, searchInput, filterBtns;
+    let modalEl, modalContainer, closeModalBtn, modalIcon, modalCategory, modalTitle;
+    let modalCnTitle, modalDesc, modalStatusText, modalToggleBtn, modalRegion, modalCreatureId;
+    let soundBtn, resetBtn;
+
+    function initData() {
+      // DOM Elements Initialization
+      gridEl = document.getElementById('achievement-grid');
+      emptyEl = document.getElementById('empty-state');
+      progressBarEl = document.getElementById('progress-bar');
+      progressTextEl = document.getElementById('progress-text');
+      searchInput = document.getElementById('search-input');
+      filterBtns = document.querySelectorAll('.filter-btn');
+
+      modalEl = document.getElementById('detail-modal');
+      modalContainer = document.getElementById('modal-container');
+      closeModalBtn = document.getElementById('close-modal-btn');
+      modalIcon = document.getElementById('modal-icon');
+      modalCategory = document.getElementById('modal-category');
+      modalTitle = document.getElementById('modal-title');
+      modalCnTitle = document.getElementById('modal-cn-title');
+      modalDesc = document.getElementById('modal-desc');
+      modalStatusText = document.getElementById('modal-status-text');
+      modalToggleBtn = document.getElementById('modal-toggle-btn');
+      modalRegion = document.getElementById('modal-region');
+      modalCreatureId = document.getElementById('modal-creature-id');
+
+      soundBtn = document.getElementById('sound-btn');
+      resetBtn = document.getElementById('reset-btn');
+
+      const saved = localStorage.getItem('zelda_achievements_v3');
+      if (saved) {
+        try {
+          const savedStates = JSON.parse(saved);
+          state.achievements = RAW_ACHIEVEMENTS.map(item => ({
+            ...item,
+            unlocked: savedStates[item.id] !== undefined ? savedStates[item.id] : item.unlocked
+          }));
+        } catch(e) {
+          state.achievements = [...RAW_ACHIEVEMENTS];
+        }
+      } else {
+        state.achievements = [...RAW_ACHIEVEMENTS];
+      }
+    }
+
+    function saveState() {
+      const statusMap = {};
+      state.achievements.forEach(a => statusMap[a.id] = a.unlocked);
+      localStorage.setItem('zelda_achievements_v3', JSON.stringify(statusMap));
+    }
+
+    function updateProgress() {
+      const total = state.achievements.length;
+      const unlockedCount = state.achievements.filter(a => a.unlocked).length;
+      const pct = Math.round((unlockedCount / total) * 100);
+
+      progressBarEl.style.width = `${pct}%`;
+      progressTextEl.textContent = `${unlockedCount} / ${total} (${pct}%)`;
+    }
+
+    // Burst Particle FX on Card Unlock (Pixel Sparks)
+    function triggerUnlockBurst(cardElement) {
+      const rect = cardElement.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      for (let i = 0; i < 30; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'fixed w-3 h-3 pointer-events-none z-50 pixel-art';
+        particle.style.left = `${centerX}px`;
+        particle.style.top = `${centerY}px`;
+        particle.style.backgroundColor = Math.random() > 0.35 ? '#f3c959' : '#00e5ff';
+        particle.style.boxShadow = '0 0 8px #f3c959';
+        document.body.appendChild(particle);
+
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 90 + 45;
+        const vx = Math.cos(angle) * speed;
+        const vy = Math.sin(angle) * speed;
+
+        particle.animate([
+          { transform: 'translate(0, 0) scale(1.2)', opacity: 1 },
+          { transform: `translate(${vx}px, ${vy}px) scale(0)`, opacity: 0 }
+        ], {
+          duration: 600 + Math.random() * 300,
+          easing: 'steps(6, end)'
+        }).onfinish = () => particle.remove();
+      }
+    }
+
+    // Render Grid Cards
+    function renderGrid() {
+      gridEl.innerHTML = '';
+
+      const filtered = state.achievements.filter(item => {
+        if (state.filter === 'unlocked' && !item.unlocked) return false;
+        if (state.filter === 'locked' && item.unlocked) return false;
+
+        if (state.search.trim() !== '') {
+          const q = state.search.toLowerCase();
+          const matchTitle = item.title.toLowerCase().includes(q);
+          const matchCn = item.cnTitle.toLowerCase().includes(q);
+          const matchCreature = item.creature.toLowerCase().includes(q);
+          const matchRegion = item.region.toLowerCase().includes(q);
+          if (!matchTitle && !matchCn && !matchCreature && !matchRegion) return false;
+        }
+
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        emptyEl.classList.remove('hidden');
+      } else {
+        emptyEl.classList.add('hidden');
+      }
+
+      filtered.forEach(item => {
+        const container = document.createElement('div');
+        container.className = 'card-container';
+
+        const card = document.createElement('div');
+        card.className = `zelda-card ${item.unlocked ? 'unlocked' : 'locked'} rounded-2xl p-4 md:p-5 flex flex-col justify-between cursor-pointer group`;
+        card.setAttribute('data-id', item.id);
+
+        const rarityColor = {
+          'Common': 'bg-zinc-800 text-zinc-300 border-zinc-600',
+          'Uncommon': 'bg-emerald-950/90 text-emerald-300 border-emerald-700',
+          'Rare': 'bg-sky-950/90 text-sky-300 border-sky-700',
+          'Legendary': 'bg-amber-950/90 text-amber-300 border-amber-500 gold-glow-text'
+        }[item.rarity] || 'bg-zinc-800 text-zinc-300';
+
+        card.innerHTML = `
+          <div class="corner-tl"></div><div class="corner-tr"></div>
+          <div class="corner-bl"></div><div class="corner-br"></div>
+
+          <div>
+            <!-- Top Tag & Lock Badge -->
+            <div class="flex items-center justify-between mb-3 relative z-20">
+              <span class="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-md border ${rarityColor} shadow-md tracking-wider">
+                ${item.rarity}
+              </span>
+              <div class="status-badge text-xs font-black flex items-center gap-1.5 ${item.unlocked ? 'text-amber-400 gold-glow-text' : 'text-red-400'}">
+                <i class="fa-solid ${item.unlocked ? 'fa-circle-check text-amber-400' : 'fa-lock-open text-red-400'}"></i>
+                <span>${item.unlocked ? '已获得' : '未解锁'}</span>
+              </div>
+            </div>
+
+            <!-- Pixel Avatar Wrapper with Inner Shadow & Rim Highlight -->
+            <div class="pixel-avatar-box w-24 h-24 mx-auto my-2 p-2.5 rounded-2xl ${item.unlocked ? 'bg-black/70 border-2 border-zelda-gold avatar-light-bg' : 'bg-black/90 border border-zinc-700'} flex items-center justify-center relative transition-transform duration-300 group-hover:scale-110 overflow-hidden">
+              <div class="w-20 h-20 relative z-10 flex items-center justify-center">
+                ${item.svg}
+              </div>
+            </div>
+
+            <!-- Titles -->
+            <div class="text-center mt-3 relative z-20">
+              <h4 class="font-cinzel text-base font-bold tracking-wide ${item.unlocked ? 'text-zelda-lightGold gold-glow-text' : 'text-zinc-400'} group-hover:text-white transition-colors">
+                ${item.title}
+              </h4>
+              <p class="text-xs font-bold text-amber-200/80 mt-1">
+                ${item.cnTitle}
+              </p>
+            </div>
+          </div>
+
+          <!-- Bottom Bar -->
+          <div class="mt-4 pt-3 border-t border-amber-900/40 flex items-center justify-between text-xs relative z-20">
+            <span class="text-zinc-400 font-mono text-[11px] truncate max-w-[140px] flex items-center gap-1">
+              <i class="fa-solid fa-location-dot text-amber-500"></i> ${item.creature}
+            </span>
+            <button class="toggle-status-btn px-2.5 py-1 rounded-lg ${item.unlocked ? 'bg-amber-950/80 text-amber-300 border-amber-600' : 'bg-zinc-800 text-zinc-400 border-zinc-700'} hover:border-zelda-gold border transition-all text-xs font-bold flex items-center gap-1 shadow">
+              <i class="fa-solid ${item.unlocked ? 'fa-key text-amber-400' : 'fa-lock text-zinc-400'}"></i>
+              <span>${item.unlocked ? '重置' : '解锁'}</span>
+            </button>
+          </div>
+        `;
+
+        // 3D Card Hover Effect
+        card.addEventListener('mousemove', (e) => {
+          const rect = card.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+          const centerX = rect.width / 2;
+          const centerY = rect.height / 2;
+          const rotateX = ((y - centerY) / centerY) * -10;
+          const rotateY = ((x - centerX) / centerX) * 10;
+
+          card.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(10px)`;
+        });
+
+        card.addEventListener('mouseleave', () => {
+          card.style.transform = 'rotateX(0deg) rotateY(0deg) translateZ(0px)';
+        });
+
+        // Click Event -> Open Modal / Toggle
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('.toggle-status-btn')) {
+            e.stopPropagation();
+            toggleAchievement(item.id, card);
+          } else {
+            playSound('click');
+            openModal(item.id);
+          }
+        });
+
+        container.appendChild(card);
+        gridEl.appendChild(container);
+      });
+
+      updateProgress();
+    }
+
+    // Toggle Achievement State
+    function toggleAchievement(id, cardEl) {
+      const item = state.achievements.find(a => a.id === id);
+      if (item) {
+        item.unlocked = !item.unlocked;
+        saveState();
+        
+        if (item.unlocked) {
+          playSound('unlock');
+          if (cardEl) triggerUnlockBurst(cardEl);
+        } else {
+          playSound('lock');
+        }
+
+        renderGrid();
+        if (state.selectedId === id) {
+          updateModalUI(item);
+        }
+      }
+    }
+
+    // Open Modal
+    function openModal(id) {
+      state.selectedId = id;
+      const item = state.achievements.find(a => a.id === id);
+      if (!item) return;
+
+      updateModalUI(item);
+
+      modalEl.classList.remove('opacity-0', 'pointer-events-none');
+      modalContainer.classList.remove('scale-90');
+      modalContainer.classList.add('scale-100');
+    }
+
+    function updateModalUI(item) {
+      modalIcon.innerHTML = item.svg;
+      modalCategory.textContent = `${item.category} • ${item.rarity}`;
+      modalTitle.textContent = item.title;
+      modalCnTitle.textContent = item.cnTitle;
+      modalDesc.innerHTML = `<span class="text-amber-300 font-bold">图鉴记载：</span>${item.desc}<br/><br/><span class="text-emerald-400 font-bold">成就奖励：</span>${item.reward}`;
+      modalRegion.textContent = item.region;
+      modalCreatureId.textContent = `#${item.id.toUpperCase()}`;
+
+      if (item.unlocked) {
+        modalStatusText.textContent = "已完成解锁 (Unlocked)";
+        modalStatusText.className = "text-sm font-black text-emerald-400 gold-glow-text";
+        modalToggleBtn.className = "px-5 py-2.5 rounded-xl text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-600 border transition-all shadow-lg flex items-center gap-2";
+        modalToggleBtn.innerHTML = `<i class="fa-solid fa-rotate-left"></i> 重新设为未解锁`;
+      } else {
+        modalStatusText.textContent = "未解锁神殿记录 (Locked)";
+        modalStatusText.className = "text-sm font-black text-zinc-400";
+        modalToggleBtn.className = "px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-400 hover:brightness-110 text-black border-amber-300 border transition-all shadow-xl flex items-center gap-2 font-black";
+        modalToggleBtn.innerHTML = `<i class="fa-solid fa-key"></i> 立即点亮神殿成就`;
+      }
+    }
+
+    // Close Modal
+    function closeModal() {
+      modalEl.classList.add('opacity-0', 'pointer-events-none');
+      modalContainer.classList.remove('scale-100');
+      modalContainer.classList.add('scale-90');
+      state.selectedId = null;
+    }
+
+    // Event Listeners Setup
+    function setupEvents() {
+      // Search Box Filter
+      searchInput.addEventListener('input', (e) => {
+        state.search = e.target.value;
+        renderGrid();
+      });
+
+      // Filter Buttons
+      filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          playSound('click');
+          filterBtns.forEach(b => {
+            b.className = "filter-btn px-4 py-2 rounded-lg text-xs md:text-sm font-bold text-zinc-400 hover:text-amber-200 transition-all";
+          });
+          btn.className = "filter-btn px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all bg-gradient-to-r from-amber-700 to-yellow-600 text-white shadow-lg border border-amber-400/50";
+
+          state.filter = btn.getAttribute('data-filter');
+          renderGrid();
+        });
+      });
+
+      // Modal Toggle State Button
+      modalToggleBtn.addEventListener('click', () => {
+        if (state.selectedId) {
+          const cardEl = document.querySelector(`.zelda-card[data-id="${state.selectedId}"]`);
+          toggleAchievement(state.selectedId, cardEl);
+        }
+      });
+
+      // Modal Close Listeners
+      closeModalBtn.addEventListener('click', closeModal);
+      modalEl.addEventListener('click', (e) => {
+        if (e.target === modalEl) closeModal();
+      });
+
+      // Sound Toggle Button
+      soundBtn.addEventListener('click', () => {
+        soundEnabled = !soundEnabled;
+        soundBtn.innerHTML = soundEnabled ? 
+          `<i class="fa-solid fa-volume-high text-sm"></i>` : 
+          `<i class="fa-solid fa-volume-xmark text-sm text-zinc-500"></i>`;
+        if (soundEnabled) playSound('click');
+      });
+
+      // Reset All Progress Button
+      resetBtn.addEventListener('click', () => {
+        if (confirm("确定要重置所有海拉鲁神殿成就的解锁状态吗？")) {
+          state.achievements.forEach(a => a.unlocked = false);
+          saveState();
+          playSound('lock');
+          renderGrid();
+          if (state.selectedId) closeModal();
+        }
+      });
+
+      // Keyboard ESC
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && state.selectedId) {
+          closeModal();
+        }
+      });
+    }
+
+    // App Initialization
+    window.addEventListener('DOMContentLoaded', () => {
+      initCanvasParticles();
+      initData();
+      setupEvents();
+      renderGrid();
+    });
+  </script>
+</body>
+</html>
