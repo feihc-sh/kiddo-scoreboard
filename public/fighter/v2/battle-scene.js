@@ -47,13 +47,19 @@ let _renderedMonsterIdx = null;
 let _renderedMonsterId = null;
 
 // ==================== Sprite Assets ====================
-// Per ASSET-CATALOG.md: sprite sheet is 1788x1968, 7 cols × 6 rows, each frame 256x328
-// Hero: hero-attack.png first frame (col 0, row 0) at sprite sheet position (0,0)
-// Monster: monster-fungus.png (Stage 1-2) or monster-worm.png (Stage 3+) — use fungus by default
-// Frame pixel math: frame col * 256, frame row * 328
+// These PNGs are SINGLE sprites painted on a large white canvas — they are NOT
+// sprite sheets and have no animation frames to crop.
+//   (measured 2026-11-20: content bbox covers 72-92% of the canvas width and
+//    81-95% of its height; the top-left 256x328 cell is empty for 7 of the 8
+//    assets and, for the 8th, the content bleeds past the cell border)
+//   Ground truth: public/assets/fighter/v2/ASSET-CATALOG.md §「真实画布布局」
+//   Guard:        tests/unit/fighter-v2/asset-sheet-guard.test.ts
+//
+// Hero:    hero-attack.png (a full-body chibi hero, whole image)
+// Monster: monster-fungus.png (Stage 1-2) or monster-worm.png (Stage 3+)
 
-// Knight sprite — real PNG from hero-attack.png sprite sheet (first frame at 0,0)
-// 1788x1968 sprite sheet, 7x6 grid, 256x328/frame → first frame = top-left 256x328
+// Knight sprite — the whole hero-attack.png image. Do NOT try to crop a
+// "first frame" out of it: there are no frames, only one sprite on a canvas.
 const KNIGHT_IMG = `<img class="dk-battle-knight" src="/assets/fighter/v2/hero-attack.png" alt="骑士"
   style="image-rendering: pixelated; width: 100px; height: auto; image-rendering: crisp-edges;"
   onerror="this.outerHTML='<div class=&quot;dk-battle-knight-fallback&quot;>⚔️</div>'"

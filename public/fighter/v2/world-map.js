@@ -7,8 +7,12 @@
 import { clearChildren } from './utils.js';
 
 // Asset image tags — per ASSET-CATALOG.md asset-swap wiring pattern
-// knight.png = hero-idle.png first frame (256x328, cropped by PM)
-// dragon.png = monster-dragon.png first frame (naming mismatch per catalog, but file exists)
+// knight.png = a tight, transparent-background crop of the hero idle sprite
+// dragon.png = a crop of monster-worm.png (the "dragon" asset is actually a
+//              hero, so the worm sprite stands in for it — see catalog notes)
+// NOTE: the source assets under public/assets/fighter/v2/ are SINGLE sprites on
+// a large white canvas, not animation sheets — crop by content bbox, never by
+// a fixed frame coordinate. See tests/unit/fighter-v2/asset-sheet-guard.test.ts.
 const KNIGHT_IMG = `<img class="dk-knight" src="/fighter/v2/knight.png" alt="骑士" onerror="this.outerHTML='<div class=&quot;dk-knight-fallback&quot;>🦸</div>'" />`;
 const DRAGON_IMG = `<img class="dk-dragon" src="/fighter/v2/dragon.png" alt="红龙" onerror="this.outerHTML='<div class=&quot;dk-dragon-fallback&quot;>🐉</div>'" />`;
 
