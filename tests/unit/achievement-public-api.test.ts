@@ -58,6 +58,9 @@ function addAward(overrides: Record<string, unknown> = {}) {
     granted_at: 1_700_000_000,
     revoked_at: null,
     revoked_by: null,
+    // 完成详情 (spec §7c) —— 默认没记 (= NULL)。
+    completed_on: null,
+    note: null,
     ...overrides,
   });
   return state.awards[state.awards.length - 1];

@@ -2409,6 +2409,14 @@ body {
   margin-top: 2px;
   letter-spacing: 0.03em;
 }
+/* 成就发放日志里的「完成详情」行 (spec §7c) —— 完成日期 + 完成内容。 */
+.pm-row .pm-row-note {
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-top: 4px;
+  line-height: 1.4;
+  word-break: break-word;
+}
 .pm-row .pm-row-actions {
   display: flex;
   gap: 6px;

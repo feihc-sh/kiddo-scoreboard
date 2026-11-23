@@ -210,7 +210,8 @@ export async function getAchievement(
 // =============================================================
 
 export const AWARD_COLUMNS =
-  'id, achievement_id, user_id, tier, season_id, status, granted_by, granted_at, revoked_at, revoked_by';
+  'id, achievement_id, user_id, tier, season_id, status, granted_by, granted_at, revoked_at, revoked_by, ' +
+  'completed_on, note';
 
 /**
  * Has this (season, achievement, user, tier) ever been awarded?

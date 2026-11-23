@@ -13,7 +13,8 @@
 //         "description": "获得一次语文默写全对",
 //         "grant_mode": "admin_tier",
 //         "ladder": { "iron": 1, "bronze": 3, "silver": 5, "gold": 8, "king": 10 },
-//         "award": null
+//         "award": null,
+//         "records": []
 //       }
 //     ],
 //     "pet_tokens": 0
@@ -22,6 +23,12 @@
 // award = the HIGHEST medal earned for that achievement in the season, or
 // null when nothing was earned. The ladder is parsed server-side from
 // ladder_json (spec §7b, R11 — never return the raw JSON TEXT).
+//
+// records = the completion records (spec §7c) for that achievement in that
+// season — one entry per active grant, newest first:
+//   { "completed_on": "2026-11-21", "note": "英语课外班默写全对",
+//     "granted_at": "2026-11-21T04:00:00.000Z" }
+// completed_on / note are null when the PM didn't record them.
 
 import { Hono } from 'hono';
 import type { Env } from '../../worker.ts';
@@ -48,6 +55,19 @@ interface WallAward {
   tier: AchievementTier;
   granted_at: string;
   count: number;
+}
+
+/**
+ * 一条完成记录 (spec §7c) —— 孩子侧成就详情弹窗展示的「每次成就时刻」。
+ *
+ * completed_on: PM 记的完成日期 ('YYYY-MM-DD') 或 null (没记)
+ * note:         PM 记的完成内容 (自由文本) 或 null (没记)
+ * granted_at:   发放时刻 (ISO 8601) —— 排序用, 也兜底显示「什么时候发的」
+ */
+interface WallRecord {
+  completed_on: string | null;
+  note: string | null;
+  granted_at: string;
 }
 
 achievements.get('/', async (c) => {
@@ -131,6 +151,9 @@ achievements.get('/', async (c) => {
       // Server-side parse of ladder_json (spec §7b, R11).
       ladder: parseLadder(a.ladder_json),
       award,
+      // 完成记录 (spec §7c) —— 该赛季该奖项的历次发放记录, 最近的在前。
+      // 空数组 = 还没发过 (前端显示空状态文案)。
+      records: buildWallRecords(active),
     };
   });
 
@@ -176,6 +199,28 @@ function buildWallAward(activeAwards: AchievementAward[]): WallAward | null {
     granted_at: new Date(latest * 1000).toISOString(),
     count,
   };
+}
+
+/**
+ * 构造完成记录列表 (spec §7c)。
+ *
+ * 只含 **active** 的 award (撤销的牌不进孩子的记录 —— 和「最高牌」口径一致:
+ * 撤销 = 这枚牌不存在了, 不是「曾经存在过」)。
+ *
+ * 排序: granted_at **降序** (最近的在前), 同秒则 id 降序 —— id 是自增的,
+ * 所以同秒发放的记录按写入顺序倒序, 结果稳定可预期。
+ *
+ * completed_on / note 允许为 null —— PM 没记就是没记, 不编造默认值
+ * (编一个日期会让「哪天完成的」变成假信息)。
+ */
+function buildWallRecords(activeAwards: AchievementAward[]): WallRecord[] {
+  return [...activeAwards]
+    .sort((a, b) => b.granted_at - a.granted_at || b.id - a.id)
+    .map((award) => ({
+      completed_on: award.completed_on ?? null,
+      note: award.note ?? null,
+      granted_at: new Date(award.granted_at * 1000).toISOString(),
+    }));
 }
 
 export { highestTier };

@@ -357,6 +357,16 @@
               </div>
             </div>
           </div>
+          <!-- 完成详情 (可选, spec §7c) —— 发放时顺手记下「哪天完成的 / 完成了什么」。
+               孩子侧的成就详情弹窗会按时间倒序展示每一条记录。 -->
+          <div class="pm-form-row">
+            <div><label>完成日期 (可选)</label>
+              <input name="completed_on" type="date">
+            </div>
+            <div><label>完成内容 (可选)</label>
+              <input name="note" type="text" maxlength="100" placeholder="例: 英语课外班默写全对">
+            </div>
+          </div>
         </form>
 
         <!-- 发放日志 -->

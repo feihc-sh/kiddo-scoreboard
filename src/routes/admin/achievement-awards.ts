@@ -66,9 +66,69 @@ interface GrantBody {
   tier: AchievementTier;
   user_id: number;
   season_id?: number;
+  /** 完成日期 (spec §7c) — 'YYYY-MM-DD' 或 undefined (= NULL, 没记)。 */
+  completed_on?: string;
+  /** 完成内容 (spec §7c) — 自由文本 (≤100 字) 或 undefined (= NULL, 没记)。 */
+  note?: string;
 }
 
-function parseGrantBody(raw: unknown): { ok: true; value: GrantBody } | { ok: false; message: string } {
+/** 完成日期的格式: ISO 日历日 'YYYY-MM-DD' (spec §7c)。 */
+const COMPLETED_ON_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 完成内容的长度上限 (spec §7c)。 */
+const NOTE_MAX_LENGTH = 100;
+
+/**
+ * 校验完成日期 —— 必须是 ISO 日历日 'YYYY-MM-DD'。
+ *
+ * 只查形状 (数字 + 分隔符位置), 不查语义 (2026-13-45 也能过)。理由:
+ * 这是一个**记录**字段, 不是驱动任何逻辑的日期 —— 没有按它做区间过滤,
+ * 所以语义错误不会造成错算, 而严格解析会引入时区/闰年这类边界分支。
+ * 形状错了 (e.g. '21/11/2026') 必须 400 —— 那多半是 PM 填错了格式。
+ */
+function parseCompletedOn(
+  raw: unknown,
+): { ok: true; value: string | undefined } | { ok: false; message: string } {
+  if (raw === undefined || raw === null || raw === '') {
+    return { ok: true, value: undefined };
+  }
+  if (typeof raw !== 'string') {
+    return { ok: false, message: 'completed_on must be YYYY-MM-DD' };
+  }
+  const trimmed = raw.trim();
+  if (trimmed === '') return { ok: true, value: undefined };
+  if (!COMPLETED_ON_PATTERN.test(trimmed)) {
+    return { ok: false, message: 'completed_on must be YYYY-MM-DD' };
+  }
+  return { ok: true, value: trimmed };
+}
+
+/**
+ * 校验完成内容 —— 可选字符串, trim 后 ≤100 字。
+ *
+ * 超长直接 400: 这条文本会被回显到孩子侧的成就详情弹窗, 不该允许
+ * 一整段话塞进一个列表项。
+ */
+function parseNote(
+  raw: unknown,
+): { ok: true; value: string | undefined } | { ok: false; message: string } {
+  if (raw === undefined || raw === null) {
+    return { ok: true, value: undefined };
+  }
+  if (typeof raw !== 'string') {
+    return { ok: false, message: 'note must be a string' };
+  }
+  const trimmed = raw.trim();
+  if (trimmed === '') return { ok: true, value: undefined };
+  if (trimmed.length > NOTE_MAX_LENGTH) {
+    return { ok: false, message: `note must be at most ${NOTE_MAX_LENGTH} characters` };
+  }
+  return { ok: true, value: trimmed };
+}
+
+function parseGrantBody(
+  raw: unknown,
+): { ok: true; value: GrantBody } | { ok: false; message: string; code?: string } {
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
     return { ok: false, message: 'body must be a JSON object' };
   }
@@ -89,6 +149,18 @@ function parseGrantBody(raw: unknown): { ok: true; value: GrantBody } | { ok: fa
     }
   }
 
+  // 完成详情 (spec §7c) —— 两个字段都可选, 格式错就 400 (不静默丢弃:
+  // 静默丢弃会让 PM 以为日期记上了, 实际孩子侧看不到)。
+  const completedOn = parseCompletedOn(b.completed_on);
+  if (!completedOn.ok) {
+    return { ok: false, message: completedOn.message, code: 'INVALID' };
+  }
+
+  const note = parseNote(b.note);
+  if (!note.ok) {
+    return { ok: false, message: note.message, code: 'INVALID' };
+  }
+
   return {
     ok: true,
     value: {
@@ -96,6 +168,8 @@ function parseGrantBody(raw: unknown): { ok: true; value: GrantBody } | { ok: fa
       tier: b.tier,
       user_id: b.user_id as number,
       season_id: b.season_id as number | undefined,
+      completed_on: completedOn.value,
+      note: note.value,
     },
   };
 }
@@ -111,7 +185,7 @@ achievementsAdmin.post('/', async (c) => {
     return badRequest(c, 'invalid JSON body');
   }
   const parsed = parseGrantBody(raw);
-  if (!parsed.ok) return badRequest(c, parsed.message);
+  if (!parsed.ok) return badRequest(c, parsed.message, parsed.code ?? 'BAD_REQUEST');
   const body = parsed.value;
 
   const db = c.env.DB;
@@ -198,6 +272,9 @@ achievementsAdmin.post('/', async (c) => {
     seasonId,
     grantedBy: pmUserId,
     actor: 'pm',
+    // 完成详情 (spec §7c) —— 可选, 没填就是 NULL。
+    completedOn: body.completed_on ?? null,
+    note: body.note ?? null,
   });
 
   const petTokens = await getPetTokenBalance(db, body.user_id);

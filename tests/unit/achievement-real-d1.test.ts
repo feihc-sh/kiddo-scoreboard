@@ -52,12 +52,15 @@ function splitStatements(sql: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-async function applyAllMigrations(exclude?: string) {
+async function applyAllMigrations(exclude?: string | string[]) {
+  const excluded = exclude === undefined
+    ? []
+    : (Array.isArray(exclude) ? exclude : [exclude]);
   const files = readdirSync(MIGRATIONS_DIR)
     .filter((f) => /^\d{4}_.*\.sql$/.test(f))
     .sort();
   for (const f of files) {
-    if (exclude && f.startsWith(exclude)) continue;
+    if (excluded.some((prefix) => f.startsWith(prefix))) continue;
     const sql = readFileSync(resolve(MIGRATIONS_DIR, f), 'utf8');
     for (const stmt of splitStatements(sql)) {
       await db.prepare(stmt).run();
@@ -79,13 +82,18 @@ async function applyMigration(prefix: string) {
   }
 }
 
-async function resetDb(options: { exclude?: string } = {}) {
+async function resetDb(options: { exclude?: string | string[] } = {}) {
   // Drop every table any migration creates, so the migrations can be
   // replayed from scratch on each test.
   //
   // FK-safe order: children before parents. `achievement_awards` references
   // achievements/seasons/users, so it must go first; `seasons` and
   // `achievements` are referenced by achievement_awards only.
+  //
+  // `achievement_awards` MUST be in this list: migration 0022 does
+  // `ALTER TABLE achievement_awards ADD COLUMN completed_on/note`, and
+  // SQLite refuses a duplicate column on replay. Dropping the table
+  // (instead of the columns) is the only way to re-apply 0022 cleanly.
   for (const t of [
     'audit_log',
     'deleted_records',
@@ -224,7 +232,7 @@ describe('migration 0021 — schema + seed', () => {
     });
   });
 
-  it('seeds exactly 8 achievements with the spec §2 ladders', async () => {
+  it('seeds exactly 9 achievements with the spec §2 ladders', async () => {
     const res = await db
       .prepare(
         `SELECT id, grp, name, grant_mode, ladder_json, sort_order
@@ -239,10 +247,12 @@ describe('migration 0021 — schema + seed', () => {
         sort_order: number;
       }>();
     const rows = res.results ?? [];
-    expect(rows).toHaveLength(8);
-    expect(rows.map((r) => r.sort_order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    // 8 个 0021 seed 奖项 + 1 个 0022 新增 (读完一本英文长篇小说)。
+    expect(rows).toHaveLength(9);
+    // sort_order: 1..6, 6.5 (新奖项), 7, 8 —— 新奖项卡在中文长篇与曲子之间。
+    expect(rows.map((r) => r.sort_order)).toEqual([1, 2, 3, 4, 5, 6, 6.5, 7, 8]);
 
-    // 次数档奖项 (study ×3 + skill ×3)
+    // 次数档奖项 (study ×3 + skill ×4)
     const countLadder = '{"iron":1,"bronze":3,"silver":5,"gold":8,"king":10}';
     for (const r of rows.filter((x) => x.grant_mode === 'admin_tier')) {
       expect(r.ladder_json).toBe(countLadder);
@@ -255,6 +265,53 @@ describe('migration 0021 — schema + seed', () => {
     const flat = rows.find((r) => r.name === '创新家务奖')!;
     expect(flat.grant_mode).toBe('admin_flat');
     expect(flat.ladder_json).toBeNull();
+  });
+
+  it('migration 0022 adds the 完成日期/完成内容 columns to achievement_awards', async () => {
+    // Old rows survive with the new columns as NULL (no backfill needed).
+    const cols = await db
+      .prepare(`SELECT completed_on, note FROM achievement_awards LIMIT 1`)
+      .all<{ completed_on: string | null; note: string | null }>();
+    // No rows yet → the query still resolves (columns exist).
+    expect(cols.results).toBeDefined();
+
+    const schema = await db
+      .prepare(`SELECT sql FROM sqlite_master WHERE name = 'achievement_awards'`)
+      .first<{ sql: string }>();
+    expect(schema?.sql).toMatch(/completed_on\s+TEXT/i);
+    expect(schema?.sql).toMatch(/note\s+TEXT/i);
+  });
+
+  it('migration 0022 seeds 读完一本英文长篇小说 as an independent skill award', async () => {
+    const row = await db
+      .prepare(
+        `SELECT id, grp, name, description, grant_mode, ladder_json, is_active, sort_order
+         FROM achievements WHERE name = '读完一本英文长篇小说'`,
+      )
+      .first<{
+        id: number;
+        grp: string;
+        name: string;
+        description: string | null;
+        grant_mode: string;
+        ladder_json: string | null;
+        is_active: number;
+        sort_order: number;
+      }>();
+    expect(row).not.toBeNull();
+    expect(row!.grp).toBe('skill');
+    expect(row!.description).toBe('读完一本英文长篇小说');
+    expect(row!.grant_mode).toBe('admin_tier');
+    expect(row!.ladder_json).toBe('{"iron":1,"bronze":3,"silver":5,"gold":8,"king":10}');
+    expect(row!.is_active).toBe(1);
+    expect(row!.sort_order).toBe(6.5);
+
+    // It is a SEPARATE award from 中文长篇 — both exist side by side.
+    const chinese = await db
+      .prepare(`SELECT id FROM achievements WHERE name = '读完一本长篇中文小说'`)
+      .first<{ id: number }>();
+    expect(chinese).not.toBeNull();
+    expect(chinese!.id).not.toBe(row!.id);
   });
 
   it('accepts the pet_tokens account type and the achievement source', async () => {
@@ -275,7 +332,10 @@ describe('migration 0021 — schema + seed', () => {
   it('preserves existing score_events rows and their ids across the rebuild', async () => {
     // Rebuild the DB in the PRE-0021 state, write rows + FK references,
     // then apply 0021 — the real production upgrade path.
-    await resetDb({ exclude: '0021' });
+    //
+    // 0022 must be excluded too: it ALTERs achievement_awards, a table
+    // that only exists from 0021 onward.
+    await resetDb({ exclude: ['0021', '0022'] });
     // resetDb dropped the users/tasks, so re-create the rows the FKs need.
     await seedUsers();
     await db
@@ -333,7 +393,8 @@ describe('migration 0021 — schema + seed', () => {
 
   it('preserves shop_redemptions FK references and restores the NOT NULL constraint', async () => {
     // The pre-0021 schema, with a redemption pointing at a coin event.
-    await resetDb({ exclude: '0021' });
+    // 0022 is excluded for the same reason as above (it ALTERs a 0021 table).
+    await resetDb({ exclude: ['0021', '0022'] });
     await seedUsers();
     await db
       .prepare(
@@ -563,7 +624,7 @@ describe('achievement grant/revoke — real D1', () => {
       pet_tokens: number;
     };
     expect(body.season.name).toBe('S1 · 四年级上学期');
-    expect(body.achievements).toHaveLength(8);
+    expect(body.achievements).toHaveLength(9);
     expect(body.achievements[0].ladder).toEqual({
       iron: 1,
       bronze: 3,

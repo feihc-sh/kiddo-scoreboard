@@ -66,6 +66,17 @@ export interface GrantOptions {
   actor: 'pm' | 'system';
   /** Whether to mint pet tokens. The streak engine mints too (spec §8). */
   mintTokens?: boolean;
+  /**
+   * 完成日期 (spec §7c) — 'YYYY-MM-DD' (Asia/Shanghai 日历日) 或 NULL。
+   * PM 在发放时填「这件事是哪天完成的」。格式由 API 层校验 (400),
+   * 这里只负责落库。
+   */
+  completedOn?: string | null;
+  /**
+   * 完成内容 (spec §7c) — 自由文本 (≤100 字) 或 NULL。
+   * 例: 「英语课外班默写全对」。长度由 API 层校验 (400)。
+   */
+  note?: string | null;
 }
 
 /**
@@ -86,6 +97,9 @@ export async function grantAchievementAward(
   const mintTokens = opts.mintTokens ?? true;
   const amount = tokensForTier(tier);
   const now = Math.floor(Date.now() / 1000);
+  // 完成详情 (spec §7c) — 两列都可 NULL: PM 没记就是 NULL, 不是空串。
+  const completedOn = opts.completedOn ?? null;
+  const note = opts.note ?? null;
 
   const statements: ReturnType<D1Database['prepare']>[] = [];
 
@@ -95,10 +109,11 @@ export async function grantAchievementAward(
     db
       .prepare(
         `INSERT INTO achievement_awards
-           (achievement_id, user_id, tier, season_id, status, granted_by, granted_at)
-         VALUES (?, ?, ?, ?, 'active', ?, ?)`,
+           (achievement_id, user_id, tier, season_id, status, granted_by, granted_at,
+            completed_on, note)
+         VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)`,
       )
-      .bind(achievement.id, userId, tier, seasonId, grantedBy, now),
+      .bind(achievement.id, userId, tier, seasonId, grantedBy, now, completedOn, note),
   );
 
   // 2. Pet-token mint (spec §5). The source_ref is derived from the award
@@ -132,6 +147,9 @@ export async function grantAchievementAward(
           season_id: seasonId,
           tokens: mintTokens ? amount : 0,
           granted_by: grantedBy,
+          // 完成详情 (spec §7c) — 审计面也要能看到 PM 当时记了什么。
+          completed_on: completedOn,
+          note,
         }),
         now,
       ),
@@ -153,6 +171,8 @@ export async function grantAchievementAward(
     granted_at: now,
     revoked_at: null,
     revoked_by: null,
+    completed_on: completedOn,
+    note,
   };
 
   return { award, tokensMinted: mintTokens ? amount : 0, tokenEventId };
