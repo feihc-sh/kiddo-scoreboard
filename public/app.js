@@ -1317,6 +1317,103 @@ function updateCountdowns() {
     }
   });
 }
+// ---------- 操作日志 (kid 页 #event-list) ----------
+// feihao 需求 (2026-11-23): 操作日志里的 task 不要只显示裸 id，要加任务名 + 日期。
+//
+// 数据来源 (服务端，本文件不修改 src/)：
+//   - 任务完成事件的 reason    = `task:#<taskId>`            (src/utils/coin.ts buildTaskCoinGrantSQL)
+//   - 任务完成事件的 source_ref = `task:<taskId>:<date>:<userId>`
+//   - 撤销任务的 reason         = `revoke:task:#<taskId>`
+//   - 全勤 bonus 的 reason      = `bonus:<date>:<userId>`
+//   - 其它 reason（手工申请、周奖励等）保持原样文案。
+//
+// 任务名从 state.tasks（GET /api/public/tasks?active=true）做 id → name 映射。
+// 任务已被删除 / 不在 active 列表里时回退显示「任务 #<id>」，不丢信息。
+
+/** reason 里提取 task id：匹配 `task:#123` 或 `revoke:task:#123`。 */
+function extractTaskIdFromReason(reason) {
+  if (typeof reason !== 'string') return null;
+  const m = reason.match(/(?:^|:)task:#(\d+)$/);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * 从 source_ref 提取 task id。
+ * 格式 `task:<taskId>:<date>:<userId>`；`revoke:task:<taskId>:<date>:<userId>` 也支持。
+ * 非 task 开头的 source_ref（bonus:… / manual 的 null）返回 null —— 绝不误伤。
+ */
+function extractTaskIdFromSourceRef(sourceRef) {
+  if (typeof sourceRef !== 'string') return null;
+  const m = sourceRef.match(/^(?:revoke:)?task:(\d+)(?::|$)/);
+  return m ? Number(m[1]) : null;
+}
+
+/** 事件里关联的 task id：先看 reason（权威），再看 source_ref（兜底）。 */
+function resolveEventTaskId(ev) {
+  if (!ev) return null;
+  return extractTaskIdFromReason(ev.reason) ?? extractTaskIdFromSourceRef(ev.source_ref);
+}
+
+/**
+ * unix 秒 → `MM-DD HH:MM`（本地时区）。
+ * 与 admin/admin.js 的 fmtTime 同源（同一台机器上的时区语义），
+ * 但只保留月-日：操作日志只显示最近 10 条，年份对 kid 无意义。
+ */
+function formatEventTime(unixSec) {
+  const n = Number(unixSec);
+  if (!unixSec || !Number.isFinite(n) || n <= 0) return '';
+  const d = new Date(n * 1000);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (x) => String(x).padStart(2, '0');
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * 把一条 score_event 格式化成操作日志条目（纯函数，可单测）。
+ *
+ * @param {object} ev        score_event 行（reason / source_ref / created_at）
+ * @param {Map<number,string>|object} tasksById  id → 任务名
+ * @returns {{title: string, time: string}}
+ *   title — 任务事件的显示文案（任务名，缺失时回退「任务 #id」）；非任务事件为原 reason
+ *   time  — `MM-DD HH:MM`；created_at 缺失时为空串
+ */
+function formatEventEntry(ev, tasksById) {
+  const reason = (ev && typeof ev.reason === 'string') ? ev.reason : '';
+  const time = formatEventTime(ev && ev.created_at);
+
+  const taskId = resolveEventTaskId(ev);
+  if (taskId === null) {
+    // 非任务事件（bonus:… / 手工申请 / 周奖励…）—— 原样保留文案，语义不变。
+    return { title: reason, time };
+  }
+
+  const name = lookupTaskName(tasksById, taskId);
+  return { title: name || `任务 #${taskId}`, time };
+}
+
+/** 在 tasksById（Map 或普通对象）里查任务名，找不到返回 null。 */
+function lookupTaskName(tasksById, taskId) {
+  if (!tasksById) return null;
+  if (typeof tasksById.get === 'function') {
+    const v = tasksById.get(taskId);
+    return typeof v === 'string' && v ? v : null;
+  }
+  const v = tasksById[taskId];
+  return typeof v === 'string' && v ? v : null;
+}
+
+/** state.tasks → Map<taskId, taskName>（给 formatEventEntry 用）。 */
+function buildTasksById(tasks) {
+  const map = new Map();
+  if (!Array.isArray(tasks)) return map;
+  tasks.forEach((t) => {
+    if (t && t.id != null && typeof t.name === 'string' && t.name) {
+      map.set(Number(t.id), t.name);
+    }
+  });
+  return map;
+}
+
 function renderEvents() {
   const root = $('#event-list');
   const empty = $('#event-empty');
@@ -1327,17 +1424,20 @@ function renderEvents() {
     return;
   }
   empty.hidden = true;
+  const tasksById = buildTasksById(state.tasks);
   state.events.forEach((ev) => {
     const el = document.createElement('div');
     el.className = 'event-item event-status-' + ev.status;
     const sign = ev.change_value > 0 ? '+' : '';
     const icon = eventIcon(ev.type);
     const unit = eventUnit(ev.type);
+    const entry = formatEventEntry(ev, tasksById);
     el.innerHTML = `
       <span class="event-icon">${icon}</span>
       <span class="event-text">
         <span class="event-amount">${sign}${ev.change_value} ${unit}</span>
-        <span class="event-reason">${escapeHtml(ev.reason)}</span>
+        <span class="event-reason">${escapeHtml(entry.title)}</span>
+        ${entry.time ? `<span class="event-time">${escapeHtml(entry.time)}</span>` : ''}
       </span>
       <span class="event-status">${statusLabel(ev.status)}</span>
     `;
