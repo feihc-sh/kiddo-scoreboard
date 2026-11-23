@@ -179,6 +179,6 @@ describe('Item #006 §1: calendar fold toggle scaffold', () => {
 
   it('calendar-grid is a 7-column grid (matches the 7×6 month grid spec)', () => {
     const css = fs.readFileSync(CSS_PATH, 'utf8');
-    expect(css).toMatch(/\.calendar-grid\s*\{[^}]*grid-template-columns:\s*repeat\(7,\s*1fr\)/);
+    expect(css).toMatch(/\.calendar-grid\s*\{[^}]*grid-template-columns:\s*repeat\(7,\s*minmax\(0,\s*1fr\)\)/);
   });
 });

@@ -369,7 +369,7 @@
 
 .calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
   min-height: 200px;
 }
@@ -2890,7 +2890,7 @@ a.pm-btn {
 
 .health-calendar {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
 }
 .health-cal-weekday {
@@ -3428,7 +3428,7 @@ a.pm-btn {
 }
 .summer-calendar-month-weekdays {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 2px;
   margin-bottom: 2px;
 }
@@ -3440,7 +3440,7 @@ a.pm-btn {
 }
 .summer-calendar-month-days {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 2px;
 }
 .summer-calendar-day {
