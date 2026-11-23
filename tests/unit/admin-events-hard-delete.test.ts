@@ -99,6 +99,12 @@ async function resetDb() {
     'running_records',
     'running_points',
     'running_maps',
+    // Achievement tables — must drop so migration 0022's
+    // `ALTER TABLE achievement_awards ADD COLUMN completed_on/note` re-applies
+    // cleanly across beforeEach runs (SQLite fails on a duplicate column).
+    'achievement_awards',
+    'achievements',
+    'seasons',
   ]) {
     await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
   }

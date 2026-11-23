@@ -124,6 +124,10 @@ export interface MockAward {
   granted_at: number;
   revoked_at: number | null;
   revoked_by: number | null;
+  /** 完成日期 ('YYYY-MM-DD') 或 null —— spec §7c。 */
+  completed_on: string | null;
+  /** 完成内容或 null —— spec §7c。 */
+  note: string | null;
 }
 
 /** A prepared statement, captured for assertions. */
@@ -231,6 +235,9 @@ function execute(
       granted_at: (params[5] as number) ?? state.now,
       revoked_at: null,
       revoked_by: null,
+      // 完成详情 (spec §7c) —— 两个都可 NULL。
+      completed_on: (params[6] ?? null) as string | null,
+      note: (params[7] ?? null) as string | null,
     };
     state.awards.push(row);
     return {

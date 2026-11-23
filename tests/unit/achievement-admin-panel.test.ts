@@ -153,6 +153,59 @@ describe('admin.js 成就发放面板接线', () => {
     expect(html).toContain('id="btn-grant-achievement"');
   });
 
+  // ---------------------------------------------------------------------------
+  // 完成详情 (spec §7c) —— 发放时可填「完成日期」+「完成内容」
+  // ---------------------------------------------------------------------------
+  it('the grant form has the optional 完成日期 + 完成内容 fields', () => {
+    expect(html).toContain('name="completed_on"');
+    expect(html).toContain('type="date"');
+    expect(html).toContain('name="note"');
+    // 完成内容有长度上限 (与后端的 100 字校验一致)。
+    expect(html).toContain('maxlength="100"');
+  });
+
+  it('the grant submits completed_on and note to the API', () => {
+    const fn = js.slice(js.indexOf('async function submitAchievementGrant'));
+    const body = fn.slice(0, fn.indexOf('\n}'));
+    expect(body).toContain("form.elements['completed_on']");
+    expect(body).toContain("form.elements['note']");
+    expect(body).toContain('body.completed_on = completedOn');
+    expect(body).toContain('body.note = note');
+  });
+
+  it('the grant only sends the optional fields when they are filled (空串不传)', () => {
+    const fn = js.slice(js.indexOf('async function submitAchievementGrant'));
+    const body = fn.slice(0, fn.indexOf('\n}'));
+    // 条件发送 —— 否则空串会被后端当成「填了但为空」。
+    expect(body).toContain('if (completedOn) body.completed_on = completedOn;');
+    expect(body).toContain('if (note) body.note = note;');
+  });
+
+  it('the grant clears the 完成详情 fields after a successful grant', () => {
+    const fn = js.slice(js.indexOf('async function submitAchievementGrant'));
+    const body = fn.slice(0, fn.indexOf('\n}'));
+    // 下一次发放不该带着上一次的日期/内容 (容易误记)。
+    expect(body).toContain("form.elements['completed_on'].value = ''");
+    expect(body).toContain("form.elements['note'].value = ''");
+  });
+
+  it('the 完成日期 field defaults to today on boot', () => {
+    expect(js).toContain('prefillGrantCompletedOn');
+    const fn = js.slice(js.indexOf('function prefillGrantCompletedOn'));
+    const body = fn.slice(0, fn.indexOf('\n}'));
+    expect(body).toContain('completed_on');
+    expect(body).toContain('todayIsoLocal()');
+  });
+
+  it('the grant log escapes and renders the 完成详情 (note)', () => {
+    const fn = js.slice(js.indexOf('function renderAchievementAwards'));
+    const body = fn.slice(0, fn.indexOf('\n}'));
+    expect(body).toContain('a.completed_on');
+    expect(body).toContain('a.note');
+    // 动态文本必须过 escapeHtml (XSS)。
+    expect(body).toContain('escapeHtml(a.note)');
+  });
+
   it('the grant form posts to /api/admin/achievement-awards', () => {
     expect(js).toContain("'/api/admin/achievement-awards'");
     expect(js).toContain('submitAchievementGrant');

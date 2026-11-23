@@ -133,10 +133,11 @@ async function wall(seasonId?: number): Promise<WallResponse> {
 
 describe('achievement journey — real D1', () => {
   it('walks the whole grant → wall → revoke → season-switch flow', async () => {
-    // 1. Empty wall: 8 achievements, nothing earned, no tokens.
+    // 1. Empty wall: 9 achievements (8 seed + 英文长篇 from migration 0022),
+    //    nothing earned, no tokens.
     let w = await wall();
     expect(w.season.name).toBe('S1 · 四年级上学期');
-    expect(w.achievements).toHaveLength(8);
+    expect(w.achievements).toHaveLength(9);
     expect(w.achievements.every((a) => a.award === null)).toBe(true);
     expect(w.pet_tokens).toBe(0);
 
