@@ -212,6 +212,12 @@ export interface AchievementAward {
   granted_at: number;            // Unix seconds
   revoked_at: number | null;
   revoked_by: number | null;
+  // 发放时的完成详情 (migration 0022, spec §7c) —— 两者都可 NULL:
+  //   completed_on = 'YYYY-MM-DD' (Asia/Shanghai 日历日) —— PM 记「哪天完成的」
+  //   note         = 完成内容 (自由文本, ≤100 字, API 层校验)
+  // 老数据与未填写的发放一律是 NULL —— 缺失不是错误, 只是「没记」。
+  completed_on: string | null;
+  note: string | null;
 }
 
 // =============================================================
