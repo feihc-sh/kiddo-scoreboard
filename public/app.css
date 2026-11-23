@@ -1252,6 +1252,15 @@ body {
   word-break: break-word;
   color: var(--text-primary);
 }
+/* 操作日志条目时间戳 (MM-DD HH:MM) —— 跟在任务名下方，弱化不抢主文案 */
+.event-time {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
 .event-meta {
   font-family: var(--font-mono);
   font-size: 11px;
