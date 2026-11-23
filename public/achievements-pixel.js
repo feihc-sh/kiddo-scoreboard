@@ -237,6 +237,15 @@ const PIXEL_ICONS = {
       <path d="M5 2h6v1H5z" fill="#94a3b8"/>
       <path d="M6 9h4v2H6z" fill="#1e293b"/>
     </svg>`,
+  enNovel: `
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M2 3h5v9H2z" fill="#1e3a8a"/>
+      <path d="M9 3h5v9H9z" fill="#1e3a8a"/>
+      <path d="M3 4h3v7H3zM10 4h3v7h-3z" fill="#bfdbfe"/>
+      <path d="M7 3h2v9H7z" fill="#60a5fa"/>
+      <path d="M3 6h2v1H3zM3 8h3v1H3zM10 6h3v1h-3zM10 8h2v1h-2z" fill="#fde047"/>
+      <path d="M11 1h2v4h-2z" fill="#ef4444"/>
+    </svg>`,
 };
 
 /**
@@ -255,6 +264,7 @@ const ICON_BY_ID = {
   6: 'bookStack',     // 读完一本长篇中文小说
   7: 'musicNote',     // 完成一首新曲子演奏
   8: 'gamepad',       // 通关一个新游戏
+  9: 'enNovel',       // 读完一本英文长篇小说 (migration 0022)
 };
 
 const ICON_BY_NAME = {
@@ -266,6 +276,8 @@ const ICON_BY_NAME = {
   '读完一本长篇中文小说': 'bookStack',
   '完成一首新曲子演奏': 'musicNote',
   '通关一个新游戏': 'gamepad',
+  // migration 0022 的新奖项 —— 用 name 匹配 (id 由自增分配, 不写死)。
+  '读完一本英文长篇小说': 'enNovel',
 };
 
 /** 组 → 图标 (分组横幅 + 兜底图标)。 */
@@ -289,6 +301,15 @@ const UNIT_BY_ID = {
   8: '个',   // 通关一个新游戏
 };
 
+/**
+ * 奖项 → 阶梯单位的补充映射 (按 name)。
+ *
+ * UNIT_BY_ID 覆盖不到 id 由自增分配的新奖项 —— 这里按 name 补。
+ */
+const UNIT_BY_NAME = {
+  '读完一本英文长篇小说': '本',
+};
+
 /** 取某个奖项的像素图标 key。 */
 function iconKeyFor(achievement) {
   if (achievement?.id != null && ICON_BY_ID[achievement.id]) return ICON_BY_ID[achievement.id];
@@ -300,6 +321,8 @@ function iconKeyFor(achievement) {
 /** 取某个奖项的阈值单位。 */
 function unitFor(achievement) {
   if (achievement?.id != null && UNIT_BY_ID[achievement.id]) return UNIT_BY_ID[achievement.id];
+  const byName = UNIT_BY_NAME[achievement?.name];
+  if (byName) return byName;
   return ladderUnit(achievement?.grant_mode);
 }
 

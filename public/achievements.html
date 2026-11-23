@@ -168,6 +168,15 @@
           <span class="tier-badge none" id="modal-tier-badge">未解锁</span>
         </div>
 
+        <!-- 完成记录 (spec §7c) —— 每次成就时刻的日期 + 内容, 最近的在前 -->
+        <div class="modal-records" id="modal-records" hidden>
+          <div class="modal-records-label">完成记录</div>
+          <ul class="modal-records-list" id="modal-records-list"></ul>
+          <p class="modal-records-empty" id="modal-records-empty" hidden>
+            还没有记录，解锁后这里会写下每次成就时刻
+          </p>
+        </div>
+
         <!-- 脚注: GROUP / AWARD ID -->
         <div class="modal-foot">
           <span>GROUP: <span class="foot-accent" id="modal-group">—</span></span>

@@ -49,6 +49,9 @@ const els = {
   modalDesc: $('#modal-desc'),
   modalStatusText: $('#modal-status-text'),
   modalTierBadge: $('#modal-tier-badge'),
+  modalRecords: $('#modal-records'),
+  modalRecordsList: $('#modal-records-list'),
+  modalRecordsEmpty: $('#modal-records-empty'),
   modalGroup: $('#modal-group'),
   modalAwardId: $('#modal-award-id'),
   closeModalBtn: $('#close-modal-btn'),
@@ -404,6 +407,7 @@ function openModal(id) {
     els.modalTierBadge.textContent = unlocked ? `${tierLabel(tier)}牌` : '未解锁';
     els.modalTierBadge.className = `tier-badge ${unlocked ? tier : 'none'}`;
   }
+  renderModalRecords(item.records);
   if (els.modalGroup) els.modalGroup.textContent = (GROUP_LABELS[item.grp] ?? item.grp ?? '').toUpperCase();
   if (els.modalAwardId) els.modalAwardId.textContent = item.award ? `#${String(item.id).padStart(3, '0')}` : '—';
 
@@ -420,6 +424,40 @@ function closeModal() {
     els.modal.setAttribute('aria-hidden', 'true');
   }
   state.selectedId = null;
+}
+
+/**
+ * 渲染「完成记录」列表 (spec §7c)。
+ *
+ * 数据来自 API 的 `records` 数组 (服务端已按 granted_at 降序排好) ——
+ * 前端不重排, 免得两端口径打架。
+ *
+ * 每条: 📅 完成日期 + 完成内容。PM 没记的那一项显示 '—'。
+ *   - completed_on 有 → 显示 'YYYY-MM-DD'
+ *   - note 有 → 显示内容
+ *   - 两者都没记 → 显示 '—' (但仍列出这条, 因为「发过牌」本身是事实)
+ *
+ * 空状态 (没发过 / 没记录): 「还没有记录，解锁后这里会写下每次成就时刻」。
+ */
+function renderModalRecords(records) {
+  const list = Array.isArray(records) ? records : [];
+  if (els.modalRecords) {
+    // 记录区始终显示 —— 没记录时显示空状态文案 (比整个区藏起来更容易懂)。
+    els.modalRecords.hidden = false;
+  }
+  if (els.modalRecordsList) {
+    els.modalRecordsList.innerHTML = list.map((r) => {
+      const date = r?.completed_on ? escapeHtml(r.completed_on) : '—';
+      const note = r?.note ? escapeHtml(r.note) : '—';
+      return `<li class="modal-record">` +
+        `<span class="modal-record-date">📅 ${date}</span>` +
+        `<span class="modal-record-note">${note}</span>` +
+        `</li>`;
+    }).join('');
+  }
+  if (els.modalRecordsEmpty) {
+    els.modalRecordsEmpty.hidden = list.length > 0;
+  }
 }
 
 // =============================================================
