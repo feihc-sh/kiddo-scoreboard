@@ -791,6 +791,13 @@ function renderAchievementAwards() {
   state.achievementAwards.forEach(function (a) {
     const isRevoked = a.status === 'revoked';
     const tier = TIER_RULES ? TIER_RULES.tierLabel(a.tier) : String(a.tier || '');
+    // 完成详情 (spec §7c) —— 有才显示, 没有就不占地方。
+    const detailParts = [];
+    if (a.completed_on) detailParts.push('完成于 ' + escapeHtml(a.completed_on));
+    if (a.note) detailParts.push(escapeHtml(a.note));
+    const detailHtml = detailParts.length
+      ? '<div class="pm-row-note">' + detailParts.join(' · ') + '</div>'
+      : '';
     root.appendChild(rowEl(
       '<div class="pm-row-main">' +
         '<div class="pm-row-title">' +
@@ -806,6 +813,7 @@ function renderAchievementAwards() {
           (isRevoked && a.revoked_at ? ' · 撤销于 ' + fmtTime(a.revoked_at) : '') +
           ' · <span class="pm-mono">#' + escapeHtml(a.id) + '</span>' +
         '</div>' +
+        detailHtml +
       '</div>' +
       '<div class="pm-row-actions">' +
         (!isRevoked
@@ -1470,6 +1478,10 @@ async function doLogout() {
  * body: { achievement_id, tier, user_id } —— 不传 season_id, 后端默认当前赛季
  * (spec §7)。铸币 (🌟 星币) 由后端在同一 batch 里落账, 前端只负责把
  * 结果告诉 PM。
+ *
+ * 完成详情 (spec §7c): completed_on + note 两个**可选**字段。空串 = 没记,
+ * 所以这里根本不发给后端 (后端存 NULL)。日期格式由 <input type="date">
+ * 保证是 'YYYY-MM-DD', 后端还会再校验一次 (400 INVALID)。
  */
 async function submitAchievementGrant(form) {
   if (inFlight.has('grant-achievement')) return;
@@ -1488,20 +1500,38 @@ async function submitAchievementGrant(form) {
     toast('user_id 必须是正整数', 'error');
     return;
   }
+  const completedOn = String(form.elements['completed_on']?.value ?? '').trim();
+  const note = String(form.elements['note']?.value ?? '').trim();
+  if (completedOn && !/^\d{4}-\d{2}-\d{2}$/.test(completedOn)) {
+    toast('完成日期格式应为 YYYY-MM-DD', 'error');
+    return;
+  }
+  if (note.length > 100) {
+    toast('完成内容最多 100 字', 'error');
+    return;
+  }
   inFlight.add('grant-achievement');
   try {
-    const r = await api('POST', '/api/admin/achievement-awards', {
+    const body = {
       achievement_id: achievementId,
       tier: tier,
       user_id: userId,
-    });
+    };
+    // 只在填了的时候才带这两个字段 —— 空串不传 (后端存 NULL)。
+    if (completedOn) body.completed_on = completedOn;
+    if (note) body.note = note;
+    const r = await api('POST', '/api/admin/achievement-awards', body);
     const minted = r?.tokens_minted ?? 0;
     toast(`已发放 ${tierLabel(tier)} · 铸 ${minted} 🌟`, 'success');
+    // 清掉完成详情 —— 下一次发放不该带着上一次的日期/内容 (容易误记)。
+    form.elements['completed_on'].value = '';
+    form.elements['note'].value = '';
     await Promise.all([loadAchievementAwards(), loadBalance()]);
     renderAchievementAwards();
   } catch (e) {
     if (e.message === 'INVALID_TIER') toast('该牌级对这个奖项无效', 'error');
     else if (e.message === 'NO_CURRENT_SEASON') toast('没有当前赛季, 请先新建赛季', 'error');
+    else if (e.message === 'INVALID') toast('完成日期或完成内容格式不对', 'error');
     else if (e.message !== 'UNAUTHORIZED') toast('发放失败：' + e.message, 'error');
   } finally {
     inFlight.delete('grant-achievement');
@@ -1781,6 +1811,9 @@ async function boot() {
   bindDelegatedActions();
   renderEmojiPicker();  // Item #001 — populate from window.EMOJI_PRESETS (shared/emoji-presets.js)
   bindEmojiPicker();   // Item #001
+  // 完成日期默认今天 (spec §7c) —— PM 多数时候记的就是当天, 少点一次。
+  // 用现有的 todayIsoLocal() (admin.js 既有惯例, 与日历口径一致)。
+  prefillGrantCompletedOn();
   try {
     await loadMe();
     await refreshAll();
@@ -1788,6 +1821,16 @@ async function boot() {
     if (e.message === 'UNAUTHORIZED') return;  // redirect handled in api()
     toast('启动失败：' + e.message, 'error');
   }
+}
+
+/**
+ * 把「完成日期」预填成今天 (spec §7c)。
+ *
+ * 只在字段为空时填 —— 用户自己清空过就别再塞回去。
+ */
+function prefillGrantCompletedOn() {
+  const input = document.querySelector('#achievement-grant-form input[name="completed_on"]');
+  if (input && !input.value) input.value = todayIsoLocal();
 }
 
 if (document.readyState === 'loading') {
